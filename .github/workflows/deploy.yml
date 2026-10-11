@@ -1,0 +1,36 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H 62.171.184.161 >> ~/.ssh/known_hosts
+
+      - name: Copy files
+        run: |
+          rsync -az --delete \
+            --exclude .git --exclude .github --exclude node_modules --exclude .env --exclude deploy \
+            -e "ssh -i ~/.ssh/deploy" ./ clarvy@62.171.184.161:/opt/clarvy/
+
+      - name: Restart and check
+        run: |
+          ssh -i ~/.ssh/deploy clarvy@62.171.184.161 'sudo systemctl restart clarvy'
+          sleep 3
+          curl -fsS -o /dev/null -w "HTTP %{http_code}\n" https://clarvy.tejarra.com/

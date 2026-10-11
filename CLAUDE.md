@@ -7,6 +7,8 @@ Clarvy is a decision-making web app: "makes the call while you're still overthin
 - `lib/core.js`: server logic. It holds the OpenAI key, calls the Responses API (`/v1/responses`), and handles the access code, the per-IP rate limit and JSON parsing.
 - `api/ask.js`, `api/search.js`: Vercel serverless endpoints wrapping `lib/core.js`.
 - `server.js`: plain Node server for local runs or non-Vercel hosts (`npm start`).
+- `deploy/setup-server.sh`: one-time server setup (Node, nginx, HTTPS, systemd `clarvy` service, secrets in `/etc/clarvy.env`).
+- `.github/workflows/deploy.yml`: every push to `main` rsyncs to `clarvy@62.171.184.161:/opt/clarvy` and restarts the service. Live at https://clarvy.tejarra.com. Needs the `DEPLOY_SSH_KEY` repo secret.
 
 ## Decision pipeline (in public/index.html, `decide()`)
 1. Reader (only when files are attached): extracts facts from PDF, Word, Excel, CSV, text and images.
