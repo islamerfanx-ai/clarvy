@@ -27,4 +27,4 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": types[extname(path)] || "application/octet-stream" });
     res.end(file);
   } catch { res.writeHead(404); res.end("Not found"); }
-}).listen(process.env.PORT || 3000, () => console.log(`Clarvy running on http://localhost:${process.env.PORT || 3000}`));
+}).listen(process.env.PORT || 3000, process.env.HOST, () => console.log(`Clarvy running on http://localhost:${process.env.PORT || 3000}`));
