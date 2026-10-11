@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # One-time setup for clarvy.tejarra.com on a fresh Ubuntu/Debian server. Run as root:
-#   bash setup-server.sh you@example.com
+#   bash setup-server.sh [you@example.com]   (email for certificate notices, optional)
 # Installs Node, nginx and certbot, creates the clarvy user and service, and lets
 # GitHub Actions deploy with the clarvy-github-deploy key.
 set -euo pipefail
 
 DOMAIN=clarvy.tejarra.com
 APP_DIR=/opt/clarvy
-EMAIL="${1:?usage: bash setup-server.sh you@example.com (for Let's Encrypt notices)}"
+EMAIL="${1:-}"
 DEPLOY_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILvi3GFIUY9Pe/naAJPNPFdFeEBdDSVBjK7QYo4oLjpN clarvy-github-deploy'
 
 export DEBIAN_FRONTEND=noninteractive
@@ -74,7 +74,8 @@ ln -sf /etc/nginx/sites-available/clarvy /etc/nginx/sites-enabled/clarvy
 nginx -t && systemctl reload nginx
 
 if command -v ufw >/dev/null && ufw status | grep -q active; then ufw allow 'Nginx Full'; fi
-certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$EMAIL" --redirect
+if [ -n "$EMAIL" ]; then CONTACT=(-m "$EMAIL"); else CONTACT=(--register-unsafely-without-email); fi
+certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos "${CONTACT[@]}" --redirect
 
 echo
 echo "Done. Next: put your OpenAI key in /etc/clarvy.env (nano /etc/clarvy.env),"
