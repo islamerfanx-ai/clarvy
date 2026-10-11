@@ -1,0 +1,9 @@
+{
+  "name": "clarvy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Clarvy: makes the call while you're still overthinking it.",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
