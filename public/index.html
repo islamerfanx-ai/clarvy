@@ -18,6 +18,7 @@
   --indigo:#2C36CB;
   --magenta:#C74092;
   --lilac:#7C7AA3;
+  --sky:#8FB2FF;        /* wordmark */
   --ember:#FF6A3D;
   --fg:#FFFFFF;
   --dim:rgba(255,255,255,.55);
@@ -37,7 +38,7 @@ main{position:relative;z-index:2;display:flex;flex-direction:column;gap:clamp(20
 
 .mark{display:flex;justify-content:space-between;align-items:center;font-family:var(--mono);font-stretch:75%;font-weight:400;
   font-size:clamp(34px,8.5vw,120px);line-height:1;letter-spacing:0;padding-block:4px;user-select:none}
-.mark span{display:inline-block;width:.62em;text-align:center;transition:color .3s}
+.mark span{display:inline-block;width:.62em;text-align:center;transition:color .3s;color:var(--sky);text-shadow:0 0 .35em rgba(44,54,203,.55)}
 .mark span.q{color:var(--lilac)}
 
 .stack{display:flex;flex-direction:column;gap:8px;width:100%;max-width:720px;margin-inline:auto}
