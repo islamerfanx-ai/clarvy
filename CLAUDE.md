@@ -31,6 +31,10 @@ npm start                      # http://localhost:3000
 
 ## Decision Rooms (in progress, spec: docs/decision-rooms-spec.md)
 - `supabase/migrations/20261012000000_decision_rooms.sql`: the whole v1 data model with row-level security. A member's raw input, sign-off and trip brief are readable by that member only (not the owner); groups see ticks and counts through security-definer functions (`room_roster`, `signoff_counts`, `trip_vote_counts`). The server reads inputs with the service role to compute the combined view. Inputs are validated by trigger: weights cover exactly the room's criteria, whole numbers summing to 100, and lock once the room leaves `open`.
-- `public/room.html?room=<id>`: the My input screen (Supabase sign-in by email link). `?demo=1` and `?demo=ar` open in-browser demo rooms with no backend.
+- `supabase/migrations/20261013000000_room_invites.sql`: invite links (`invites`, `invite_preview()` works signed out, `join_room()`), and a trigger validating rooms (2-6 options, 2-8 criteria summing to 100, frozen once anyone has given input).
+- `supabase/tests/test_rls.py`: privacy and validation checks on embedded Postgres. Run it after any schema change.
+- `public/new.html`: the New room screen (type templates, options, context, files, criteria with "Suggest from my question" via `/api/ask`, review date) and the invite step (copy, WhatsApp, email links sent from the owner's own device).
+- `public/room.html?room=<id>`: the My input screen; `?join=<token>` previews the invite, signs in and joins. Both pages take `?demo=1` or `?demo=ar` to run in the browser with no backend.
+- `public/rooms/rooms.js`, `rooms.css`: shared by the room pages (words, Supabase, sign-in, weights that always total 100, file readers).
 - `public/i18n/en.json`, `ar.json`: interface text. Arabic sets `dir=rtl`, switches to IBM Plex Sans Arabic and drops uppercase and letter-spacing. Room content keeps the owner's language and direction.
 - `/api/config` hands the browser `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public by design). Never send the service role key to the browser.

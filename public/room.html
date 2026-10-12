@@ -8,113 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans+Arabic:wght@400;500&display=swap">
-<style>
-/* Decision Rooms: My input. Same tokens and message-card look as index.html, mirrored for Arabic. */
-:root{
-  --ink:#140703;--card:#161616;--violet:#690DE2;--indigo:#2C36CB;--magenta:#C74092;--lilac:#7C7AA3;--sky:#8FB2FF;--ember:#FF6A3D;
-  --fg:#FFFFFF;--dim:rgba(255,255,255,.55);--faint:rgba(255,255,255,.35);--line:rgba(255,255,255,.18);--err:#ff8fa8;
-  --mono:"Martian Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
-  --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
-  --arabic:"IBM Plex Sans Arabic",system-ui,sans-serif;
-  color-scheme:dark;
-}
-*,*::before,*::after{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{background:var(--ink);color:var(--fg)}
-body{font-family:var(--mono);font-stretch:75%;margin:0;padding:0 16px;min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
-body::before{content:"";position:fixed;inset:auto -20% -40vh;height:80vh;z-index:0;pointer-events:none;
-  background:radial-gradient(50% 50% at 50% 50%,rgba(105,13,226,.55),rgba(44,54,203,.25) 45%,transparent 70%);filter:blur(30px)}
-main{position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;width:100%;max-width:720px;margin:0 auto;padding:16px 0 calc(48px + env(safe-area-inset-bottom,0px))}
-
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:4px 12px}
-.wm{font-size:13px;letter-spacing:.5em;text-transform:uppercase;color:var(--sky);text-decoration:none}
-.top-acts{display:flex;gap:8px;align-items:center}
-.pill{font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.4);white-space:nowrap}
-.lang{font:inherit;font-size:12px;letter-spacing:.06em;color:var(--fg);background:none;border:1px solid var(--line);border-radius:4px;padding:6px 10px;cursor:pointer}
-.lang:hover{border-color:rgba(255,255,255,.4)}
-
-.msg{background:var(--card);border-radius:8px;padding:22px 24px 24px;display:flex;flex-direction:column;gap:18px}
-.msg.active{background:var(--violet)}
-.msg.you{background:rgba(255,255,255,.08);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
-.meta{display:flex;justify-content:space-between;gap:12px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-variant-numeric:tabular-nums}
-.meta.light{color:rgba(255,255,255,.75)}
-.text{margin:0;font-size:clamp(17px,2.8vw,22px);line-height:1.4;text-transform:uppercase;letter-spacing:.03em;text-wrap:balance}
-.body{margin:0;font-size:14px;line-height:1.55;white-space:pre-line}
-.small{margin:0;font-size:12px;line-height:1.5;color:var(--dim)}
-h3,.lbl{margin:0;font-size:11px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-.lbl .opt{color:var(--faint)}
-.block{display:flex;flex-direction:column;gap:8px}
-ul.plain{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.5}
-ul.facts li{border-inline-start:2px solid var(--lilac);padding-inline-start:12px}
-.file{display:flex;gap:10px;align-items:center;background:rgba(255,255,255,.06);border-radius:6px;padding:8px 12px;font-size:12px}
-details.peek>summary{cursor:pointer;list-style:none;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);opacity:.85}
-details.peek>summary::-webkit-details-marker{display:none}
-details.peek>summary::before{content:"+ "}details.peek[open]>summary::before{content:"– "}
-details.peek[open]>summary{margin-bottom:16px}
-details.peek .block+.block{margin-top:16px}
-
-.note{display:flex;gap:10px;align-items:flex-start;font-size:12px;line-height:1.5;color:var(--fg);background:rgba(124,122,163,.18);border-radius:6px;padding:12px 14px}
-.note svg{flex:none;margin-top:2px}
-
-form{display:flex;flex-direction:column;gap:26px}
-.field{display:flex;flex-direction:column;gap:10px}
-.field-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
-.linkbtn{font:inherit;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--lilac);background:none;border:0;padding:0;cursor:pointer}
-.linkbtn:hover{color:var(--fg)}
-
-.alloc{display:flex;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08)}
-.alloc i{display:block;height:100%;transition:width .2s}
-.crit{display:grid;grid-template-columns:12px 1fr auto;gap:6px 10px;align-items:center}
-.crit .dot{width:10px;height:10px;border-radius:50%}
-.crit .nm{font-size:13px;line-height:1.35}
-.crit output{font-size:13px;font-variant-numeric:tabular-nums;min-width:3ch;text-align:end}
-.crit input{grid-column:1/-1}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:28px;background:none;margin:0;cursor:pointer;--c:var(--violet);--p:50%}
-input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:linear-gradient(to right,var(--c) var(--p),rgba(255,255,255,.12) var(--p))}
-[dir=rtl] input[type=range]::-webkit-slider-runnable-track{background:linear-gradient(to left,var(--c) var(--p),rgba(255,255,255,.12) var(--p))}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;background:#fff;border:0;box-shadow:0 0 0 4px rgba(0,0,0,.25)}
-input[type=range]::-moz-range-track{height:4px;border-radius:2px;background:rgba(255,255,255,.12)}
-input[type=range]::-moz-range-progress{height:4px;border-radius:2px;background:var(--c)}
-input[type=range]::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#fff;border:0}
-input[type=range]:focus-visible{outline:2px solid var(--fg);outline-offset:4px;border-radius:4px}
-.total{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);font-variant-numeric:tabular-nums}
-
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{font:inherit;font-stretch:75%;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);background:none;
-  border:1px solid rgba(255,255,255,.16);border-radius:999px;padding:9px 14px;cursor:pointer;text-align:start}
-.chip:hover{color:var(--fg);border-color:rgba(255,255,255,.4)}
-.chip[aria-pressed=true]{background:var(--violet);color:var(--fg);border-color:transparent}
-.chip:focus-visible,.btn:focus-visible,.lang:focus-visible,.linkbtn:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
-
-input.line,textarea{width:100%;min-width:0;font:inherit;font-stretch:75%;font-size:15px;letter-spacing:.02em;color:var(--fg);
-  background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:6px;padding:14px;line-height:1.5}
-input.line::placeholder,textarea::placeholder{color:var(--faint)}
-input.line:focus,textarea:focus{outline:none;border-color:var(--lilac);background:rgba(255,255,255,.1)}
-.count{font-size:11px;color:var(--faint);text-align:end;font-variant-numeric:tabular-nums}
-
-.btn{font:inherit;font-stretch:75%;font-size:14px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg);cursor:pointer;
-  background:var(--violet);border:0;border-radius:4px;padding:16px 22px;width:100%}
-.btn:hover{background:#7a22f0}.btn:disabled{opacity:.45;cursor:default}
-.status{margin:0;min-height:1.2em;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
-.status.err{color:var(--err)}.status.ok{color:var(--sky)}
-fieldset{border:0;margin:0;padding:0;min-width:0}
-fieldset:disabled .chip,fieldset:disabled input{cursor:default;opacity:.6}
-
-.thinking::after{content:"_";animation:blink 1s steps(1) infinite}
-@keyframes blink{50%{opacity:0}}
-
-/* Arabic: a real Arabic face, no uppercase, no letter-spacing (they break Arabic shaping) */
-[dir=rtl] body,[dir=rtl] .chip,[dir=rtl] .btn,[dir=rtl] input.line,[dir=rtl] textarea,[dir=rtl] .lang{font-family:var(--arabic);font-stretch:normal}
-[dir=rtl] .text,[dir=rtl] .meta,[dir=rtl] h3,[dir=rtl] .lbl,[dir=rtl] .chip,[dir=rtl] .btn,[dir=rtl] .status,[dir=rtl] .pill,
-[dir=rtl] .linkbtn,[dir=rtl] .total,[dir=rtl] details.peek>summary{text-transform:none;letter-spacing:0}
-[dir=rtl] .text{font-size:clamp(19px,3vw,25px);line-height:1.6}
-[dir=rtl] .meta,[dir=rtl] h3,[dir=rtl] .lbl,[dir=rtl] .total,[dir=rtl] .linkbtn,[dir=rtl] details.peek>summary{font-size:13px}
-[dir=rtl] .body,[dir=rtl] ul.plain,[dir=rtl] .crit .nm{font-size:15px;line-height:1.7}
-.wm,.lang{direction:ltr}
-
-@media (max-width:480px){.msg{padding:18px 16px 20px}}
-@media (prefers-reduced-motion:reduce){.alloc i{transition:none}.thinking::after{animation:none}}
-</style>
+<link rel="stylesheet" href="/rooms/rooms.css">
 </head>
 <body>
 <main>
@@ -138,6 +32,18 @@ fieldset:disabled .chip,fieldset:disabled input{cursor:default;opacity:.6}
       <button class="btn" type="submit" data-t="signin_send">Email me a link</button>
       <p class="status" id="signinStatus" role="status" aria-live="polite"></p>
     </form>
+  </article>
+
+  <!-- Invite link: who's asking, then sign in and join -->
+  <article class="msg active" id="joinCard" hidden>
+    <div class="meta light"><span id="joinFrom"></span><span id="joinType"></span></div>
+    <p class="text" id="joinQuestion"></p>
+    <p class="small" id="joinObserver" data-t="join_observer" hidden style="color:rgba(255,255,255,.8)"></p>
+  </article>
+  <article class="msg you" id="joinActions" hidden>
+    <label class="check" id="consentRow" hidden><input type="checkbox" id="consent"><span data-t="join_consent"></span></label>
+    <button class="btn" type="button" id="joinBtn" data-t="join_btn">Join the room</button>
+    <p class="status" id="joinStatus" role="status" aria-live="polite"></p>
   </article>
 
   <!-- The question and what the room knows -->
@@ -201,29 +107,15 @@ fieldset:disabled .chip,fieldset:disabled input{cursor:default;opacity:.6}
   <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:8px"></p>
 </main>
 
+<script src="/rooms/rooms.js"></script>
 <script>
 (() => {
-const $ = id => document.getElementById(id);
+const { $, t, chip, PALETTE } = Rooms;
 const params = new URLSearchParams(location.search);
-const roomId = params.get("room");
+let roomId = params.get("room");
+const joinToken = params.get("join");
 const demo = params.get("demo");
-const PALETTE = ["#690DE2", "#8FB2FF", "#C74092", "#FF6A3D", "#2C36CB", "#7C7AA3", "#E8E3FF", "#3FB59B"];
 const RISKS = ["safe", "balanced", "bold"];
-
-/* ---------- Words: English and Arabic live in /i18n/*.json ---------- */
-let lang = "en", words = {};
-const t = (k, vars = {}) => (words[k] || k).replace(/\{(\w+)\}/g, (_, v) => vars[v] ?? "");
-async function loadLang(l) {
-  const res = await fetch(`/i18n/${l}.json`);
-  words = await res.json(); lang = l;
-  document.documentElement.lang = l;
-  document.documentElement.dir = words.dir;
-  document.title = t("page_title");
-  document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t(el.dataset.t); });
-  $("langBtn").textContent = t("lang_other");
-  $("langBtn").setAttribute("aria-label", t("lang_other_label"));
-  $("concern").placeholder = t("concern_ph");
-}
 
 /* ---------- Data: Supabase when configured, an in-browser demo room otherwise ---------- */
 const DEMO_ROOMS = {
@@ -247,16 +139,16 @@ const DEMO_ROOMS = {
   }
 };
 
-let sb = null, user = null;
 const store = {
   async room() {
     if (demo) { const r = DEMO_ROOMS[demo === "ar" ? "ar" : "en"]; return { room: r, role: "member", files: r.files, facts: r.facts }; }
+    const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
       .select("id,type,question,context,options,criteria,status,language,review_date").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // RLS hides rooms you're not in
     const [mem, files, analysis] = await Promise.all([
-      sb.from("memberships").select("role").eq("room_id", roomId).eq("user_id", user.id).maybeSingle(),
+      sb.from("memberships").select("role").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at"),
       sb.from("analyses").select("frame").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle()
     ]);
@@ -265,42 +157,21 @@ const store = {
   },
   async myInput() {
     if (demo) { try { return JSON.parse(localStorage.getItem("clarvy-demo-input-" + demo)); } catch { return null; } }
-    const { data } = await sb.from("inputs").select("weights,risk_appetite,gut_pick,concern").eq("room_id", roomId).eq("user_id", user.id).maybeSingle();
+    const { data } = await Rooms.sb.from("inputs").select("weights,risk_appetite,gut_pick,concern").eq("room_id", roomId).eq("user_id", Rooms.user.id).maybeSingle();
     return data;
   },
   async save(input) {
     if (demo) { try { localStorage.setItem("clarvy-demo-input-" + demo, JSON.stringify(input)); } catch {} return; }
-    const { error } = await sb.from("inputs").upsert({ room_id: roomId, user_id: user.id, ...input }, { onConflict: "room_id,user_id" });
+    const { error } = await Rooms.sb.from("inputs").upsert({ room_id: roomId, user_id: Rooms.user.id, ...input }, { onConflict: "room_id,user_id" });
     if (error) throw error;
-  },
-  async language() {
-    if (demo || !user) return null;
-    const { data } = await sb.from("profiles").select("language").eq("id", user.id).maybeSingle();
-    return data?.language;
-  },
-  async setLanguage(l) { if (!demo && user) await sb.from("profiles").update({ language: l }).eq("id", user.id); }
+  }
 };
 
-/* ---------- Weights: whole numbers that always add up to 100 ---------- */
-// Spread `total` across keys in proportion to `shares`, rounding so the parts still sum exactly.
-function apportion(keys, shares, total) {
-  const sum = keys.reduce((s, k) => s + shares[k], 0);
-  const raw = keys.map(k => sum > 0 ? shares[k] / sum * total : total / keys.length);
-  const out = raw.map(Math.floor);
-  let left = total - out.reduce((a, b) => a + b, 0);
-  raw.map((r, i) => [r - out[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { out[i]++; left--; } });
-  return Object.fromEntries(keys.map((k, i) => [k, out[i]]));
-}
-// Set one criterion to v and rescale the others so the total stays 100.
-function rebalance(weights, id, v) {
-  const others = Object.keys(weights).filter(k => k !== id);
-  if (!others.length) return { [id]: 100 };
-  return { ...apportion(others, weights, 100 - v), [id]: v };
-}
-const suggested = room => apportion(room.criteria.map(c => c.id), Object.fromEntries(room.criteria.map(c => [c.id, Number(c.weight) || 0])), 100);
+const suggested = room => Rooms.apportion(room.criteria.map(c => c.id), Object.fromEntries(room.criteria.map(c => [c.id, Number(c.weight) || 0])), 100);
 
 /* ---------- Screen ---------- */
-let state = null; // { room, role, weights, risk, gut, saved }
+let state = null;   // { room, role, files, facts, weights, risk, gut, saved }
+let invite = null;  // invite_preview row while joining
 
 function notice(msg, { thinking = false, signin = false } = {}) {
   $("notice").hidden = false;
@@ -310,24 +181,44 @@ function notice(msg, { thinking = false, signin = false } = {}) {
   $("questionCard").hidden = $("inputCard").hidden = true;
 }
 
-function chip(label, pressed, onClick) {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = label;
-  b.setAttribute("aria-pressed", String(pressed));
-  b.addEventListener("click", onClick);
-  return b;
+/* ---------- Joining with an invite link ---------- */
+function renderJoin() {
+  $("joinCard").hidden = false;
+  $("joinFrom").textContent = invite.owner_name ? t("join_from", { name: invite.owner_name }) : t("join_anon");
+  $("joinType").textContent = t("type_" + invite.type);
+  $("joinQuestion").textContent = invite.question;
+  $("joinQuestion").dir = invite.language === "ar" ? "rtl" : "ltr";
+  $("joinObserver").hidden = invite.role !== "observer";
+  $("consentRow").hidden = !invite.named_views;
+  document.title = t("join_btn") + " · Clarvy";
 }
+$("joinBtn").addEventListener("click", async () => {
+  $("joinBtn").disabled = true; $("joinStatus").textContent = t("joining"); $("joinStatus").className = "status";
+  const { data, error } = await Rooms.sb.rpc("join_room", { invite_token: joinToken, consent: $("consent").checked });
+  if (error) {
+    $("joinStatus").textContent = t(Rooms.errKey(error, ["invite_expired", "invite_not_found"]));
+    $("joinStatus").className = "status err"; $("joinBtn").disabled = false;
+    return;
+  }
+  roomId = data;
+  history.replaceState(null, "", "?room=" + encodeURIComponent(roomId));
+  $("joinCard").hidden = $("joinActions").hidden = true;
+  invite = null;
+  openRoom();
+});
 
+/* ---------- The room and my input ---------- */
 function renderRoom({ room, files, facts }) {
   $("notice").hidden = true;
   $("questionCard").hidden = $("inputCard").hidden = false;
+  document.title = t("page_title");
   // Room content is in the owner's language; set its direction separately from the interface.
   const contentDir = room.language === "ar" ? "rtl" : "ltr";
   ["question", "contextBlock", "optionList", "factList", "crits", "gutChips"].forEach(id => { $(id).dir = contentDir; $(id).lang = room.language; });
   $("typePill").hidden = false;
   $("typePill").textContent = t("type_" + room.type);
   $("reviewOn").textContent = room.review_date
-    ? t("review_on", { date: new Date(room.review_date + "T00:00:00").toLocaleDateString(lang === "ar" ? "ar-u-nu-latn" : "en-GB", { day: "numeric", month: "short", year: "numeric" }) })
+    ? t("review_on", { date: new Date(room.review_date + "T00:00:00").toLocaleDateString(Rooms.lang === "ar" ? "ar-u-nu-latn" : "en-GB", { day: "numeric", month: "short", year: "numeric" }) })
     : "";
   $("question").textContent = room.question;
   $("context").textContent = room.context || "";
@@ -345,7 +236,7 @@ function renderRoom({ room, files, facts }) {
 }
 
 function renderCrits() {
-  const { room, weights } = state;
+  const { room } = state;
   $("crits").replaceChildren(...room.criteria.map((c, i) => {
     const row = document.createElement("div"); row.className = "crit";
     const dot = document.createElement("span"); dot.className = "dot"; dot.style.background = PALETTE[i % PALETTE.length];
@@ -354,7 +245,7 @@ function renderCrits() {
     const r = document.createElement("input");
     Object.assign(r, { type: "range", min: 0, max: 100, step: 1, id: "w-" + c.id });
     r.style.setProperty("--c", PALETTE[i % PALETTE.length]);
-    r.addEventListener("input", () => { state.weights = rebalance(state.weights, c.id, Number(r.value)); syncWeights(); dirty(); });
+    r.addEventListener("input", () => { state.weights = Rooms.rebalance(state.weights, c.id, Number(r.value)); syncWeights(); dirty(); });
     row.append(dot, nm, out, r);
     return row;
   }));
@@ -397,7 +288,6 @@ function setStatus(msg, kind = "") { $("status").textContent = msg; $("status").
 $("concern").addEventListener("input", () => { $("concernCount").textContent = $("concern").value.length + "/280"; dirty(); });
 $("resetWeights").addEventListener("click", () => { state.weights = suggested(state.room); syncWeights(); dirty(); });
 
-const SERVER_ERRORS = { room_not_open: "closed" };
 $("inputForm").addEventListener("submit", async e => {
   e.preventDefault();
   if (!state.risk) return setStatus(t("need_risk"), "err");
@@ -409,57 +299,21 @@ $("inputForm").addEventListener("submit", async e => {
     $("send").textContent = t("update");
     setStatus(t("sent"), "ok");
   } catch (err) {
-    const key = Object.keys(SERVER_ERRORS).find(k => String(err.message || "").includes(k));
-    setStatus(t(key ? SERVER_ERRORS[key] : "err_generic"), "err");
+    const key = Rooms.errKey(err, ["room_not_open"]);
+    setStatus(t(key === "room_not_open" ? "closed" : key), "err");
     $("send").disabled = false;
   }
 });
 
-$("langBtn").addEventListener("click", async () => {
-  const next = lang === "ar" ? "en" : "ar";
-  await loadLang(next);
-  try { localStorage.setItem("clarvy-lang", next); } catch {}
-  store.setLanguage(next).catch(() => {});
+Rooms.langToggle(() => {
   if (state) { renderRoom(state); renderForm(); if (state.saved) $("send").textContent = t("update"); }
-  else if (!$("signin").hidden) $("noticeText").textContent = t("signin_title");
+  else if (invite) renderJoin();
+  if (!$("signin").hidden) $("noticeText").textContent = t(joinToken && !roomId ? "signin_title_join" : "signin_title");
 });
+Rooms.signInForm($("signin"), $("email"), $("signinStatus"));
 
-$("signin").addEventListener("submit", async e => {
-  e.preventDefault();
-  const email = $("email").value.trim(); if (!email) return;
-  const s = $("signinStatus");
-  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
-  s.textContent = error ? t("err_generic") : t("signin_sent");
-  s.className = "status " + (error ? "err" : "ok");
-});
-
-async function loadSupabase() {
-  const cfg = await fetch("/api/config").then(r => r.ok ? r.json() : {}).catch(() => ({}));
-  if (!cfg.supabase) return false;
-  await new Promise((res, rej) => {
-    const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js";
-    s.onload = res; s.onerror = rej; document.head.append(s);
-  });
-  sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
-  return true;
-}
-
-async function start() {
-  let saved = null; try { saved = localStorage.getItem("clarvy-lang"); } catch {}
-  await loadLang(saved || (demo === "ar" ? "ar" : (navigator.language || "").startsWith("ar") ? "ar" : "en"));
+async function openRoom() {
   notice(t("loading"), { thinking: true });
-
-  if (!demo) {
-    if (!roomId) return notice(t("no_room"));
-    if (!(await loadSupabase())) return notice(t("not_setup"));
-    user = (await sb.auth.getSession()).data.session?.user || null;
-    if (!user) return notice(t("signin_title"), { signin: true });
-    const pref = await store.language();
-    if (pref && pref !== lang && !saved) await loadLang(pref);
-  }
-  $("demoNote").hidden = !demo;
-
   try {
     const data = await store.room();
     if (!data || !data.role) return notice(t("no_access"));
@@ -481,6 +335,32 @@ async function start() {
     console.error(err);
     notice(t("err_generic"));
   }
+}
+
+async function start() {
+  await Rooms.loadLang(Rooms.firstLang(demo === "ar" ? "ar" : null));
+  notice(t("loading"), { thinking: true });
+  $("demoNote").hidden = !demo;
+  if (demo) return openRoom();
+  if (!roomId && !joinToken) return notice(t("no_room"));
+  if (!(await Rooms.connect())) return notice(t("not_setup"));
+  if (Rooms.user) {
+    const p = await Rooms.profile();
+    if (p?.language && !Rooms.savedLang() && p.language !== Rooms.lang) await Rooms.loadLang(p.language);
+  }
+  if (joinToken && !roomId) {
+    const { data, error } = await Rooms.sb.rpc("invite_preview", { invite_token: joinToken });
+    invite = !error && data && data[0];
+    if (!invite) return notice(t("invite_not_found"));
+    if (!invite.usable) return notice(t("invite_expired"));
+    renderJoin();
+    if (!Rooms.user) return notice(t("signin_title_join"), { signin: true });
+    $("notice").hidden = true;
+    $("joinActions").hidden = false;
+    return;
+  }
+  if (!Rooms.user) return notice(t("signin_title"), { signin: true });
+  openRoom();
 }
 start();
 })();

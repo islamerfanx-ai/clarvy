@@ -1,10 +1,10 @@
 # Privacy and validation checks for the Decision Rooms schema, on a throwaway embedded Postgres.
 #   python3 -m venv .venv && .venv/bin/pip install pgserver "psycopg[binary]"
-#   .venv/bin/python supabase/tests/test_rls.py supabase/migrations/20261012000000_decision_rooms.sql
+#   .venv/bin/python supabase/tests/test_rls.py supabase/migrations/*.sql
 """Run the Decision Rooms migration on embedded Postgres with Supabase stubs, then test RLS."""
 import sys, tempfile, uuid, pgserver, psycopg
 
-MIGRATION = sys.argv[1]
+MIGRATIONS = sorted(sys.argv[1:])
 STUB = """
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema storage;
@@ -28,7 +28,7 @@ def db(sql):
         cur.execute(sql)
 db(STUB)
 try:
-    db(open(MIGRATION).read())
+    for m in MIGRATIONS: db(open(m).read())
 except Exception as e:
     print("MIGRATION ERROR:", e); sys.exit(1)
 print("migration applied")
@@ -107,6 +107,42 @@ check("storage: member reads room file", as_user(B, f"select count(*) from stora
 check("storage: member can't upload", as_user(B, f"insert into storage.objects (bucket_id,name) values ('room-files','{R}/x.pdf')"), "row-level security")
 check("storage: owner uploads", as_user(A, f"insert into storage.objects (bucket_id,name) values ('room-files','{R}/x.pdf')"), "INSERT 0 1")
 check("storage: junk path is denied, not an error", as_user(A, "insert into storage.objects (bucket_id,name) values ('room-files','nope/x.pdf')"), "row-level security")
+
+# ---------- Invites and room validation (20261013000000_room_invites.sql) ----------
+F = str(uuid.uuid4())
+def anon(sql):
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute("set local role anon"); cur.execute(sql)
+            return cur.statusmessage + "\n" + "\n".join(" | ".join(str(v) for v in r) for r in cur.fetchall()) + "\n"
+    except Exception as e:
+        return f"ERROR: {e}"
+db(f"insert into auth.users (id,email) values ('{F}','f@x.test')")
+R2 = str(uuid.uuid4())
+check("owner opens a second room", as_user(A, f"insert into rooms (id,workspace_id,type,question,options,criteria,owner_id) values ('{R2}','{W}','finance','Loan or equity?','{opts}','{crit}','{A}')"), "INSERT 0 1")
+check("room needs 2+ options", as_user(A, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id) values ('{W}','finance','x','[{{\"id\":\"a\",\"label\":\"A\"}}]','{crit}','{A}')"), "room_needs_2_to_6_options")
+check("criteria weights must sum to 100", as_user(A, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id) values ('{W}','finance','x','{opts}','[{{\"id\":\"a\",\"label\":\"A\",\"weight\":50}},{{\"id\":\"b\",\"label\":\"B\",\"weight\":40}}]','{A}')"), "criteria_weights_must_sum_100")
+check("ids must be unique", as_user(A, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id) values ('{W}','finance','x','[{{\"id\":\"a\",\"label\":\"A\"}},{{\"id\":\"a\",\"label\":\"B\"}}]','{crit}','{A}')"), "room_ids_must_be_unique")
+check("criteria frozen once input exists", as_user(A, f"update rooms set criteria='[{{\"id\":\"x\",\"label\":\"X\",\"weight\":50}},{{\"id\":\"y\",\"label\":\"Y\",\"weight\":50}}]' where id='{R}'"), "room_has_inputs")
+check("owner edits criteria before any input", as_user(A, f"update rooms set criteria='[{{\"id\":\"x\",\"label\":\"X\",\"weight\":50}},{{\"id\":\"y\",\"label\":\"Y\",\"weight\":50}}]' where id='{R2}'"), "UPDATE 1")
+check("member can't create invites", as_user(B, f"insert into invites (room_id,created_by) values ('{R}','{B}')"), "row-level security")
+check("owner creates invite", as_user(A, f"insert into invites (token,room_id,created_by) values ('tok2','{R2}','{A}')"), "INSERT 0 1")
+check("owner can't invite an owner", as_user(A, f"insert into invites (token,room_id,role,created_by) values ('tok3','{R2}','owner','{A}')"), "check constraint")
+check("signed-out preview shows the question", anon("select question, usable from invite_preview('tok2')"), "Loan or equity? | True")
+check("preview of a bad token is empty", anon("select count(*) from invite_preview('nope')"), "\n0\n")
+check("signed-out can't join", anon("select join_room('tok2')"), "permission denied")
+check("outsider can't see room before joining", as_user(F, f"select count(*) from rooms where id='{R2}'"), "\n0\n")
+check("join with a link", as_user(F, "select join_room('tok2', true)"), R2)
+check("joined: room now visible", as_user(F, f"select question from rooms where id='{R2}'"), "Loan or equity?")
+check("joined as member with consent", as_user(F, f"select role, named_view_consent from memberships where room_id='{R2}' and user_id='{F}'"), "member | True")
+check("joining twice is harmless", as_user(F, "select join_room('tok2')"), R2)
+check("invite use counted once", as_user(A, "select uses from invites where token='tok2'"), "\n1\n")
+check("bad token is rejected", as_user(F, "select join_room('nope')"), "invite_not_found")
+check("members can't list invite tokens", as_user(F, f"select count(*) from invites where room_id='{R2}'"), "\n0\n")
+as_user(A, "update invites set revoked=true where token='tok2'")
+check("revoked link stops working", as_user(E, "select join_room('tok2')"), "invite_expired")
+check("revoked link shows as unusable", anon("select usable from invite_preview('tok2')"), "False")
+check("links to a decided room stop working", (as_user(A, f"insert into invites (token,room_id,created_by) values ('tok4','{R}','{A}')") + as_user(E, "select join_room('tok4')")), "invite_expired")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
