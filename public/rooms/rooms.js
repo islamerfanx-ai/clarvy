@@ -88,7 +88,8 @@ function rebalance(weights, id, v) {
 }
 
 /* ---------- Small DOM helpers ---------- */
-const PALETTE = ["#690DE2", "#8FB2FF", "#C74092", "#FF6A3D", "#2C36CB", "#7C7AA3", "#E8E3FF", "#3FB59B"];
+// One blue family plus neutrals, so the page stays a single colour.
+const PALETTE = ["#2F5BFF", "#141414", "#8DA4FF", "#8C93A3", "#1A3BB3", "#C5CBD6", "#5C5C66", "#BFCCFF"];
 function chip(label, pressed, onClick) {
   const b = document.createElement("button");
   b.type = "button"; b.className = "chip"; b.textContent = label;
