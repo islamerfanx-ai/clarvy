@@ -3,11 +3,11 @@ import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { ask, search } from "./lib/core.js";
+import { ask, search, config } from "./lib/core.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "public");
-const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
-const routes = { "/api/ask": ask, "/api/search": search };
+const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
+const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config };
 const MAX_BODY = 8 * 1024 * 1024;
 
 http.createServer(async (req, res) => {
