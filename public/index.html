@@ -8,7 +8,7 @@
 <title>Clarvy</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=Instrument+Serif:ital@0;1&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&display=swap">
 <style>
 /* Layout: full-bleed spaced wordmark, a single message column, fixed halo glowing up from the bottom edge */
 :root{
@@ -22,6 +22,7 @@
   --err:#C62F45;
   --mono:"Martian Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
   --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
+  --read:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;   /* questions, answers and form text */
   color-scheme:light;
 }
 *{box-sizing:border-box}
@@ -157,6 +158,27 @@ ul.odds{list-style:none;padding:0!important;gap:2px!important;font-size:12px!imp
 #code:focus{outline:none;border-color:var(--accent)}
 .small{margin:0;font-size:12px;color:var(--dim);line-height:1.5}
 @media (prefers-reduced-motion:reduce){.thinking .text::after{animation:none}}
+
+/* Reading text: sentence case in a readable sans. Mono uppercase stays for labels, chips, buttons and the wordmark. */
+.text{font-family:var(--read);text-transform:none;letter-spacing:-.01em;font-weight:500;font-size:clamp(18px,2.6vw,22px);line-height:1.4}
+.text em{font-size:1.2em}
+.msg .body,.msg ul,.small,.hitem .q{font-family:var(--read);letter-spacing:0}
+.msg .body,.msg ul{font-size:15px}
+.ask input,.ask textarea,#code{font-family:var(--read);text-transform:none;letter-spacing:0;font-size:16px}
+.hitem .d{font-family:var(--read);text-transform:none;letter-spacing:0;font-size:15px;font-weight:500}
+details.more>summary{font-size:12px;padding-block:6px}
+details.more>summary .opt{color:var(--dim);margin-inline-start:4px}
+details.more .field{margin-top:20px}
+
+/* "Deciding with other people?" card under the composer */
+a.msg.group{flex-direction:row;align-items:center;gap:16px;text-decoration:none;color:var(--fg);background:#fff;box-shadow:0 0 0 1px rgba(20,20,20,.1);
+  width:100%;padding:18px 22px;transition:box-shadow .2s}
+a.msg.group:hover{box-shadow:0 0 0 1.5px var(--accent)}
+a.msg.group:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.group-text{display:flex;flex-direction:column;gap:4px;font-family:var(--read);font-size:14px;line-height:1.45;color:var(--dim)}
+.group-text strong{font-weight:600;color:var(--fg);font-size:15px}
+.group-go{margin-inline-start:auto;font-size:20px;color:var(--accent)}
+@media (max-width:560px){.msg.you{width:100%}}
 </style>
 
 </head>
@@ -176,36 +198,36 @@ ul.odds{list-style:none;padding:0!important;gap:2px!important;font-size:12px!imp
       <div class="meta"><span>From: You</span><span>Now</span></div>
       <form class="ask" id="ask">
         <div class="field">
-          <label>Pick a topic <span class="opt">optional</span></label>
-          <div class="topics" id="topics" role="group" aria-label="Topics"></div>
-        </div>
-        <div class="field">
           <label for="q">What are you deciding?</label>
-          <textarea id="q" rows="2" placeholder="Should we open a second location in Riyadh this year?"></textarea>
-        </div>
-        <div class="field">
-          <label>How much risk are you up for?</label>
-          <div class="topics" id="riskPick" role="group" aria-label="Risk appetite"></div>
+          <textarea id="q" rows="3" placeholder="Should we open a second location in Riyadh this year?"></textarea>
         </div>
         <details class="more" id="more">
-          <summary>Add details</summary>
+          <summary>Add details <span class="opt">optional</span></summary>
           <div class="field">
-            <label for="d">What you know <span class="opt">optional</span></label>
+            <label>Topic</label>
+            <div class="topics" id="topics" role="group" aria-label="Topics"></div>
+          </div>
+          <div class="field">
+            <label>How much risk are you up for?</label>
+            <div class="topics" id="riskPick" role="group" aria-label="Risk appetite"></div>
+          </div>
+          <div class="field">
+            <label for="d">What you know</label>
             <textarea id="d" rows="4" placeholder="Facts, numbers, the options you're weighing..."></textarea>
           </div>
           <div class="field">
-            <label for="c">What matters most <span class="opt">optional</span></label>
+            <label for="c">What matters most</label>
             <textarea id="c" rows="2" placeholder="For example: family, money, peace of mind"></textarea>
           </div>
+          <div class="field">
+            <label for="files">Files <span class="opt">PDF, Word, Excel, CSV, text<span id="imgNote"></span></span></label>
+            <label class="drop" id="drop" for="files">
+              <input type="file" id="files" multiple accept=".pdf,.docx,.xlsx,.xls,.ods,.csv,.tsv,.txt,.md,.json">
+              <span>Drop files here or <u>browse</u></span>
+            </label>
+            <ul class="files" id="fileList"></ul>
+          </div>
         </details>
-        <div class="field">
-          <label for="files">Attach data <span class="opt">optional · PDF, Word, Excel, CSV, text<span id="imgNote"></span></span></label>
-          <label class="drop" id="drop" for="files">
-            <input type="file" id="files" multiple accept=".pdf,.docx,.xlsx,.xls,.ods,.csv,.tsv,.txt,.md,.json">
-            <span>Drop files here or <u>browse</u></span>
-          </label>
-          <ul class="files" id="fileList"></ul>
-        </div>
         <div class="field" id="codeRow" hidden>
           <label for="code">Access code</label>
           <div class="row"><input id="code" type="password" autocomplete="off" placeholder="Ask the Clarvy team for a code"><button class="btn" type="button" id="codeSave">Save</button></div>
@@ -214,6 +236,12 @@ ul.odds{list-style:none;padding:0!important;gap:2px!important;font-size:12px!imp
         <p class="status" id="status" role="status" aria-live="polite"></p>
       </form>
     </article>
+
+    <a class="msg group" href="/new.html">
+      <span class="group-text"><strong>Deciding with other people?</strong>
+      <span>Open a room. Everyone answers privately, and Clarvy makes one call for the group.</span></span>
+      <span class="group-go" aria-hidden="true">→</span>
+    </a>
   </section>
 
 </main>

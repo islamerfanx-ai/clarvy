@@ -5,6 +5,7 @@
   --mono:"Martian Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
   --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
   --arabic:"IBM Plex Sans Arabic",system-ui,sans-serif;
+  --read:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;   /* questions, answers and form text */
   color-scheme:light;
 }
 *,*::before,*::after{box-sizing:border-box}
@@ -98,6 +99,13 @@ fieldset:disabled .chip,fieldset:disabled input{cursor:default;opacity:.6}
 .thinking::after{content:"_";animation:blink 1s steps(1) infinite}
 @keyframes blink{50%{opacity:0}}
 
+/* Reading text: sentence case in a readable sans. Mono uppercase stays for labels, chips and buttons. */
+.text{font-family:var(--read);text-transform:none;letter-spacing:-.01em;font-weight:500}
+.body,.small,ul.plain,.crit .nm,.note,.check{font-family:var(--read);letter-spacing:0}
+input.line,textarea{font-family:var(--read);font-stretch:normal;letter-spacing:0;font-size:16px}
+/* Arabic text (interface or room content) keeps the Arabic face; Inter has no Arabic letters */
+.text:lang(ar),.body:lang(ar),.small:lang(ar),ul.plain:lang(ar),.nm:lang(ar),.note:lang(ar),.check:lang(ar),input.line:lang(ar),textarea:lang(ar),.chip:lang(ar){font-family:var(--arabic)}
+
 /* Arabic: a real Arabic face, no uppercase, no letter-spacing (they break Arabic shaping) */
 [dir=rtl] body,[dir=rtl] .chip,[dir=rtl] .btn,[dir=rtl] input.line,[dir=rtl] textarea,[dir=rtl] .lang{font-family:var(--arabic);font-stretch:normal}
 [dir=rtl] .text,[dir=rtl] .meta,[dir=rtl] h3,[dir=rtl] .lbl,[dir=rtl] .chip,[dir=rtl] .btn,[dir=rtl] .status,[dir=rtl] .pill,
@@ -106,6 +114,7 @@ fieldset:disabled .chip,fieldset:disabled input{cursor:default;opacity:.6}
 [dir=rtl] .meta,[dir=rtl] h3,[dir=rtl] .lbl,[dir=rtl] .total,[dir=rtl] .linkbtn,[dir=rtl] details.peek>summary{font-size:13px}
 [dir=rtl] .body,[dir=rtl] ul.plain,[dir=rtl] .crit .nm{font-size:15px;line-height:1.7}
 .wm,.lang{direction:ltr}
+[dir=rtl] .wm{font-family:var(--mono);font-stretch:75%}
 
 @media (max-width:480px){.msg{padding:18px 16px 20px}}
 @media (prefers-reduced-motion:reduce){.alloc i{transition:none}.thinking::after{animation:none}}
