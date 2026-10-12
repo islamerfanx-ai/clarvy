@@ -239,7 +239,7 @@ function stepLast() {
   const emailBox = el("div", "stack-sm");
   if (needEmail) {
     const eHead = el("div", "block");
-    eHead.append(el("p", "text sm", t("email_title_owner")), el("p", "small", t("email_hint_owner")));
+    eHead.append(el("p", "text sm", t("email_title_owner")), el("p", "small", t(Rooms.emailCodes ? "email_hint_owner" : "email_hint_link")));
     nodes.push(eHead, emailBox);
   }
   const f = form([...nodes, actions({ next: needEmail ? t("next") : t("create") })], create);

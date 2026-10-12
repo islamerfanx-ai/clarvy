@@ -21,7 +21,6 @@
   "type_trip": "Trip",
   "advice_note": "Clarvy supports the decision. It doesn't replace a licensed adviser.",
   "review_on": "Review on {date}",
-
   "email_title_owner": "Where should we keep your rooms?",
   "email_hint_owner": "We'll email you a 6-digit code. No password needed.",
   "signin_title": "Sign in to see your rooms",
@@ -33,7 +32,6 @@
   "code_wrong": "That code didn't work. Check it, or send a new one.",
   "code_resend": "Send a new code",
   "email_change": "Use a different email",
-
   "nr_q_title": "What are you deciding?",
   "nr_q_hint": "Write it as a question your group can answer.",
   "question_ph": "Should we open a second location in Jeddah this year?",
@@ -76,7 +74,6 @@
   "room_needs_2_to_6_options": "A room needs between 2 and 6 options.",
   "room_needs_2_to_8_criteria": "A room needs between 2 and 8 things to weigh.",
   "files_failed": "The room is open, but some files didn't upload.",
-
   "share_title": "Invite the people who should have a say",
   "share_hint": "Anyone with this link can join with just their name. It works for 30 days.",
   "copy": "Copy link",
@@ -88,7 +85,6 @@
   "invite_msg_anon": "You're invited to weigh in on a decision: \"{question}\"\nIt takes about 2 minutes, and only you see your answers.\n{link}",
   "invite_subject": "Your view on: {question}",
   "reminder_msg": "Quick reminder: your view on \"{question}\" is still open. It takes about 2 minutes.\n{link}",
-
   "join_from": "{name} wants your view",
   "join_anon": "You're invited to weigh in",
   "join_hint": "About 2 minutes. Only you see your answers.",
@@ -101,7 +97,6 @@
   "have_account": "Have an account? Sign in with email",
   "invite_expired": "This invite link no longer works. Ask the owner for a new one.",
   "invite_not_found": "This invite link isn't right. Check you copied all of it.",
-
   "privacy": "Only you see your answers. The group sees the combined result, never who said what.",
   "in_rate_title": "How much does each thing matter to you?",
   "scale_1": "Not much",
@@ -126,7 +121,6 @@
   "need_pick": "Pick one to continue.",
   "closed": "This room has moved on, so answers are locked.",
   "observer": "You're observing this room. You'll see the result when it's ready.",
-
   "wait_title_member": "Thanks, your answers are in.",
   "wait_title_owner": "Your room is open.",
   "wait_progress": "{n} of {total} have answered",
@@ -145,10 +139,8 @@
   "save_title": "Keep this room on your other devices",
   "save_hint": "Add your email and we'll send a code. Optional.",
   "save_done": "Saved. You can sign in with {email} on any device.",
-
   "thinking": "Clarvy is weighing everyone's view",
   "thinking_hint": "This takes about a minute. You can leave and come back.",
-
   "v_call": "Clarvy's call",
   "conf_High": "High certainty",
   "conf_Medium": "Medium certainty",
@@ -188,7 +180,6 @@
   "so_send": "Sign off",
   "so_done": "You signed off: {stance}",
   "so_counts": "{agree} agree · {commit} disagree but commit · {object} object",
-
   "mr_title": "My rooms",
   "mr_empty": "No rooms yet. Open one and invite the people who should have a say.",
   "mr_open_new": "Open a room",
@@ -199,9 +190,35 @@
   "st_decided": "Decided",
   "st_reviewed": "Reviewed",
   "role_owner": "You run this room",
-
-  "tmpl_business": ["Upside", "Cash risk", "Execution capacity", "Brand fit"],
-  "tmpl_finance": ["Cost of capital", "Control", "Downside protection", "Liquidity"],
-  "tmpl_politics": ["Mission and values", "Real-world impact", "Reputation", "Relationships", "Safety"],
-  "tmpl_trip": ["Budget", "Travel time", "Weather", "Vibe", "Dates that work"]
+  "tmpl_business": [
+    "Upside",
+    "Cash risk",
+    "Execution capacity",
+    "Brand fit"
+  ],
+  "tmpl_finance": [
+    "Cost of capital",
+    "Control",
+    "Downside protection",
+    "Liquidity"
+  ],
+  "tmpl_politics": [
+    "Mission and values",
+    "Real-world impact",
+    "Reputation",
+    "Relationships",
+    "Safety"
+  ],
+  "tmpl_trip": [
+    "Budget",
+    "Travel time",
+    "Weather",
+    "Vibe",
+    "Dates that work"
+  ],
+  "link_hint": "We sent an email to {email}. Tap the link in it and this page carries on by itself.",
+  "email_wait": "Too many emails just now. Wait a minute and try again.",
+  "email_send_link": "Email me a link",
+  "resend_link": "Send the email again",
+  "email_hint_link": "We'll email you a sign-in link. No password needed."
 }
