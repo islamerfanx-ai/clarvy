@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Your Clarvy decision rooms.">
+<title>My rooms · Clarvy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Clarvy</a>
+    <div class="top-acts">
+      <a class="navlink" href="/new.html" data-t="new_room">New room</a>
+      <button class="lang" type="button" id="langBtn"></button>
+    </div>
+  </header>
+  <div id="view" style="display:flex;flex-direction:column;gap:8px" aria-live="polite">
+    <article class="msg"><p class="text thinking">One moment</p></article>
+  </div>
+  <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:8px"></p>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const demo = new URLSearchParams(location.search).get("demo");
+const view = $("view");
+let rooms = null;
+
+const DEMO = [
+  { id: "a", type: "business", question: "Should we open a second location in Jeddah this year, or wait until next spring?", status: "open", role: "owner", review_date: "2026-12-01", quorum: 2, members: 3, submitted: 2, i_submitted: false, has_verdict: false },
+  { id: "b", type: "trip", question: "Where should the six of us go in March?", status: "open", role: "member", review_date: null, quorum: 2, members: 6, submitted: 3, i_submitted: false, has_verdict: false },
+  { id: "c", type: "finance", question: "Take the bank loan, raise equity, or self-fund?", status: "deciding", role: "member", review_date: "2026-11-20", quorum: 2, members: 4, submitted: 4, i_submitted: true, has_verdict: true },
+  { id: "d", type: "politics", question: "Do we speak publicly on the new data law?", status: "decided", role: "owner", review_date: "2026-11-02", quorum: 2, members: 5, submitted: 5, i_submitted: true, has_verdict: true }
+];
+
+// One plain line on where each room stands, with what you need to do first.
+function statusLine(r) {
+  if (r.status === "open" && !r.i_submitted && r.role !== "observer") return { text: t("st_input"), go: true };
+  if (r.status === "open") return { text: t("st_waiting", { n: r.submitted, total: r.members }), go: r.role === "owner" && r.submitted >= r.quorum };
+  if (r.status === "deciding") return r.has_verdict ? { text: t("st_verdict"), go: r.role === "owner" } : { text: t("st_deciding") };
+  return { text: t(r.status === "reviewed" ? "st_reviewed" : "st_decided") };
+}
+
+function render() {
+  document.title = t("mr_title") + " · Clarvy";
+  const head = el("article", "msg active");
+  head.append(el("p", "text", t("mr_title")));
+  if (!rooms.length) {
+    head.append(el("p", "small", t("mr_empty")));
+    const go = el("a", "btn", t("mr_open_new")); go.href = "/new.html";
+    head.append(go);
+    view.replaceChildren(head);
+    return;
+  }
+  const list = el("ul", "rlist");
+  rooms.forEach(r => {
+    const li = el("li");
+    const a = el("a", "ritem"); a.href = demo ? "/room.html?demo=" + (r.role === "owner" ? "owner" : "1") : "/room.html?room=" + r.id;
+    const m = el("div", "meta"); m.append(el("span", null, t("type_" + r.type) + (r.role === "owner" ? " · " + t("role_owner") : "")), el("span", null, r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : ""));
+    const q = el("span", "q", r.question); q.lang = r.language || "en"; q.dir = r.language === "ar" ? "rtl" : "ltr";
+    const s = statusLine(r);
+    a.append(m, q, el("span", "st" + (s.go ? " go" : ""), s.text));
+    li.append(a);
+    list.append(li);
+  });
+  const add = el("a", "btn soft", "+ " + t("mr_open_new")); add.href = "/new.html";
+  view.replaceChildren(head, list, add);
+}
+
+function signIn() {
+  const box = el("div", "stack-sm");
+  const c = el("article", "msg you"); c.append(el("p", "text sm", t("signin_title")), box);
+  view.replaceChildren(c);
+  Rooms.emailCode(box, { onDone: load });
+}
+
+async function load() {
+  if (demo) { rooms = DEMO; return render(); }
+  const { data, error } = await Rooms.sb.rpc("my_rooms");
+  if (error) { const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); return view.replaceChildren(c); }
+  rooms = data || [];
+  render();
+}
+
+Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.user) signIn(); });
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  $("demoNote").hidden = !demo;
+  if (demo) return load();
+  if (!(await Rooms.connect())) { const c = el("article", "msg"); c.append(el("p", "text", t("not_setup"))); return view.replaceChildren(c); }
+  if (!Rooms.user) return signIn();
+  load();
+})();
+})();
+</script>
+</body>
+</html>

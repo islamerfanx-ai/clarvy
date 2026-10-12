@@ -11,6 +11,8 @@ create schema auth; create schema storage;
 create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}');
 create function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+create function auth.jwt() returns jsonb language sql stable as
+  $$ select coalesce(nullif(current_setting('request.jwt.claims', true), '')::jsonb, '{}'::jsonb) $$;
 create table storage.buckets (id text primary key, name text, public boolean);
 create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
 alter table storage.objects enable row level security;
@@ -37,12 +39,13 @@ A, B, C, D, E = (str(uuid.uuid4()) for _ in range(5))
 db("".join(f"insert into auth.users (id,email,raw_user_meta_data) values ('{u}','{n}@x.test','{{\"name\":\"{n}\"}}');"
            for u, n in zip((A, B, C, D, E), "ABCDE")))
 
-def as_user(u, sql):
+def as_user(u, sql, anonymous=False):
     """Run one statement as user u. Returns 'STATUS', rows as 'a | b' lines, or 'ERROR: ...'."""
     try:
         with conn.transaction(), conn.cursor() as cur:
             cur.execute("set local role authenticated")
             cur.execute("select set_config('request.jwt.claim.sub', %s, true)", (u,))
+            cur.execute("select set_config('request.jwt.claims', %s, true)", (f'{{"sub":"{u}","is_anonymous":{str(anonymous).lower()}}}',))
             cur.execute(sql)
             out = cur.statusmessage
             if cur.description:
@@ -96,8 +99,10 @@ check("calendar link listable", as_user(B, "select provider from calendar_links"
 
 db(f"insert into analyses (room_id, verdict) values ('{R}', '{{\"call\":\"b\"}}')")
 check("member can't decide verdict", as_user(B, f"select decide_verdict('{R}','accepted')"), "only_owner_decides")
-check("override needs a reason", as_user(A, f"select decide_verdict('{R}','overridden','  ')"), "check constraint")
-check("owner overrides with reason", as_user(A, f"select decide_verdict('{R}','overridden','Cash first this year')"), "SELECT 1")
+check("override needs a real option", as_user(A, f"select decide_verdict('{R}','overridden','Cash first','zzz')"), "override_needs_option")
+check("override needs a reason", as_user(A, f"select decide_verdict('{R}','overridden','  ','b')"), "check constraint")
+check("owner overrides with reason", as_user(A, f"select decide_verdict('{R}','overridden','Cash first this year','b')"), "SELECT 1")
+check("override is the final option", as_user(A, f"select final_option, override_reason from analyses where room_id='{R}'"), "b | Cash first this year")
 check("inputs locked once decided", as_user(B, f"update inputs set concern='late' where room_id='{R}' and user_id='{B}'"), "room_not_open")
 
 check("signoff then counts", (as_user(C, f"insert into signoffs (room_id,user_id,stance) values ('{R}','{C}','object')") + as_user(C, f"select stance, n from signoff_counts('{R}')")), "object | 1")
@@ -143,6 +148,24 @@ as_user(A, "update invites set revoked=true where token='tok2'")
 check("revoked link stops working", as_user(E, "select join_room('tok2')"), "invite_expired")
 check("revoked link shows as unusable", anon("select usable from invite_preview('tok2')"), "False")
 check("links to a decided room stop working", (as_user(A, f"insert into invites (token,room_id,created_by) values ('tok4','{R}','{A}')") + as_user(E, "select join_room('tok4')")), "invite_expired")
+
+# ---------- The simple journey (20261014000000_room_journey.sql) ----------
+G = str(uuid.uuid4())
+db(f"insert into auth.users (id) values ('{G}')")
+check("name-only member can't open a workspace", as_user(G, f"insert into workspaces (name,owner_id) values ('x','{G}')", anonymous=True), "row-level security")
+check("name-only member can set their name", as_user(G, f"update profiles set name='Guest' where id='{G}'", anonymous=True), "UPDATE 1")
+check("owner makes a fresh invite", as_user(A, f"insert into invites (token,room_id,created_by) values ('tok5','{R2}','{A}')"), "INSERT 0 1")
+check("name-only member joins with a link", as_user(G, "select join_room('tok5')", anonymous=True), R2)
+check("name-only member gives input with ratings", as_user(G, f"insert into inputs (room_id,user_id,weights,ratings,risk_appetite,gut_pick) values ('{R2}','{G}','{{\"x\":75,\"y\":25}}','{{\"x\":5,\"y\":2}}','bold','a')", anonymous=True), "INSERT 0 1")
+check("name-only member can't open a room", as_user(G, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id) values ('{W}','business','x','{opts}','{crit}','{G}')", anonymous=True), "row-level security")
+check("my rooms lists the room with counts", as_user(G, "select question, role, members, submitted, i_submitted, has_verdict from my_rooms()", anonymous=True), "Loan or equity? | member | 3 | 1 | True | False")
+check("my rooms: owner sees status", as_user(A, f"select status from my_rooms() where id='{R}'"), "decided")
+check("my rooms empty for outsiders", as_user(E, "select count(*) from my_rooms()"), "\n0\n")
+check("no sign-off before the call is settled", as_user(G, f"insert into signoffs (room_id,user_id,stance) values ('{R2}','{G}','agree')", anonymous=True), "row-level security")
+check("verdict needs an analysis first", as_user(A, f"select decide_verdict('{R2}','accepted')"), "no_verdict_yet")
+db(f"insert into analyses (room_id, verdict) values ('{R2}', '{{\"call\":\"b\"}}')")
+check("accept takes Clarvy's call", (as_user(A, f"select decide_verdict('{R2}','accepted')") + as_user(A, f"select final_option, owner_decision from analyses where room_id='{R2}'")), "b | accepted")
+check("sign-off once settled", as_user(G, f"insert into signoffs (room_id,user_id,stance) values ('{R2}','{G}','agree')", anonymous=True), "INSERT 0 1")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

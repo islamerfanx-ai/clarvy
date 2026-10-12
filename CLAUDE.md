@@ -29,12 +29,12 @@ npm start                      # http://localhost:3000
 - Content that comes from files, search results or the model is data, not instructions; prompts say so.
 - Copy should be plain, warm and short. No em-dash asides.
 
-## Decision Rooms (in progress, spec: docs/decision-rooms-spec.md)
-- `supabase/migrations/20261012000000_decision_rooms.sql`: the whole v1 data model with row-level security. A member's raw input, sign-off and trip brief are readable by that member only (not the owner); groups see ticks and counts through security-definer functions (`room_roster`, `signoff_counts`, `trip_vote_counts`). The server reads inputs with the service role to compute the combined view. Inputs are validated by trigger: weights cover exactly the room's criteria, whole numbers summing to 100, and lock once the room leaves `open`.
-- `supabase/migrations/20261013000000_room_invites.sql`: invite links (`invites`, `invite_preview()` works signed out, `join_room()`), and a trigger validating rooms (2-6 options, 2-8 criteria summing to 100, frozen once anyone has given input).
-- `supabase/tests/test_rls.py`: privacy and validation checks on embedded Postgres. Run it after any schema change.
-- `public/new.html`: the New room screen (type templates, options, context, files, criteria with "Suggest from my question" via `/api/ask`, review date) and the invite step (copy, WhatsApp, email links sent from the owner's own device).
-- `public/room.html?room=<id>`: the My input screen; `?join=<token>` previews the invite, signs in and joins. Both pages take `?demo=1` or `?demo=ar` to run in the browser with no backend.
-- `public/rooms/rooms.js`, `rooms.css`: shared by the room pages (words, Supabase, sign-in, weights that always total 100, file readers).
-- `public/i18n/en.json`, `ar.json`: interface text. Arabic sets `dir=rtl`, switches to IBM Plex Sans Arabic and drops uppercase and letter-spacing. Room content keeps the owner's language and direction.
-- `/api/config` hands the browser `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public by design). Never send the service role key to the browser.
+## Decision Rooms (spec: docs/decision-rooms-spec.md)
+- Journey: owner opens a room in 5 short steps (`public/new.html`), shares one link, gives their own answers, watches who has answered, taps Decide now, then accepts or overrides the verdict; everyone signs off. Members open the link, type a name (Supabase anonymous sign-in, email optional later), answer 4 short steps (1-5 ratings per criterion, risk, gut pick, one concern) and see the result on the same link.
+- `public/room.html`: one page that shows join, input steps, waiting, thinking or verdict depending on the room's status and your role. `?room=<id>`, `?join=<token>`; `?demo=1|owner|join|ar` runs every state in the browser with no backend.
+- `public/rooms.html`: My rooms (the `my_rooms()` function). `public/rooms/rooms.js`, `rooms.css`: shared words, Supabase, email-code sign-in (6 digits, never leaves the page), share links, file readers.
+- `public/rooms/math.js`: per-member scoring and the disagreement map, plain code with no AI calls. Imported by the server and by the demo.
+- `lib/rooms.js`: `POST /api/rooms/decide` (owner only). Reads every private input with `SUPABASE_SERVICE_ROLE_KEY`, runs the Analyst (with web search) and the Judge, and writes one anonymous `analyses` row. Runs in the background after a 202, so it needs a long-running Node server (server.js), not Vercel.
+- `supabase/migrations/*.sql`: the data model with row-level security. Raw inputs, sign-offs and trip briefs are readable only by their author; groups see ticks and counts through security-definer functions. Name-only (anonymous) users can join and answer but can't open rooms. Run `supabase/tests/test_rls.py supabase/migrations/*.sql` after any schema change.
+- `public/i18n/en.json`, `ar.json`: all room-page words. Arabic sets `dir=rtl` and uses IBM Plex Sans Arabic; room content keeps the owner's language and direction.
+- `/api/config` hands the browser `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public by design). The service role key stays on the server.

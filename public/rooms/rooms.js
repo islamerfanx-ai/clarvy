@@ -1,6 +1,8 @@
-// Shared by the Decision Rooms pages (room.html, new.html): words, Supabase, sign-in, weights, file reading.
+// Shared by the Decision Rooms pages (new.html, room.html, rooms.html): words, Supabase, sign-in,
+// weights, file reading and small DOM helpers.
 (() => {
 const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
 /* ---------- Words: English and Arabic live in /i18n/*.json ---------- */
 let lang = "en", words = {};
@@ -12,8 +14,8 @@ async function loadLang(l) {
   words = await (await fetch(`/i18n/${l}.json`)).json(); lang = l;
   document.documentElement.lang = l;
   document.documentElement.dir = words.dir;
-  document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t(el.dataset.t); });
-  document.querySelectorAll("[data-t-ph]").forEach(el => { el.placeholder = t(el.dataset.tPh); });
+  document.querySelectorAll("[data-t]").forEach(e => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll("[data-t-ph]").forEach(e => { e.placeholder = t(e.dataset.tPh); });
   const b = $("langBtn");
   if (b) { b.textContent = t("lang_other"); b.setAttribute("aria-label", t("lang_other_label")); }
 }
@@ -29,6 +31,7 @@ function langToggle(onChange) {
     onChange && onChange();
   });
 }
+const fmtDate = d => new Date(d + (String(d).length === 10 ? "T00:00:00" : "")).toLocaleDateString(lang === "ar" ? "ar-u-nu-latn" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /* ---------- Supabase ---------- */
 let sb = null, user = null;
@@ -38,41 +41,110 @@ async function connect() {
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
   sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
   user = (await sb.auth.getSession()).data.session?.user || null;
+  sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; });
+  showMyRooms();
   return true;
 }
+const isGuest = () => !!user?.is_anonymous;      // joined with just a name
+const hasAccount = () => !!user && !user.is_anonymous;
 async function profile() {
   if (!user) return null;
   const { data } = await sb.from("profiles").select("name,language").eq("id", user.id).maybeSingle();
   return data;
 }
-// The sign-in form: an email link that brings you back to this exact page.
-function signInForm(form, input, status) {
-  form.addEventListener("submit", async e => {
-    e.preventDefault();
-    const email = input.value.trim(); if (!email) return;
-    const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
-    status.textContent = t(error ? "err_generic" : "signin_sent");
-    status.className = "status " + (error ? "err" : "ok");
-  });
+async function setName(name) { await sb.from("profiles").update({ name }).eq("id", user.id); }
+// Members join with just a name: an anonymous Supabase account that is still theirs alone.
+async function guestSignIn(name) {
+  if (!user) {
+    const { data, error } = await sb.auth.signInAnonymously();
+    if (error) throw error;
+    user = data.user;
+  }
+  await setName(name);
 }
-// Map a database error (raised by our triggers and functions) to a words key.
+function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !user; }
+
+/* ---------- Email sign-in with a 6-digit code (never leaves the page) ---------- */
+// Builds the email -> code steps inside `box`. A guest who adds an email keeps their rooms
+// (their anonymous account is upgraded); anyone else signs in or signs up.
+function emailCode(box, { onDone }) {
+  box.replaceChildren();
+  const emailStep = el("form", "stack-sm"), codeStep = el("form", "stack-sm");
+  codeStep.hidden = true;
+  const eLbl = el("label", "lbl", t("email_lbl")); eLbl.htmlFor = "ecEmail";
+  const eIn = el("input", "line"); Object.assign(eIn, { id: "ecEmail", type: "email", autocomplete: "email", required: true, inputMode: "email" });
+  const eBtn = el("button", "btn", t("email_send")); eBtn.type = "submit";
+  const cLbl = el("label", "lbl", t("code_lbl")); cLbl.htmlFor = "ecCode";
+  const cIn = el("input", "line code"); Object.assign(cIn, { id: "ecCode", inputMode: "numeric", autocomplete: "one-time-code", maxLength: 6, pattern: "[0-9]*" });
+  const cHint = el("p", "small");
+  const cBtn = el("button", "btn", t("code_verify")); cBtn.type = "submit";
+  const again = el("div", "row-acts");
+  const resend = el("button", "linkbtn", t("code_resend")); resend.type = "button";
+  const change = el("button", "linkbtn", t("email_change")); change.type = "button";
+  again.append(resend, change);
+  const status = el("p", "status"); status.setAttribute("role", "status");
+  emailStep.append(eLbl, eIn, eBtn);
+  codeStep.append(cLbl, cIn, cHint, cBtn, again);
+  box.append(emailStep, codeStep, status);
+  let mode = "email", email = "";
+  const say = (msg, kind = "err") => { status.textContent = msg; status.className = "status " + kind; };
+  async function send() {
+    say("");
+    eBtn.disabled = true;
+    const res = isGuest()
+      ? await sb.auth.updateUser({ email }, { emailRedirectTo: location.href })
+      : await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
+    mode = isGuest() ? "email_change" : "email";
+    eBtn.disabled = false;
+    if (res.error) return say(t("err_generic"));
+    emailStep.hidden = true; codeStep.hidden = false;
+    cHint.textContent = t("code_hint", { email });
+    cIn.value = ""; cIn.focus();
+  }
+  emailStep.addEventListener("submit", e => { e.preventDefault(); email = eIn.value.trim(); if (email) send(); });
+  resend.addEventListener("click", send);
+  change.addEventListener("click", () => { codeStep.hidden = true; emailStep.hidden = false; say(""); eIn.focus(); });
+  codeStep.addEventListener("submit", async e => {
+    e.preventDefault();
+    const token = cIn.value.replace(/\D/g, "");
+    if (token.length !== 6) return say(t("code_wrong"));
+    cBtn.disabled = true;
+    const { data, error } = await sb.auth.verifyOtp({ email, token, type: mode });
+    cBtn.disabled = false;
+    if (error) return say(t("code_wrong"));
+    user = data.user || (await sb.auth.getUser()).data.user;
+    showMyRooms();
+    onDone && onDone(email);
+  });
+  setTimeout(() => eIn.focus(), 50);
+}
+
+/* ---------- Server calls ---------- */
+const accessCode = () => { try { return localStorage.getItem("clarvy-access-code") || ""; } catch { return ""; } };
+async function ask(prompt) {
+  const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", "x-access-code": accessCode() }, body: JSON.stringify({ prompt }) });
+  const data = await r.json().catch(() => null);
+  if (!r.ok || !data?.data) throw new Error(data?.code || "upstream");
+  return data.data;
+}
+// Owner's "Decide now": the server reads everyone's private input and writes back the combined result.
+async function decideNow(roomId) {
+  const token = (await sb.auth.getSession()).data.session?.access_token;
+  const r = await fetch("/api/rooms/decide", { method: "POST", headers: { "Content-Type": "application/json", "x-access-code": accessCode(), Authorization: "Bearer " + token }, body: JSON.stringify({ room_id: roomId }) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.code || "upstream"), data);
+  return data;
+}
+// Map an error (from our database functions or the server) to a words key.
 function errKey(err, known) {
   const msg = String(err?.message || err || "");
   return known.find(k => msg.includes(k)) || "err_generic";
 }
 
-/* ---------- Model calls (same /api/ask the main app uses) ---------- */
-async function ask(prompt) {
-  let code = ""; try { code = localStorage.getItem("clarvy-access-code") || ""; } catch {}
-  const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", "x-access-code": code }, body: JSON.stringify({ prompt }) });
-  const data = await r.json().catch(() => null);
-  if (!r.ok || !data?.data) throw new Error(data?.code || "upstream");
-  return data.data;
-}
-
-/* ---------- Weights: whole numbers that always add up to 100 ---------- */
+/* ---------- Weights ---------- */
 // Spread `total` across keys in proportion to `shares`, rounding so the parts still sum exactly.
-function apportion(keys, shares, total) {
+// (Same as apportion() in rooms/math.js, which the server uses.)
+function apportion(keys, shares, total = 100) {
   const sum = keys.reduce((s, k) => s + (Number(shares[k]) || 0), 0);
   const raw = keys.map(k => sum > 0 ? (Number(shares[k]) || 0) / sum * total : total / keys.length);
   const out = raw.map(Math.floor);
@@ -80,20 +152,22 @@ function apportion(keys, shares, total) {
   raw.map((r, i) => [r - out[i], i]).sort((a, b) => b[0] - a[0]).forEach(([, i]) => { if (left > 0) { out[i]++; left--; } });
   return Object.fromEntries(keys.map((k, i) => [k, out[i]]));
 }
-// Set one key to v and rescale the others so the total stays 100.
-function rebalance(weights, id, v) {
-  const others = Object.keys(weights).filter(k => k !== id);
-  if (!others.length) return { [id]: 100 };
-  return { ...apportion(others, weights, 100 - v), [id]: v };
-}
 
 /* ---------- Small DOM helpers ---------- */
-// One blue family plus neutrals, so the page stays a single colour.
-const PALETTE = ["#2F5BFF", "#141414", "#8DA4FF", "#8C93A3", "#1A3BB3", "#C5CBD6", "#5C5C66", "#BFCCFF"];
 function chip(label, pressed, onClick) {
-  const b = document.createElement("button");
-  b.type = "button"; b.className = "chip"; b.textContent = label;
+  const b = el("button", "chip", label);
+  b.type = "button";
   b.setAttribute("aria-pressed", String(pressed));
+  b.addEventListener("click", onClick);
+  return b;
+}
+// A big tappable choice: title plus an optional one-line description.
+function choice(title, hint, pressed, onClick) {
+  const b = el("button", "choice");
+  b.type = "button";
+  b.setAttribute("aria-pressed", String(pressed));
+  b.append(el("span", "choice-t", title));
+  if (hint) b.append(el("span", "choice-h", hint));
   b.addEventListener("click", onClick);
   return b;
 }
@@ -104,6 +178,17 @@ function loadScript(src) {
     s.onerror = () => { delete scripts[src]; rej(new Error("load")); };
     document.head.append(s);
   }));
+}
+// Share links that open the person's own apps; Clarvy sends nothing itself.
+function shareLinks(msg, subject) {
+  return {
+    whatsapp: "https://wa.me/?text=" + encodeURIComponent(msg),
+    email: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`
+  };
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch { const ta = el("textarea"); ta.value = text; document.body.append(ta); ta.select(); document.execCommand("copy"); ta.remove(); return true; }
 }
 
 /* ---------- Files: read text in the browser (same readers as the main app) ---------- */
@@ -141,8 +226,9 @@ async function readFile(f) {
 }
 
 window.Rooms = {
-  $, t, loadLang, firstLang, savedLang, langToggle, get lang() { return lang; },
-  connect, profile, signInForm, errKey, get sb() { return sb; }, get user() { return user; },
-  ask, apportion, rebalance, PALETTE, chip, fileKind, readFile
+  $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, get lang() { return lang; },
+  connect, profile, setName, guestSignIn, isGuest, hasAccount, emailCode, showMyRooms,
+  get sb() { return sb; }, get user() { return user; },
+  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, fileKind, readFile
 };
 })();
