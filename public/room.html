@@ -46,12 +46,12 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
       sb.from("memberships").select("role").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
-      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
+      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.rpc("room_roster", { rid: roomId }),
       sb.from("analyses").select("frame,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
@@ -110,6 +110,17 @@ const live = {
     const { error } = await Rooms.sb.from("objections").insert({ room_id: roomId, user_id: Rooms.user.id, reason });
     if (error) throw error;
   },
+  // Report share links (owner): the current one, a new one, or switch it off.
+  async reportLink() {
+    const { data } = await Rooms.sb.from("report_shares").select("token").eq("room_id", roomId).eq("revoked", false).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    return data?.token || null;
+  },
+  async createReport() {
+    const { data, error } = await Rooms.sb.from("report_shares").insert({ room_id: roomId, created_by: Rooms.user.id }).select("token").single();
+    if (error) throw error;
+    return data.token;
+  },
+  async stopReport(token) { const { error } = await Rooms.sb.from("report_shares").update({ revoked: true }).eq("token", token); if (error) throw error; },
   async withdraw(oid) { const { error } = await Rooms.sb.rpc("withdraw_objection", { oid }); if (error) throw error; },
   async overrule(oid, why) { const { error } = await Rooms.sb.rpc("override_objection", { oid, why }); if (error) throw error; }
 };
@@ -135,6 +146,7 @@ function demoStore(kind) {
   const room = structuredClone(DEMO_ROOMS[kind === "ar" ? "ar" : "en"]);
   room.model = params.get("model") || "wrap";
   room.rapid = params.get("rapid") === "1";
+  room.links = [{ url: "https://www.example.org/jeddah-retail-report" }];
   const owner = kind === "owner";
   let role = kind === "join" ? null : owner ? "owner" : "member";
   let mine = null, analysis = null, signoff = null, myName = owner ? "Islam" : "Lina";
@@ -159,6 +171,10 @@ function demoStore(kind) {
     async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
     async object(reason) { objections.push({ id: "x" + (objections.length + 1), user_id: "me", reason, status: "open" }); },
     async withdraw(oid) { const o = objections.find(x => x.id === oid); if (o) o.status = "withdrawn"; },
+    reportToken: null,
+    async reportLink() { return this.reportToken; },
+    async createReport() { this.reportToken = "demo"; return "demo"; },
+    async stopReport() { this.reportToken = null; },
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
     async decide() {
@@ -246,12 +262,18 @@ function questionCard() {
   const r = S.room;
   const q = contentLang(el("p", "text", r.question));
   const c = card("active", meta(Rooms.typeName(r), r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : ""), q);
-  if (r.context || S.files?.length) {
+  const links = (Array.isArray(r.links) ? r.links : []).map(l => l?.url).filter(Boolean);
+  if (r.context || S.files?.length || links.length) {
     const more = el("details", "more");
     const sum = el("summary", null, t("nr_ctx_title").replace(/[?؟]$/, "")); sum.style.color = "#fff";
     more.append(sum);
     if (r.context) { const b = contentLang(el("p", "body", r.context)); b.style.marginTop = "10px"; more.append(b); }
     if (S.files?.length) { const ul = el("ul", "plain"); ul.style.marginTop = "12px"; S.files.forEach(n => ul.append(el("li", "file", n))); more.append(ul); }
+    if (links.length) {
+      const ul = el("ul", "plain"); ul.style.marginTop = "12px";
+      links.forEach(u => { const li = el("li", "file"); const a = el("a", "nm", u); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.color = "#fff"; li.append(a); ul.append(li); });
+      more.append(ul);
+    }
     c.append(more);
   }
   return c;
@@ -314,7 +336,7 @@ function startInput() {
   const m = S.mine;
   draft = {
     ratings: Object.fromEntries(ids.map(id => [id, m?.ratings?.[id] ?? 3])),
-    risk: m?.risk_appetite || null, gut: m?.gut_pick || null, concern: m?.concern || ""
+    risk: m?.risk_appetite || null, gut: m?.gut_pick || null, concern: m?.concern || "", links: [...(m?.links || [])]
   };
   inputStep = 1;
   render();
@@ -366,7 +388,9 @@ function vInput() {
     inp.setAttribute("aria-label", t("in_concern_title"));
     inp.oninput = () => { draft.concern = inp.value; };
     const title = el("h1", "step-title", t("in_concern_title"));
-    f.append(title, el("p", "small", t("in_concern_hint") + " (" + t("optional") + ")"), inp);
+    const lf = el("div", "field"); lf.style.marginTop = "8px";
+    lf.append(el("span", "lbl", t("my_links_lbl")), el("p", "small", t("my_links_hint")), Rooms.linksEditor(draft.links, 3, l => { draft.links = l; }));
+    f.append(title, el("p", "small", t("in_concern_hint") + " (" + t("optional") + ")"), inp, lf);
     setTimeout(() => inp.focus(), 50);
   }
   f.append(st, row);
@@ -378,7 +402,7 @@ function vInput() {
     next.disabled = true; next.textContent = t("sending");
     const ids = S.room.criteria.map(c => c.id);
     try {
-      await store.save({ ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim() });
+      await store.save({ ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim(), links: draft.links.filter(Rooms.validUrl).slice(0, 3) });
       inputStep = 0; draft = null;
       await refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -613,6 +637,7 @@ function vVerdict() {
     cards.push(card("", el("h3", null, t("v_facts")), ul));
   }
   if (settled && S.role !== "observer") cards.push(signOffCard());
+  cards.push(reportCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
 }
@@ -699,6 +724,43 @@ function mapCard(map, call) {
     });
     c.append(b);
   }
+  return c;
+}
+// Share the result: the owner makes a read-only report link anyone can open; members open the report in the room.
+function reportCard() {
+  const c = card("you", el("p", "text sm", t("rep_title")));
+  const roomReport = demo ? "/report.html?demo=1" : "/report.html?room=" + encodeURIComponent(roomId);
+  if (S.role !== "owner") {
+    const a = el("a", "btn ghost", t("rep_view")); a.href = roomReport; a.target = "_blank"; a.rel = "noopener";
+    c.append(a); return c;
+  }
+  c.append(el("p", "small", t("rep_hint")));
+  const body = el("div", "stack-sm"); c.append(body);
+  const st = el("p", "status err");
+  const draw = token => {
+    body.replaceChildren();
+    if (!token) {
+      const make = btn(t("rep_create"), "", async () => { make.disabled = true; try { draw(await store.createReport()); } catch { make.disabled = false; say(st, t("err_generic")); } });
+      body.append(make, st); return;
+    }
+    const link = demo ? `${location.origin}/report.html?demo=1` : `${location.origin}/report.html?r=${encodeURIComponent(token)}`;
+    const msg = t("rep_share_msg", { question: S.room.question, link });
+    const links = Rooms.shareLinks(msg, t("rep_subject", { question: S.room.question }));
+    const box = el("div", "linkbox");
+    const inp = el("input", "line"); inp.readOnly = true; inp.value = link; inp.setAttribute("aria-label", t("rep_title"));
+    const copy = btn(t("copy"), "soft", async () => { await Rooms.copyText(link); copy.textContent = t("copied"); setTimeout(() => { copy.textContent = t("copy"); }, 1600); });
+    box.append(inp, copy);
+    const row = el("div", "share");
+    const open = el("a", "btn ghost", t("rep_open")); open.href = link; open.target = "_blank"; open.rel = "noopener";
+    const wa = el("a", "btn ghost", t("whatsapp")); wa.href = links.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
+    const em = el("a", "btn ghost", t("email_btn")); em.href = links.email;
+    row.append(open, wa, em);
+    if (navigator.share) row.append(btn(t("share"), "ghost", () => navigator.share({ text: msg }).catch(() => {})));
+    const stop = el("button", "linkbtn", t("rep_stop")); stop.type = "button";
+    stop.onclick = async () => { stop.disabled = true; try { await store.stopReport(token); draw(null); say(st, t("rep_stopped"), "ok"); body.append(st); } catch { stop.disabled = false; } };
+    body.append(box, row, stop);
+  };
+  if (store.reportLink) store.reportLink().then(draw, () => draw(null)); else draw(null);
   return c;
 }
 function signOffCard() {

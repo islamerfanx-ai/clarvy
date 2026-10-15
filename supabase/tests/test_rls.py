@@ -200,5 +200,22 @@ as_user(G, f"insert into invites (token,room_id,created_by) values ('tok6','{R4}
 check("invite preview shows the custom name", anon("select type, type_label from invite_preview('tok6')"), "custom | Logistics")
 check("category name has a length limit", as_user(G, f"update rooms set type_label='{'x'*41}' where id='{R4}'", anonymous=True), "check constraint")
 
+# ---------- Links and reports (20261018000000_links_reports.sql) ----------
+check("owner adds room links", as_user(A, f"""update rooms set links='[{{"url":"https://example.org/report"}}]' where id='{R2}'"""), "UPDATE 1")
+check("member saves private links with answers", as_user(C, f"insert into inputs (room_id,user_id,weights,risk_appetite,gut_pick,links) values ('{R3}','{C}','{good}','safe','a',array['https://example.org/a'])"), "INSERT 0 1")
+check("other members can't read those links", as_user(B, f"select count(*) from inputs where room_id='{R3}' and user_id='{C}'"), "\n0\n")
+check("at most 5 links per member", as_user(C, f"update inputs set links=array['1','2','3','4','5','6'] where room_id='{R3}' and user_id='{C}'"), "check constraint")
+check("member can't make a report link", as_user(F, f"insert into report_shares (room_id,created_by) values ('{R2}','{F}')"), "row-level security")
+check("owner makes a report link", as_user(A, f"insert into report_shares (token,room_id,created_by) values ('rep1','{R2}','{A}')"), "INSERT 0 1")
+rep = anon("select report_by_token('rep1')")
+check("anyone with the link reads the report", rep, "Loan or equity?")
+check("report carries the verdict and counts", rep, "'final_option': 'b'")
+check("report never includes answers or member links", ("weights" not in rep and "example.org/a" not in rep and "guest@x.test" not in rep) and "ok" or rep, "ok")
+check("can't call the raw report function", anon(f"select room_report('{R2}')"), "permission denied")
+check("member reads report in the room", as_user(F, f"select report_for_member('{R2}') is not null"), "True")
+check("outsider gets nothing by room id", as_user(E, f"select report_for_member('{R2}') is null"), "True")
+as_user(A, "update report_shares set revoked=true where token='rep1'")
+check("switched-off link shows nothing", anon("select report_by_token('rep1') is null"), "True")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

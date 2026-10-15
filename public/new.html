@@ -36,7 +36,7 @@ const MAX_FILES = 8, MAX_FILE_BYTES = 20 * 1024 * 1024, MAX_TEXT = 50000;
 const DRAFT_KEY = "dr-new-room-2";
 
 // The draft survives a reload, so nothing typed is lost.
-let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", name: "", email: "", review: "", named: false };
+let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false };
 let files = [];   // files can't be saved in the draft; they live only in this page
 let ids = [];     // the steps for this person: "you" first if we don't know them yet
 const save = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} };
@@ -306,8 +306,13 @@ function stepContext() {
   const namedF = el("div", "field"); namedF.append(named);
   more.append(el("summary", null, t("more_settings")), revF, namedF);
 
+  // Useful links: everyone in the room sees them, and the analysis reads them.
+  if (!Array.isArray(d.links)) d.links = [];
+  const linksF = el("div", "field");
+  linksF.append(el("span", "lbl", t("links_lbl")), el("p", "small", t("links_hint")), Rooms.linksEditor(d.links, 10, l => { d.links = l; save(); }));
+
   setTimeout(drawFiles, 0);
-  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
+  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, linksF, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
   if (["finance", "politics"].includes(d.type)) nodes.push(el("p", "small", t("advice_note")));
   return form([...nodes, actions({ next: t("create") })], create);
 }
@@ -367,7 +372,8 @@ async function create() {
       id, workspace_id: ws.id, owner_id: me, language: Rooms.lang, type: d.type,
       type_label: d.type === "custom" ? d.typeLabel.trim() : null, question: d.question.trim(),
       context: d.context.trim(), options, criteria, review_date: review, named_views: d.named,
-      model: d.model || "standard", rapid: !!d.rapid
+      model: d.model || "standard", rapid: !!d.rapid,
+      links: (d.links || []).filter(Rooms.validUrl).slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;
     let filesFailed = false;

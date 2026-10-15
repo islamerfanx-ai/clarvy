@@ -211,6 +211,41 @@ function shareLinks(msg, subject) {
     email: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`
   };
 }
+// Add links: a URL box with "Add link", and the list so far (each removable). Calls onChange(list).
+const validUrl = u => { try { const x = new URL(String(u).trim()); return /^https?:$/.test(x.protocol) && x.hostname.includes("."); } catch { return false; } };
+function linksEditor(list, max, onChange) {
+  const box = el("div", "stack-sm");
+  const ul = el("ul", "plain");
+  const row = el("div", "add-row");
+  const inp = el("input", "line"); Object.assign(inp, { type: "url", inputMode: "url", maxLength: 500, placeholder: t("link_ph") });
+  inp.setAttribute("aria-label", t("links_lbl"));
+  const add = el("button", "btn soft", t("link_add")); add.type = "button";
+  const err = el("p", "status err");
+  const draw = () => {
+    ul.replaceChildren(...list.map((u, i) => {
+      const li = el("li", "file");
+      const a = el("a", "nm", u); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer";
+      const x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", t("remove"));
+      x.onclick = () => { list.splice(i, 1); onChange(list); draw(); };
+      li.append(a, x); return li;
+    }));
+    row.hidden = list.length >= max;
+  };
+  const addOne = () => {
+    let u = inp.value.trim(); if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = "https://" + u;
+    if (!validUrl(u)) { err.textContent = t("need_url"); return; }
+    err.textContent = "";
+    if (!list.includes(u)) { list.push(u); onChange(list); }
+    inp.value = ""; draw();
+  };
+  add.onclick = addOne;
+  inp.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addOne(); } };
+  row.append(inp, add);
+  box.append(ul, row, err);
+  draw();
+  return box;
+}
 // "By continuing you accept our Terms · Privacy" under the forms that collect a name and email.
 function agreeNote() {
   const p = el("p", "small agree");
@@ -322,6 +357,6 @@ window.Rooms = {
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
-  openNewRoom, goToRoom, embedded
+  openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();

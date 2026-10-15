@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Decision report · Decision Rooms</title>
+<meta name="description" content="A decision report from Decision Rooms: the recommended call and its reasoning.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* Decision report: the product's editorial style, laid out for reading on screen and printing to PDF. */
+main{max-width:880px}
+.rep-head{display:flex;flex-direction:column;gap:12px;padding:8px 0 20px}
+.rep-kicker{font-size:13px;color:var(--dim)}
+.rep-head h1{margin:0;font-size:clamp(28px,4.6vw,44px);line-height:1.12;font-weight:500;letter-spacing:-.025em}
+.rep-sub{font-size:14px;color:var(--dim)}
+.sharebar{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0 18px}
+.sharebar .btn{width:auto;padding:11px 16px;font-size:14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:720px){.cols{grid-template-columns:1fr}}
+.foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:18px;padding-top:16px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
+.foot strong{color:var(--fg);font-weight:600}
+@media print{
+  @page{margin:14mm}
+  html,body{background:#FFF2B3 !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{padding:0}
+  main{max-width:none;margin:0;padding:0}
+  .noprint{display:none !important}
+  .msg{break-inside:avoid}
+  a{color:inherit;text-decoration:none}
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts noprint"><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" style="display:flex;flex-direction:column;gap:8px" aria-live="polite">
+    <article class="msg"><p class="text thinking">One moment</p></article>
+  </div>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const params = new URLSearchParams(location.search);
+const token = params.get("r"), roomId = params.get("room"), demo = params.get("demo");
+let R = null, MODELS = {};
+
+// Demo report (no backend): the same shape room_report() returns.
+const DEMO = {
+  room: { question: "Should we open a second location in Jeddah this year, or wait until next spring?", type: "business", language: "en", model: "wrap", rapid: true,
+    options: [{ id: "o1", label: "Open in Jeddah this year" }, { id: "o2", label: "Wait until next spring" }, { id: "o3", label: "Grow Riyadh instead" }],
+    links: [{ url: "https://www.example.org/jeddah-retail-report" }], status: "decided", review_date: "2026-12-01", created_at: "2026-10-12" },
+  owner_name: "Islam", members: 3, answered: 3, signoffs: { agree: 2, disagree_commit: 1 },
+  analysis: { confidence: "Medium", owner_decision: "accepted", final_option: "o2", decided_at: "2026-10-16",
+    frame: { facts: [{ text: "Retail rents in central Jeddah rose about 9% this year.", source: "Local property report, Sep 2026", url: null }] },
+    verdict: { model: "wrap", call: "o2", call_label: "Wait until next spring", headline: "Wait until spring, and use the time to lock in the rent-free lease.",
+      reasons: ["It protects cash through the tightest months.", "It keeps the Jeddah option open at low cost.", "It has the broadest support in the group."],
+      risks: ["A competitor could take the best site first.", "The rent-free offer may not last until spring."],
+      check_first: "Ask the landlord if the 6 months rent-free still applies for a March start.",
+      widened_option: "Open a small pop-up in Jeddah for three months before committing to the full fit-out.",
+      small_test: "Run weekend sales in a Jeddah mall for six weeks and compare takings with Riyadh's first months.",
+      tripwires: [{ signal: "The landlord withdraws the rent-free offer for a spring start", when: "Before the end of this month" }, { signal: "Monthly revenue in Riyadh falls below 1M for two months in a row", when: "Monthly" }],
+      split: true },
+    disagreement_map: { members: 3, winners: { o1: 1, o2: 2, o3: 0 }, gut: { o1: 1, o2: 2, o3: 0 },
+      weights: [{ label: "Upside", min: 13, max: 45, avg: 26, split: true }, { label: "Cash risk", min: 15, max: 45, avg: 30, split: true }, { label: "Execution capacity", min: 15, max: 25, avg: 20, split: false }, { label: "Brand fit", min: 10, max: 25, avg: 16, split: false }],
+      themes: [{ theme: "Cash runway", kind: "facts", count: 2 }, { theme: "Moving before competitors", kind: "values", count: 1 }] } }
+};
+
+function card(cls, ...kids) { const c = el("article", "msg " + cls); c.append(...kids.filter(Boolean)); return c; }
+const contentLang = node => { node.lang = R.room.language; node.dir = R.room.language === "ar" ? "rtl" : "ltr"; return node; };
+const optLabel = id => (R.room.options || []).find(o => o.id === id)?.label || id;
+const block = (title, ...kids) => { const b = el("div", "block"); b.append(el("h3", null, title), ...kids); return b; };
+const para = text => contentLang(el("p", "body", text));
+const dots = xs => { const ul = contentLang(el("ul", "dots")); xs.forEach(x => ul.append(el("li", null, x))); return ul; };
+
+function render() {
+  const r = R.room, a = R.analysis, v = a?.verdict || {}, map = a?.disagreement_map || {};
+  document.title = (r.question.length > 60 ? r.question.slice(0, 60) + "…" : r.question) + " · " + t("product");
+  const out = [];
+
+  // Title block
+  const head = el("div", "rep-head");
+  const kicker = el("div", "rep-kicker", [Rooms.typeName(r), MODELS[v.model || r.model]?.framework].filter(Boolean).join(" · "));
+  const h1 = contentLang(el("h1", null, r.question));
+  const sub = [t("rep_started", { date: Rooms.fmtDate(String(r.created_at).slice(0, 10)) })];
+  if (a?.decided_at) sub.push(t("rep_decided", { date: Rooms.fmtDate(String(a.decided_at).slice(0, 10)) }));
+  sub.push(t("rep_people", { n: R.answered, total: R.members }));
+  if (r.review_date) sub.push(t("review_on", { date: Rooms.fmtDate(r.review_date) }));
+  head.append(kicker, h1, el("div", "rep-sub", sub.join(" · ")));
+  out.push(head);
+  out.push(shareBar());
+
+  if (!a) { out.push(card("", el("p", "text sm", t("rep_not_ready")))); $("view").replaceChildren(...out); return; }
+
+  // The call
+  const pills = el("div", "pills");
+  pills.append(el("span", "pill strong", t("conf_" + (a.confidence || "Medium"))));
+  if (v.split) pills.append(el("span", "pill", t("v_split")));
+  out.push(card("active", el("div", "meta", r.rapid && R.owner_name ? t("v_recommend_to", { name: R.owner_name }) : t("v_call")),
+    contentLang(el("p", "text", v.headline || v.call_label)), contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills));
+  if (a.owner_decision) {
+    out.push(card("outline", el("h3", null, t("v_final")), contentLang(el("p", "text sm", optLabel(a.final_option || v.call))),
+      el("p", "small", a.owner_decision === "overridden" ? t("v_overridden", { reason: a.override_reason || "" }) : t("v_accepted"))));
+  }
+  if (v.check_first) out.push(card("outline", block(t("v_check"), para(v.check_first))));
+
+  // Why and risks
+  const why = card("");
+  if (v.reasons?.length) why.append(block(t("v_why"), dots(v.reasons)));
+  if (v.risks?.length) why.append(block(t("v_risks"), dots(v.risks)));
+  if (v.disappoints) why.append(block(t("v_disappoints"), para(v.disappoints)));
+  if (v.bring_on_board) why.append(block(t("v_onboard"), para(v.bring_on_board)));
+  if (why.childElementCount) out.push(why);
+
+  // What the thinking model adds
+  if (v.domain?.domain) {
+    const c = card("", el("h3", null, t("v_domain")), el("p", "text sm", t("dom_" + v.domain.domain)));
+    if (v.domain.why) c.append(para(v.domain.why));
+    if (v.domain.shift_signal) c.append(block(t("v_shift"), para(v.domain.shift_signal)));
+    out.push(c);
+  }
+  if (v.tree?.length) {
+    const c = card("", el("h3", null, t("v_tree")));
+    if (v.governing_question) c.append(block(t("v_question"), para(v.governing_question)));
+    const ul = contentLang(el("ul", "plain tree"));
+    v.tree.forEach(b => {
+      const li = el("li"); const top = el("div", "range-top");
+      top.append(el("span", "rate-name", b.branch), el("span", "tag" + (b.verdict === "fails" ? " split" : ""), t("tree_" + b.verdict)));
+      li.append(top); if (b.hypothesis) li.append(el("p", "small", b.hypothesis)); if (b.finding) li.append(el("p", "body", b.finding));
+      ul.append(li);
+    });
+    c.append(ul); out.push(c);
+  }
+  const extras = card("");
+  if (v.best_practice) extras.append(block(t("v_best_practice"), para(v.best_practice)));
+  if (v.first_actions?.length) extras.append(block(t("v_first_actions"), dots(v.first_actions)));
+  if (v.experiments?.length) extras.append(block(t("v_experiments"), dots(v.experiments.map(x => x.test + (x.success ? " · " + t("v_success") + ": " + x.success : "")))));
+  if (v.widened_option) extras.append(block(t("v_widened"), para(v.widened_option)));
+  if (v.small_test) extras.append(block(t("v_small_test"), para(v.small_test)));
+  if (v.distance) extras.append(block(t("v_distance"), para(v.distance)));
+  if (v.undo) extras.append(block(t("v_undo"), para(v.undo)));
+  if (v.look_again) extras.append(block(t("v_look_again"), para(v.look_again)));
+  if (extras.childElementCount) out.push(extras);
+  if (v.tripwires?.length) {
+    const ul = contentLang(el("ul", "plain facts"));
+    v.tripwires.forEach(w => { const li = el("li", null, w.signal); if (w.when) li.append(el("span", "src", w.when)); ul.append(li); });
+    out.push(card("outline", el("h3", null, t("v_tripwires")), el("p", "small", t("v_tripwires_hint")), ul));
+  }
+
+  // Where the group differs (anonymous)
+  const m = card("", el("h3", null, t("v_map")));
+  if (map.weights?.length) {
+    const b = el("div", "bars"); b.append(el("p", "lbl", t("map_weights")));
+    map.weights.forEach(w => {
+      const row = el("div", "range"), top = el("div", "range-top");
+      top.append(contentLang(el("span", null, w.label)), el("span", "tag" + (w.split ? " split" : ""), t(w.split ? "map_split" : "map_agree")));
+      const trk = el("div", "range-trk"), span = el("i"), avg = el("b"), side = document.documentElement.dir === "rtl" ? "right" : "left";
+      span.style[side] = w.min + "%"; span.style.width = Math.max(1, w.max - w.min) + "%"; avg.style[side] = w.avg + "%";
+      trk.append(span, avg); row.append(top, trk); b.append(row);
+    });
+    m.append(b);
+  }
+  if (map.winners) {
+    const b = el("div", "bars"); b.append(el("p", "lbl", t("map_leans")));
+    (r.options || []).forEach(o => {
+      const row = el("div", "lean" + (o.id === v.call ? " call" : "")), top = el("div", "lean-top");
+      top.append(contentLang(el("span", null, o.label)), el("span", "n", t("map_lean", { n: map.winners[o.id] || 0, g: map.gut?.[o.id] || 0 })));
+      const trk = el("div", "lean-trk"), fill = el("i"); fill.style.width = ((map.winners[o.id] || 0) / Math.max(1, map.members || 1) * 100) + "%";
+      trk.append(fill); row.append(top, trk); b.append(row);
+    });
+    m.append(b);
+  }
+  if (map.themes?.length) {
+    const b = el("div", "block"); b.append(el("p", "lbl", t("map_themes")));
+    map.themes.forEach(th => { const d = el("div", "theme " + th.kind); d.append(contentLang(el("span", "tt", th.theme)), el("span", "kind", t(th.kind === "facts" ? "theme_facts" : "theme_values"))); b.append(d); });
+    m.append(b);
+  }
+  if (m.childElementCount > 1) out.push(m);
+
+  // Facts, options, links, sign-off
+  const facts = a.frame?.facts || [];
+  if (facts.length) {
+    const ul = contentLang(el("ul", "plain facts"));
+    facts.forEach(f => {
+      const li = el("li", null, f.text);
+      if (f.source || f.url) { const s = el("span", "src"); if (f.url) { const l = el("a", null, f.source || new URL(f.url).hostname); l.href = f.url; l.target = "_blank"; l.rel = "noopener noreferrer"; s.append(l); } else s.textContent = f.source; li.append(s); }
+      ul.append(li);
+    });
+    out.push(card("", el("h3", null, t("v_facts")), ul));
+  }
+  const cols = el("div", "cols");
+  cols.append(card("", el("h3", null, t("rep_options")), dots((r.options || []).map(o => o.label))));
+  const links = (r.links || []).map(l => l?.url).filter(Boolean);
+  const so = R.signoffs || {};
+  const side = card("", el("h3", null, t("rep_signoff")), el("p", "body", t("so_counts", { agree: so.agree || 0, commit: so.disagree_commit || 0, object: so.object || 0 })));
+  if (links.length) { const ul = el("ul", "plain"); links.forEach(u => { const li = el("li"); const l = el("a", null, u); l.href = u; l.target = "_blank"; l.rel = "noopener noreferrer"; li.append(l); ul.append(li); }); side.append(el("h3", null, t("rep_links")), ul); }
+  cols.append(side);
+  out.push(cols);
+
+  const foot = el("div", "foot");
+  foot.append(el("span", null, ""), el("span", null, t("advice_note")));
+  foot.firstChild.append(el("strong", null, t("rep_made")), " · " + Rooms.fmtDate(new Date().toISOString().slice(0, 10)));
+  out.push(foot);
+  $("view").replaceChildren(...out);
+}
+
+// Download PDF (the browser's print-to-PDF, laid out by the print styles) and the usual ways to share.
+function shareBar() {
+  const bar = el("div", "sharebar noprint");
+  const pdf = el("button", "btn", t("rep_download")); pdf.type = "button"; pdf.onclick = () => window.print();
+  bar.append(pdf);
+  if (token || demo) {   // a share link: anyone can open it
+    const link = location.href;
+    const msg = t("rep_share_msg", { question: R.room.question, link });
+    const ln = Rooms.shareLinks(msg, t("rep_subject", { question: R.room.question }));
+    const copy = el("button", "btn ghost", t("copy")); copy.type = "button";
+    copy.onclick = async () => { await Rooms.copyText(link); copy.textContent = t("copied"); setTimeout(() => { copy.textContent = t("copy"); }, 1600); };
+    const wa = el("a", "btn ghost", t("whatsapp")); wa.href = ln.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
+    const em = el("a", "btn ghost", t("email_btn")); em.href = ln.email;
+    bar.append(copy, wa, em);
+    if (navigator.share) { const sh = el("button", "btn ghost", t("share")); sh.type = "button"; sh.onclick = () => navigator.share({ text: msg }).catch(() => {}); bar.append(sh); }
+  }
+  return bar;
+}
+
+function notice(msg) { const c = el("article", "msg"); c.append(el("p", "text sm", msg)); $("view").replaceChildren(c); }
+Rooms.langToggle(() => { if (R) render(); });
+(async () => {
+  try { MODELS = (await import("/rooms/models.js")).MODELS; } catch {}
+  await Rooms.loadLang(Rooms.firstLang());
+  if (demo) { R = DEMO; return render(); }
+  if (!token && !roomId) return notice(t("rep_not_found"));
+  if (!(await Rooms.connect())) return notice(t("not_setup"));
+  const res = token
+    ? await Rooms.sb.rpc("report_by_token", { share_token: token })
+    : Rooms.user ? await Rooms.sb.rpc("report_for_member", { rid: roomId }) : { data: null };
+  if (res.error || !res.data) return notice(t(token || Rooms.user ? "rep_not_found" : "other_device"));
+  R = res.data;
+  render();
+})();
+})();
+</script>
+</body>
+</html>
