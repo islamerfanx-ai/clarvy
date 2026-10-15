@@ -220,5 +220,19 @@
   "email_wait": "Too many emails just now. Wait a minute and try again.",
   "email_send_link": "Email me a link",
   "resend_link": "Send the email again",
-  "email_hint_link": "We'll email you a sign-in link. No password needed."
+  "email_hint_link": "We'll email you a sign-in link. No password needed.",
+  "db_title": "Decision rooms",
+  "db_yours": "Your open rooms",
+  "db_invite": "Invite people",
+  "db_add": "Add a room",
+  "db_ongoing": "Ongoing rooms",
+  "db_old": "Old rooms",
+  "db_members": "Members",
+  "db_started": "Started {date}",
+  "db_only_you": "Only you so far",
+  "db_none_yet": "No open rooms yet. Add one and invite the people who should have a say.",
+  "db_empty_ongoing": "Nothing in progress right now.",
+  "db_empty_old": "Finished rooms show up here, with what the group decided.",
+  "names_and": "{a} and {b}",
+  "names_more": "{list} and {n} more"
 }

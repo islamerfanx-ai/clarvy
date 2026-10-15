@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="description" content="Your Clarvy decision rooms: open, ongoing and finished.">
+<title>Decision rooms · Clarvy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* Dashboard layout (from the paper sketch): your open rooms as cards with Invite, then Ongoing and Old lists. */
+main{max-width:880px}
+.db-title{margin:4px 0 8px;font-size:clamp(28px,4.4vw,40px);line-height:1.1;font-weight:600;letter-spacing:-.02em}
+.db-sec{display:flex;flex-direction:column;gap:12px;margin-top:28px}
+.db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.db-head h2{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.db-head .n{font-family:var(--mono);font-stretch:75%;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.rcard{display:flex;flex-direction:column;gap:12px;background:#fff;box-shadow:0 0 0 1px rgba(20,20,20,.1);border-radius:12px;padding:18px}
+.rcard a.open{display:flex;flex-direction:column;gap:6px;color:var(--fg);text-decoration:none;flex:1}
+.rcard a.open:hover .q{color:var(--accent)}
+.rcard .q{font-size:16px;font-weight:600;line-height:1.35}
+.rcard .st{font-size:13px;color:var(--dim)}
+.rcard .st.go{color:var(--accent);font-weight:500}
+.rcard .invite{width:100%}
+.panel{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.panel .share{grid-template-columns:1fr 1fr}
+.addcard{display:flex;align-items:center;justify-content:center;gap:8px;min-height:140px;border-radius:12px;border:1.5px dashed rgba(20,20,20,.25);
+  color:var(--accent);text-decoration:none;font-family:var(--mono);font-stretch:75%;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.addcard:hover{border-color:var(--accent);background:var(--accent-soft)}
+.addcard b{font-size:22px;font-weight:400;line-height:1}
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rrow a{display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:start;background:#fff;box-shadow:0 0 0 1px rgba(20,20,20,.1);border-radius:12px;padding:16px 18px;color:var(--fg);text-decoration:none}
+.rrow a:hover{box-shadow:0 0 0 1.5px var(--accent)}
+.rrow.old a{background:transparent}
+.rrow .q{font-size:16px;font-weight:500;line-height:1.4}
+.rrow .when{font-size:13px;color:var(--dim);white-space:nowrap}
+.rrow .who{grid-column:1/-1;font-size:14px;color:var(--dim)}
+.rrow .who b{font-weight:500;color:var(--fg)}
+.rrow .st{grid-column:1/-1;font-size:13px;color:var(--dim)}
+.rrow .st.go{color:var(--accent);font-weight:500}
+.empty{margin:0;font-size:14px;color:var(--dim);padding:6px 0}
+[dir=rtl] .db-head .n,[dir=rtl] .addcard{font-family:var(--arabic);font-stretch:normal;text-transform:none;letter-spacing:0;font-size:14px}
+@media (max-width:560px){.rrow a{grid-template-columns:1fr}.rrow .when{white-space:normal}.addcard{min-height:64px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Clarvy</a>
+    <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking">One moment</p></article></div>
+  <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const demo = new URLSearchParams(location.search).get("demo");
+const view = $("view");
+let rooms = null, myName = "";
+
+// Demo data mirrors the sketch: two open rooms of yours, one ongoing, one old.
+const DEMO = [
+  { id: "r1", type: "business", question: "Room 1: open a second location in Jeddah?", status: "open", role: "owner", created_at: "2026-10-12", quorum: 2, members: 1, submitted: 0, i_submitted: false, has_verdict: false, names: [] },
+  { id: "r2", type: "trip", question: "Room 2: where should the six of us go in March?", status: "open", role: "owner", created_at: "2026-10-14", quorum: 2, members: 3, submitted: 1, i_submitted: true, has_verdict: false, names: ["Lina", "Omar"] },
+  { id: "r3", type: "politics", question: "Political briefing: do we speak on the new data law?", status: "deciding", role: "member", created_at: "2026-10-08", quorum: 2, members: 4, submitted: 4, i_submitted: true, has_verdict: true, names: ["Ramy", "Ahmed", "Chris"] },
+  { id: "r4", type: "finance", question: "Egyptian economy: hold, hedge or exit our EGP position?", status: "decided", role: "member", created_at: "2026-09-21", quorum: 2, members: 3, submitted: 3, i_submitted: true, has_verdict: true, names: ["Chris", "Neon"] }
+];
+
+/* ---------- Helpers ---------- */
+// "Ramy, Ahmed and Chris" / "Ramy, Ahmed and 3 more"
+function names(list) {
+  if (!list.length) return t("db_only_you");
+  if (list.length === 1) return list[0];
+  if (list.length <= 3) return t("names_and", { a: list.slice(0, -1).join(", "), b: list[list.length - 1] });
+  return t("names_more", { list: list.slice(0, 2).join(", "), n: list.length - 2 });
+}
+// One plain line on where a room stands, with what you need to do first.
+function statusLine(r) {
+  if (r.status === "open" && !r.i_submitted && r.role !== "observer") return { text: t("st_input"), go: true };
+  if (r.status === "open") return { text: t("st_waiting", { n: r.submitted, total: r.members }), go: r.role === "owner" && r.submitted >= r.quorum };
+  if (r.status === "deciding") return r.has_verdict ? { text: t("st_verdict"), go: r.role === "owner" } : { text: t("st_deciding") };
+  return { text: t(r.status === "reviewed" ? "st_reviewed" : "st_decided") };
+}
+const roomHref = r => demo ? "/room.html?demo=" + (r.role === "owner" ? "owner" : "1") : "/room.html?room=" + r.id;
+function q(r, cls = "q") { const s = el("span", cls, r.question); s.lang = r.language || "en"; s.dir = r.language === "ar" ? "rtl" : "ltr"; return s; }
+function section(title, count) {
+  const sec = el("section", "db-sec");
+  const h = el("div", "db-head"); h.append(el("h2", null, title), el("span", "n", count != null ? String(count) : ""));
+  sec.append(h);
+  return sec;
+}
+
+/* ---------- Invite (owner) ---------- */
+async function inviteToken(roomId) {
+  if (demo) return "demo-" + roomId;
+  const sb = Rooms.sb;
+  const { data } = await sb.from("invites").select("token").eq("room_id", roomId).eq("revoked", false)
+    .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (data) return data.token;
+  const { data: made, error } = await sb.from("invites").insert({ room_id: roomId, created_by: Rooms.user.id }).select("token").single();
+  if (error) throw error;
+  return made.token;
+}
+async function togglePanel(r, card, btn) {
+  const open = card.querySelector(".panel");
+  if (open) { open.remove(); btn.setAttribute("aria-expanded", "false"); return; }
+  btn.disabled = true;
+  try {
+    const link = `${location.origin}/room.html?join=${encodeURIComponent(await inviteToken(r.id))}`;
+    const msg = myName ? t("invite_msg", { name: myName, question: r.question, link }) : t("invite_msg_anon", { question: r.question, link });
+    const links = Rooms.shareLinks(msg, t("invite_subject", { question: r.question }));
+    const panel = el("div", "panel");
+    const box = el("div", "linkbox");
+    const inp = el("input", "line"); inp.readOnly = true; inp.value = link; inp.setAttribute("aria-label", t("share_title"));
+    const copy = el("button", "btn soft", t("copy")); copy.type = "button";
+    copy.onclick = async () => { await Rooms.copyText(link); copy.textContent = t("copied"); setTimeout(() => { copy.textContent = t("copy"); }, 1600); };
+    box.append(inp, copy);
+    const row = el("div", "share");
+    const wa = el("a", "btn ghost", t("whatsapp")); wa.href = links.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
+    const em = el("a", "btn ghost", t("email_btn")); em.href = links.email;
+    row.append(wa, em);
+    panel.append(el("p", "small", t("share_hint")), box, row);
+    card.append(panel);
+    btn.setAttribute("aria-expanded", "true");
+  } catch (err) {
+    console.error(err);
+    card.append(el("p", "status err panel", t("err_generic")));
+  } finally { btn.disabled = false; }
+}
+
+/* ---------- Page ---------- */
+function render() {
+  document.title = t("db_title") + " · Clarvy";
+  const finished = r => ["decided", "reviewed"].includes(r.status);
+  const yours = rooms.filter(r => r.role === "owner" && r.status === "open");
+  const ongoing = rooms.filter(r => !finished(r) && !yours.includes(r));
+  const old = rooms.filter(finished);
+
+  const title = el("h1", "db-title", t("db_title"));
+
+  // 1. Your open rooms, each with Invite + people; then + Add a room.
+  const s1 = section(t("db_yours"), yours.length || null);
+  const grid = el("div", "cards");
+  yours.forEach(r => {
+    const card = el("article", "rcard");
+    const a = el("a", "open"); a.href = roomHref(r);
+    const s = statusLine(r);
+    a.append(el("span", "meta", t("type_" + r.type)), q(r), el("span", "st" + (s.go ? " go" : ""), s.text));
+    const inv = el("button", "btn invite", "+ " + t("db_invite")); inv.type = "button"; inv.setAttribute("aria-expanded", "false");
+    inv.onclick = () => togglePanel(r, card, inv);
+    card.append(a, inv);
+    grid.append(card);
+  });
+  const add = el("a", "addcard"); add.href = demo ? "/new.html?demo=1" : "/new.html";
+  add.append(el("b", null, "+"), el("span", null, t("db_add")));
+  grid.append(add);
+  s1.append(grid);
+  if (!yours.length) s1.append(el("p", "empty", t("db_none_yet")));
+
+  // 2. Ongoing and 3. Old: room, date, members.
+  const list = (title, items, emptyText, isOld) => {
+    const sec = section(title, items.length || null);
+    if (!items.length) { sec.append(el("p", "empty", emptyText)); return sec; }
+    const ul = el("ul", "rows");
+    items.forEach(r => {
+      const li = el("li", "rrow" + (isOld ? " old" : ""));
+      const a = el("a"); a.href = roomHref(r);
+      const who = el("span", "who"); who.append(el("b", null, t("db_members") + ": "), document.createTextNode(names(r.names)));
+      const s = statusLine(r);
+      a.append(q(r), el("span", "when", t("db_started", { date: Rooms.fmtDate(String(r.created_at).slice(0, 10)) })), who,
+        el("span", "st" + (s.go ? " go" : ""), (r.role === "owner" ? t("role_owner") + " · " : "") + s.text));
+      li.append(a);
+      ul.append(li);
+    });
+    sec.append(ul);
+    return sec;
+  };
+  view.replaceChildren(title, s1,
+    list(t("db_ongoing"), ongoing, t("db_empty_ongoing"), false),
+    list(t("db_old"), old, t("db_empty_old"), true));
+}
+
+function signIn() {
+  const box = el("div", "stack-sm");
+  const c = el("article", "msg you"); c.append(el("p", "text sm", t("signin_title")), box);
+  view.replaceChildren(el("h1", "db-title", t("db_title")), c);
+  Rooms.emailCode(box, { onDone: load });
+}
+
+async function load() {
+  if (demo) { rooms = DEMO; myName = "Islam"; return render(); }
+  const sb = Rooms.sb;
+  const [{ data, error }, p] = await Promise.all([sb.rpc("my_rooms"), Rooms.profile()]);
+  if (error) { const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); return view.replaceChildren(c); }
+  myName = p?.name || "";
+  // Member names come from each room's roster (names and ticks only, never answers).
+  rooms = await Promise.all((data || []).map(async r => {
+    const { data: roster } = await sb.rpc("room_roster", { rid: r.id });
+    return { ...r, names: (roster || []).filter(m => m.user_id !== Rooms.user.id && m.name).map(m => m.name) };
+  }));
+  render();
+}
+
+Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.user) signIn(); });
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  $("demoNote").hidden = !demo;
+  if (demo) return load();
+  if (!(await Rooms.connect())) { const c = el("article", "msg"); c.append(el("p", "text", t("not_setup"))); return view.replaceChildren(c); }
+  if (!Rooms.user) return signIn();
+  load();
+})();
+})();
+</script>
+</body>
+</html>
