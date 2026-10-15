@@ -1,6 +1,6 @@
 # Decision Rooms (repo still named clarvy)
 
-Decision Rooms helps leaders and organisations make decisions together: private input, a recommended thinking model, one call with reasoning, sign-off and review. Yellow editorial look (flat white square cards, black type, Inter; IBM Plex Sans Arabic for Arabic). English and Arabic. Open trial: everyone gives a name and an unverified email.
+Decision Rooms helps leaders and organisations make decisions together: private input, a recommended thinking model, one call with reasoning, sign-off and review. Look: warm off-white ground, yellow (`--yellow`) for highlight bands and cards, deep teal (`--accent`) pill buttons and the call, flat white cards, hairlines, regular-weight Inter (IBM Plex Sans Arabic for Arabic); the theme block is at the end of rooms.css. English and Arabic. Open trial: everyone gives a name and an unverified email.
 Product decisions live in `docs/product-foundation.md` (section 0); models in `docs/decision-models.md`. "Clarvy" is the name kept for a future, separate consumer product.
 
 ## Layout

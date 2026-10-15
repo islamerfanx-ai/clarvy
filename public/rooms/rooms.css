@@ -1,8 +1,8 @@
-/* Decision Rooms pages (dashboard, new, room, rooms). Editorial look: pale yellow ground, flat white square cards,
-   thin dividers, black type and actions, one sans throughout. Mirrored for Arabic. */
+/* Decision Rooms pages. Warm off-white ground, yellow for highlight sections, deep teal for actions and the call,
+   flat white cards, hairlines, one regular-weight sans. Mirrored for Arabic. Final theme block at the end of this file. */
 :root{
-  --ink:#FFF2B3;--card:#FFFFFF;--accent:#141414;--accent-hover:#000000;--accent-soft:rgba(20,20,20,.05);
-  --fg:#141414;--dim:rgba(20,20,20,.62);--faint:rgba(20,20,20,.4);--line:rgba(20,20,20,.14);--err:#C62F45;--ok:#1F8A4C;
+  --ink:#F6F4E9;--card:#FFFFFF;--accent:#073B3A;--accent-hover:#0B5250;--accent-soft:rgba(7,59,58,.07);--yellow:#FFF4B0;
+  --fg:#1D1D1D;--dim:rgba(29,29,29,.62);--faint:rgba(29,29,29,.4);--line:rgba(29,29,29,.14);--err:#C62F45;--ok:#073B3A;
   --mono:"Martian Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
   --serif:"Instrument Serif",Georgia,"Times New Roman",serif;
   --read:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -261,3 +261,33 @@ html.embed main{margin-inline-start:0;padding-top:68px}
 /* File how-to steps (new.html, last step) */
 details.howto .block{margin-top:16px}
 ol.steps-list{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.5}
+
+/* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
+.top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
+.wm{font-weight:500;letter-spacing:-.02em}
+.navlink{font-weight:400;text-decoration:none}
+.navlink:hover{text-decoration:underline;text-underline-offset:3px}
+.lang{font-family:var(--read)!important;font-size:13px;background:rgba(0,0,0,.05);border:0;border-radius:2px;padding:5px 9px}
+.lang:hover{background:rgba(0,0,0,.09)}
+.text,.step-title,.db-title,h1,h2{font-weight:400}
+.choice-t,.rate-name{font-weight:500}
+.btn{border-radius:40px;font-weight:400;padding:16px 24px}
+.btn.ghost{border-radius:40px;border:1px solid rgba(29,29,29,.3);background:transparent}
+.btn.ghost:hover{border-color:var(--fg);background:transparent}
+.btn.soft{border-radius:40px;background:rgba(0,0,0,.05);color:var(--fg)}
+.btn.soft:hover{background:rgba(0,0,0,.09)}
+.msg.active .btn{background:#fff;color:var(--accent)}
+.chip{border-radius:40px}
+.pill{border-radius:40px}
+.tag{border-radius:40px}
+.choice[aria-pressed=true]{background:var(--accent-soft)}
+.tick::before{border-radius:4px}
+.x{border-radius:40px}
+select.role-select,.roster li .role-fixed{border-radius:2px}
+.roster .st.done{color:var(--accent)}
+/* Highlights: the yellow carries check-first, tripwires and the final decision */
+.msg.outline{background:var(--yellow);box-shadow:none}
+.note{background:var(--yellow)}
+/* Full-bleed band behind a block, without changing the left-aligned layout */
+.band{position:relative;background:var(--yellow);box-shadow:0 0 0 100vmax var(--yellow);clip-path:inset(0 -100vmax)}
+.band.white{background:#fff;box-shadow:0 0 0 100vmax #fff}
