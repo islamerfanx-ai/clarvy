@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ask, search, config } from "./lib/core.js";
-import { decide } from "./lib/rooms.js";
+import { decide, triage } from "./lib/rooms.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "public");
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
-const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config, "/api/rooms/decide": decide };
+const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config, "/api/rooms/decide": decide, "/api/rooms/triage": triage };
 const MAX_BODY = 8 * 1024 * 1024;
 
 http.createServer(async (req, res) => {

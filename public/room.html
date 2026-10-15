@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="A Clarvy decision room: give your view privately, then see the group's call.">
-<title>Clarvy room</title>
+<meta name="description" content="A decision room: give your view privately, then see the group's call.">
+<title>Decision Rooms</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
@@ -13,9 +13,9 @@
 <body>
 <main>
   <header class="top">
-    <a class="wm" href="/">Clarvy</a>
+    <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts">
-      <a class="navlink" id="myRoomsLink" href="/rooms.html" data-t="my_rooms" hidden>My rooms</a>
+      <a class="navlink" id="myRoomsLink" href="/dashboard.html" data-t="my_rooms" hidden>My rooms</a>
       <button class="lang" type="button" id="langBtn"></button>
     </div>
   </header>
@@ -35,6 +35,7 @@ const joinToken = params.get("join");
 const demo = params.get("demo");
 const RISKS = ["safe", "balanced", "bold"];
 const SCALE = [1, 2, 3, 4, 5];
+let MODELS = {};   // rooms/models.js, loaded at start (framework names for the verdict)
 
 /* ======================= Data: live (Supabase) ======================= */
 const live = {
@@ -45,7 +46,7 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,question,context,options,criteria,status,language,review_date,quorum,decide_error").eq("id", roomId).maybeSingle();
+      .select("id,type,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
@@ -58,6 +59,10 @@ const live = {
     const role = mem.data?.role;
     const out = { room, role, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner") out.invite = await this.invite();
+    if (room.rapid) {
+      const { data: obj } = await sb.from("objections").select("id,user_id,reason,status,override_reason,created_at").eq("room_id", roomId).order("created_at");
+      out.objections = obj || [];
+    }
     if (["decided", "reviewed"].includes(room.status)) {
       const [so, counts] = await Promise.all([
         sb.from("signoffs").select("stance,note").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
@@ -77,9 +82,8 @@ const live = {
     const { data: made } = await sb.from("invites").insert({ room_id: roomId, created_by: Rooms.user.id }).select("token").single();
     return made?.token || null;
   },
-  async join(name, consent) {
-    if (!Rooms.user) await Rooms.guestSignIn(name);
-    else if (name) await Rooms.setName(name);
+  async join(name, email, consent) {
+    await Rooms.trialSignIn(name, email);
     const { data, error } = await Rooms.sb.rpc("join_room", { invite_token: joinToken, consent });
     if (error) throw error;
     return data;
@@ -96,7 +100,18 @@ const live = {
   async signOff(stance, note) {
     const { error } = await Rooms.sb.from("signoffs").upsert({ room_id: roomId, user_id: Rooms.user.id, stance, note }, { onConflict: "room_id,user_id" });
     if (error) throw error;
-  }
+  },
+  // RAPID: the owner names roles; approvers can object, which pauses Decide now.
+  async setRapidRole(uid, rapid_role) {
+    const { error } = await Rooms.sb.from("memberships").update({ rapid_role }).eq("room_id", roomId).eq("user_id", uid);
+    if (error) throw error;
+  },
+  async object(reason) {
+    const { error } = await Rooms.sb.from("objections").insert({ room_id: roomId, user_id: Rooms.user.id, reason });
+    if (error) throw error;
+  },
+  async withdraw(oid) { const { error } = await Rooms.sb.rpc("withdraw_objection", { oid }); if (error) throw error; },
+  async overrule(oid, why) { const { error } = await Rooms.sb.rpc("override_objection", { oid, why }); if (error) throw error; }
 };
 
 /* ======================= Data: demo (in this browser only) ======================= */
@@ -118,6 +133,8 @@ const DEMO_ROOMS = {
 };
 function demoStore(kind) {
   const room = structuredClone(DEMO_ROOMS[kind === "ar" ? "ar" : "en"]);
+  room.model = params.get("model") || "wrap";
+  room.rapid = params.get("rapid") === "1";
   const owner = kind === "owner";
   let role = kind === "join" ? null : owner ? "owner" : "member";
   let mine = null, analysis = null, signoff = null, myName = owner ? "Islam" : "Lina";
@@ -125,20 +142,27 @@ function demoStore(kind) {
     { name: "Sara", input: { weights: { c1: 20, c2: 45, c3: 25, c4: 10 }, risk_appetite: "safe", gut_pick: "o2", concern: "Cash is thin until the Riyadh loan is paid off." } },
     { name: "Omar", input: { weights: { c1: 45, c2: 15, c3: 15, c4: 25 }, risk_appetite: "bold", gut_pick: "o1", concern: "A competitor could take the best Jeddah site first." } }
   ];
+  const roles = { Sara: owner ? null : null, Omar: room.rapid ? "approver" : null };
+  const objections = room.rapid ? [{ id: "x1", user_id: "omar", reason: "Legal hasn't cleared the lease terms yet.", status: "open", override_reason: null }] : [];
   const roster = () => [
-    ...(role ? [{ name: myName, role, submitted: !!mine, me: true }] : []),
-    { name: "Sara", role: owner ? "member" : "owner", submitted: true, me: false },
-    { name: "Omar", role: "member", submitted: owner, me: false }
+    ...(role ? [{ user_id: "me", name: myName, role, rapid_role: null, submitted: !!mine, me: true }] : []),
+    { user_id: "sara", name: "Sara", role: owner ? "member" : "owner", rapid_role: roles.Sara, submitted: true, me: false },
+    { user_id: "omar", name: "Omar", role: "member", rapid_role: roles.Omar, submitted: owner, me: false }
   ];
   return {
     async preview() { return { room_id: "demo", type: room.type, question: room.question, language: room.language, owner_name: "Sara", named_views: false, role: "member", usable: true }; },
     async load() {
       const counts = signoff ? { agree: 1, [signoff.stance]: (signoff.stance === "agree" ? 2 : 1) } : { agree: 1 };
-      return { room, role, mine, roster: roster(), analysis, files: ["Riyadh P&L 2026.xlsx"], invite: owner ? "demo-invite" : null, signoff, counts };
+      return { room, role, mine, roster: roster(), analysis, files: ["Riyadh P&L 2026.xlsx"], invite: owner ? "demo-invite" : null, signoff, counts, objections: room.rapid ? objections : undefined };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
+    async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
+    async object(reason) { objections.push({ id: "x" + (objections.length + 1), user_id: "me", reason, status: "open" }); },
+    async withdraw(oid) { const o = objections.find(x => x.id === oid); if (o) o.status = "withdrawn"; },
+    async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
     async decide() {
+      if (objections.some(o => o.status === "open")) throw new Error("objection_open");
       room.status = "deciding";
       setTimeout(async () => { analysis = await demoAnalysis(room, [mine, ...others.map(o => o.input)].filter(Boolean)); await refresh(); }, 2500);
     },
@@ -171,7 +195,8 @@ async function demoAnalysis(room, inputs) {
       check_first: ar ? null : "Ask the landlord if the 6 months rent-free still applies for a March start.",
       disappoints: ar ? null : "Members who weigh upside most, who would rather move this year.",
       bring_on_board: ar ? null : "A signed option on the site now, so waiting doesn't mean losing it.",
-      split: m.capConfidence
+      split: m.capConfidence,
+      ...demoExtras(room.model, ar)
     },
     disagreement_map: {
       weights: m.weightSpread, winners: m.winners, gut: m.gut, risk: m.riskMix, members: m.members, dissent: m.dissent,
@@ -179,6 +204,24 @@ async function demoAnalysis(room, inputs) {
     },
     owner_decision: null, override_reason: null, final_option: null
   };
+}
+
+// What each thinking model adds to the verdict, canned for the demo (the server writes the real ones).
+function demoExtras(model, ar) {
+  const x = {
+    model,
+    tripwires: ar ? [{ signal: "تراجع السيولة إلى أقل من ستة أشهر", when: "كل شهر" }] : [
+      { signal: "The landlord withdraws the rent-free offer for a spring start", when: "Before the end of this month" },
+      { signal: "Monthly revenue in Riyadh falls below 1M for two months in a row", when: "Monthly" }]
+  };
+  if (model === "quick") Object.assign(x, { undo: "Sign a short lease with a break clause, so walking back costs one quarter's rent.", look_again: "In three months, or sooner if a tripwire is hit." });
+  if (model === "wrap") Object.assign(x, { widened_option: "Open a small pop-up in Jeddah for three months before committing to the full fit-out.", small_test: "Run weekend sales in a Jeddah mall for six weeks and compare takings with Riyadh's first months.", distance: "We'd tell another team to protect their cash runway first and keep the site option open." });
+  if (model === "cynefin") Object.assign(x, { domain: { domain: "complicated", why: "The numbers and the market can be worked out with analysis and local advice.", shift_signal: "If a major competitor opens nearby, the situation becomes much harder to predict." } });
+  if (model === "mece") Object.assign(x, { governing_question: "Will a Jeddah branch this year earn more than it puts at risk, compared with waiting until spring?", tree: [
+    { branch: "Demand", hypothesis: "Jeddah has enough demand for a second branch.", finding: "Footfall and rents suggest strong demand.", verdict: "holds" },
+    { branch: "Cash", hypothesis: "We can fund the fit-out without stress.", finding: "4M fit-out would take cash below six months of runway.", verdict: "fails" },
+    { branch: "Team", hypothesis: "We can run two branches well.", finding: "No manager is ready yet.", verdict: "unclear" }] });
+  return x;
 }
 
 const store = demo ? demoStore(demo) : live;
@@ -228,22 +271,27 @@ async function vJoin() {
   const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), t("type_" + p.type)), q,
     el("p", "small", t("join_hint")));
   const f = el("form", "stack-sm"); f.noValidate = true;
-  const needName = !Rooms.hasAccount();
-  const nameIn = el("input", "line"); Object.assign(nameIn, { id: "jName", autocomplete: "given-name", maxLength: 60, placeholder: t("name_ph") });
-  if (needName) { const l = el("label", "lbl", t("name_lbl")); l.htmlFor = "jName"; f.append(l, nameIn); }
+  const prof = Rooms.user && !demo ? await Rooms.profile() : null;
+  const field = (id, label, input) => { const l = el("label", "lbl", label); l.htmlFor = id; input.id = id; f.append(l, input); };
+  const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "given-name", maxLength: 60, placeholder: t("name_ph"), value: prof?.name || "" });
+  const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, placeholder: t("email_ph"), value: prof?.email || "" });
+  field("jName", t("name_lbl"), nameIn);
+  field("jEmail", t("email_lbl"), emailIn);
+  f.append(el("p", "small", t("email_why")));
   const consent = el("input"); consent.type = "checkbox";
   if (p.named_views) { const c = el("label", "check"); c.append(consent, el("span", null, t("join_consent"))); f.append(c); }
   if (p.role === "observer") f.append(el("p", "small", t("join_observer")));
   const go = el("button", "btn", t("join_start")); go.type = "submit";
   const st = el("p", "status"); st.setAttribute("role", "status");
-  f.append(go, st);
+  f.append(go, Rooms.agreeNote(), st);
   f.onsubmit = async e => {
     e.preventDefault();
-    const name = nameIn.value.trim();
-    if (needName && !name) { nameIn.focus(); return say(st, t("need_name")); }
+    const name = nameIn.value.trim(), email = emailIn.value.trim();
+    if (!name) { nameIn.focus(); return say(st, t("need_name")); }
+    if (!Rooms.validEmail(email)) { emailIn.focus(); return say(st, t("need_email")); }
     go.disabled = true; say(st, t("joining"), "");
     try {
-      roomId = await store.join(name, consent.checked);
+      roomId = await store.join(name, email, consent.checked);
       if (!demo) history.replaceState(null, "", "?room=" + roomId);
       Rooms.showMyRooms();
       inputStep = 0;
@@ -253,23 +301,12 @@ async function vJoin() {
       go.disabled = false;
     }
   };
-  const bottom = card("you", f);
-  if (needName && !demo) {
-    const have = el("button", "linkbtn", t("have_account")); have.type = "button";
-    const box = el("div", "stack-sm");
-    have.onclick = () => { have.hidden = true; Rooms.emailCode(box, { onDone: () => vJoin() }); };
-    bottom.append(have, box);
-  }
-  show(top, bottom);
-  if (needName) nameIn.focus();
+  show(top, card("you", f));
+  (nameIn.value ? emailIn : nameIn).focus();
 }
 
-/* ---------- Sign in (opening a room link on a new device) ---------- */
-function vSignIn() {
-  const box = el("div", "stack-sm");
-  show(card("you", el("p", "text sm", t("signin_title")), box));
-  Rooms.emailCode(box, { onDone: () => refresh() });
-}
+/* ---------- No session in this browser (trial accounts live in the browser that joined) ---------- */
+function vSignIn() { notice(t("other_device")); }
 
 /* ---------- My answers, one step at a time ---------- */
 function startInput() {
@@ -355,6 +392,11 @@ function vInput() {
 }
 
 /* ---------- Waiting: who has answered, and Decide now ---------- */
+const RAPID_KEYS = { recommender: "rr_recommender", approver: "rr_approver", performer: "rr_performer" };
+const rapidLabel = p => t(p.role === "owner" ? "rr_decides" : RAPID_KEYS[p.rapid_role] || "rr_input");
+const openObjections = () => (S.objections || []).filter(o => o.status === "open");
+const nameOf = uid => S.roster.find(p => p.user_id === uid)?.name || "·";
+
 function vWaiting() {
   const r = S.room, owner = S.role === "owner";
   const answering = S.roster.filter(p => p.role !== "observer");
@@ -365,6 +407,7 @@ function vWaiting() {
   answering.forEach(p => {
     const li = el("li");
     const who = el("span", "who", p.name || "·"); if (p.me) who.append(el("span", "me", " (" + t("you") + ")"));
+    if (r.rapid) who.append(el("span", "tag", rapidLabel(p)));
     li.append(who, el("span", "st" + (p.submitted ? " done" : ""), p.submitted ? t("answered") : t("not_yet")));
     list.append(li);
   });
@@ -375,28 +418,97 @@ function vWaiting() {
     if (!S.mine) main.append(btn(t("give_answers"), owner ? "soft" : "", startInput));
     else if (r.status === "open") { const l = el("button", "linkbtn", t("edit_answers")); l.type = "button"; l.onclick = startInput; main.append(l); }
   }
+  const blocked = r.rapid && openObjections().length > 0;
   if (owner) {
     const st = el("p", "status err"); st.setAttribute("role", "status");
     if (r.decide_error) say(st, t(r.decide_error === "rooms_not_configured" ? "rooms_not_configured" : "decide_failed"));
-    const ready = done >= r.quorum;
+    const ready = done >= r.quorum && !blocked;
     const d = btn(t("decide_now"), "", async () => {
       d.disabled = true; say(st, "");
       try { await store.decide(); S.room.status = "deciding"; render(); }
-      catch (err) { d.disabled = false; say(st, t(["need_more_inputs", "rooms_not_configured", "room_not_open"].includes(err.message) ? err.message : "err_generic", { need: r.quorum })); }
+      catch (err) { d.disabled = false; say(st, t(["need_more_inputs", "rooms_not_configured", "room_not_open", "objection_open"].includes(err.message) ? err.message : "err_generic", { need: r.quorum })); }
     });
     d.disabled = !ready;
     main.append(d);
-    if (!ready) main.append(el("p", "small", t("decide_need", { need: r.quorum })));
+    if (blocked) main.append(el("p", "small", t("obj_blocking")));
+    else if (done < r.quorum) main.append(el("p", "small", t("decide_need", { need: r.quorum })));
     main.append(st);
   } else if (S.mine) {
-    main.append(el("p", "small", t("wait_hint_member")));
+    main.append(el("p", "small", t(blocked ? "obj_blocking" : "wait_hint_member")));
   }
   if (params.get("files") === "failed") main.append(el("p", "status err", t("files_failed")));
-  const cards = [questionCard(), main];
+  const cards = [questionCard()];
+  if (r.rapid && (S.objections || []).length) cards.push(objectionsCard());
+  cards.push(main);
+  if (r.rapid && S.roster.find(p => p.me)?.rapid_role === "approver" && r.status === "open") cards.push(approverCard());
+  if (owner && r.rapid) cards.push(rolesCard());
   // A brand-new room puts the invite first; after that it sits under the progress.
-  if (owner && S.invite) cards.splice(params.get("new") && !done ? 1 : 2, 0, shareCard(done < answering.length));
-  if (Rooms.isGuest() && S.mine) cards.push(saveCard());
+  if (owner && S.invite) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
   show(...cards);
+}
+
+// RAPID: the owner names who recommends, who must agree and who carries it out.
+function rolesCard() {
+  const c = card("you", el("p", "text sm", t("rr_title")), el("p", "small", t("rr_hint")));
+  const list = el("ul", "roster");
+  S.roster.filter(p => p.role !== "observer").forEach(p => {
+    const li = el("li");
+    const who = el("span", "who", p.name || "·"); if (p.me) who.append(el("span", "me", " (" + t("you") + ")"));
+    li.append(who);
+    if (p.role === "owner") li.append(el("span", "tag", t("rr_decides")));
+    else {
+      const sel = el("select", "line role-select");
+      sel.setAttribute("aria-label", (p.name || "") + " · " + t("rr_title"));
+      [["", "rr_input"], ["recommender", "rr_recommender"], ["approver", "rr_approver"], ["performer", "rr_performer"]].forEach(([v, k]) => {
+        const o = el("option", null, t(k)); o.value = v; if ((p.rapid_role || "") === v) o.selected = true; sel.append(o);
+      });
+      sel.onchange = async () => { sel.disabled = true; try { await store.setRapidRole(p.user_id, sel.value || null); await refresh(); } catch { sel.disabled = false; } };
+      li.append(sel);
+    }
+    list.append(li);
+  });
+  c.append(list);
+  return c;
+}
+// Everyone sees objections; the owner can override one on the record, the approver can withdraw theirs.
+function objectionsCard() {
+  const c = card("outline", el("h3", null, t("obj_title")));
+  (S.objections || []).forEach(o => {
+    const b = el("div", "block objection " + o.status);
+    b.append(el("p", "body", t("obj_by", { name: nameOf(o.user_id) }) + ": " + o.reason));
+    if (o.status === "overridden") b.append(el("p", "small", t("obj_overridden", { reason: o.override_reason || "" })));
+    if (o.status === "withdrawn") b.append(el("p", "small", t("obj_withdrawn")));
+    if (o.status === "open" && S.role === "owner") {
+      const why = el("input", "line"); Object.assign(why, { maxLength: 300, placeholder: t("obj_override_ph") }); why.setAttribute("aria-label", t("obj_override_ph"));
+      const st = el("p", "status err");
+      const go = btn(t("obj_override"), "ghost", async () => {
+        if (!why.value.trim()) { why.focus(); return say(st, t("need_reason")); }
+        go.disabled = true;
+        try { await store.overrule(o.id, why.value.trim()); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); }
+      });
+      const row = el("div", "add-row"); row.append(why, go);
+      b.append(row, st);
+    }
+    if (o.status === "open" && S.roster.find(p => p.me)?.user_id === o.user_id) {
+      const w = el("button", "linkbtn", t("obj_withdraw")); w.type = "button";
+      w.onclick = async () => { w.disabled = true; try { await store.withdraw(o.id); await refresh(); } catch { w.disabled = false; } };
+      b.append(w);
+    }
+    c.append(b);
+  });
+  return c;
+}
+function approverCard() {
+  const c = card("you", el("p", "text sm", t("obj_raise")), el("p", "small", t("obj_raise_hint")));
+  const ta = el("textarea"); Object.assign(ta, { rows: 2, maxLength: 500, placeholder: t("obj_ph") }); ta.setAttribute("aria-label", t("obj_raise"));
+  const st = el("p", "status err");
+  const go = btn(t("obj_send"), "ghost", async () => {
+    if (!ta.value.trim()) { ta.focus(); return; }
+    go.disabled = true;
+    try { await store.object(ta.value.trim()); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); }
+  });
+  c.append(ta, go, st);
+  return c;
 }
 function shareCard(withNudge) {
   const link = `${location.origin}/room.html?join=${encodeURIComponent(S.invite)}`;
@@ -420,16 +532,6 @@ function shareCard(withNudge) {
   }
   return c;
 }
-// Guests (joined with just a name) can add an email to keep the room on other devices.
-function saveCard() {
-  const box = el("div", "stack-sm");
-  const c = card("you", el("p", "text sm", t("save_title")), el("p", "small", t("save_hint")));
-  const open = el("button", "linkbtn", t("email_lbl") + " →"); open.type = "button";
-  open.onclick = () => { open.remove(); Rooms.emailCode(box, { onDone: email => { c.replaceChildren(el("p", "status ok", t("save_done", { email }))); } }); };
-  c.append(open, box);
-  return c;
-}
-
 /* ---------- Thinking ---------- */
 function vThinking() {
   show(questionCard(), card("you", el("p", "text sm thinking", t("thinking")), el("p", "small", t("thinking_hint"))));
@@ -445,7 +547,8 @@ function vVerdict() {
   const pills = el("div", "pills");
   pills.append(el("span", "pill strong", t("conf_" + (a.confidence || "Medium"))));
   if (v.split) pills.append(el("span", "pill", t("v_split")));
-  const top = card("active", meta(t("v_call"), t("type_" + r.type)), contentLang(el("p", "text", v.headline || v.call_label)),
+  const ownerName = S.roster.find(p => p.role === "owner")?.name;
+  const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || t("type_" + r.type)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
   cards.push(top);
 
@@ -483,6 +586,7 @@ function vVerdict() {
   }
 
   if (v.check_first) cards.push(card("outline", el("h3", null, t("v_check")), contentLang(el("p", "body", v.check_first))));
+  cards.push(...modelCards(v));
 
   const why = card("");
   const listOf = (title, xs) => { if (!xs?.length) return; const b = el("div", "block"); const ul = contentLang(el("ul", "dots")); xs.forEach(x => ul.append(el("li", null, x))); b.append(el("h3", null, title), ul); why.append(b); };
@@ -511,6 +615,52 @@ function vVerdict() {
   if (settled && S.role !== "observer") cards.push(signOffCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
+}
+// What the room's thinking model adds: tripwires for every model, then the model's own cards.
+function modelCards(v) {
+  const out = [];
+  const para = (title, text) => { const b = el("div", "block"); b.append(el("h3", null, title), contentLang(el("p", "body", text))); return b; };
+  if (v.domain?.domain) {
+    const c = card("", el("h3", null, t("v_domain")), el("p", "text sm", t("dom_" + v.domain.domain)));
+    if (v.domain.why) c.append(contentLang(el("p", "body", v.domain.why)));
+    if (v.domain.shift_signal) c.append(para(t("v_shift"), v.domain.shift_signal));
+    out.push(c);
+  }
+  if (v.tree?.length) {
+    const c = card("", el("h3", null, t("v_tree")));
+    if (v.governing_question) c.append(para(t("v_question"), v.governing_question));
+    const ul = contentLang(el("ul", "plain tree"));
+    v.tree.forEach(b => {
+      const li = el("li");
+      const top = el("div", "range-top"); top.append(el("span", "rate-name", b.branch), el("span", "tag" + (b.verdict === "fails" ? " split" : ""), t("tree_" + b.verdict)));
+      li.append(top);
+      if (b.hypothesis) li.append(el("p", "small", b.hypothesis));
+      if (b.finding) li.append(el("p", "body", b.finding));
+      ul.append(li);
+    });
+    c.append(ul);
+    out.push(c);
+  }
+  const extras = card("");
+  if (v.best_practice) extras.append(para(t("v_best_practice"), v.best_practice));
+  if (v.first_actions?.length) { const b = el("div", "block"); const ul = contentLang(el("ul", "dots")); v.first_actions.forEach(x => ul.append(el("li", null, x))); b.append(el("h3", null, t("v_first_actions")), ul); extras.append(b); }
+  if (v.experiments?.length) {
+    const b = el("div", "block"); const ul = contentLang(el("ul", "dots"));
+    v.experiments.forEach(x => { const li = el("li", null, x.test); if (x.success) li.append(el("span", "small", " · " + t("v_success") + ": " + x.success)); ul.append(li); });
+    b.append(el("h3", null, t("v_experiments")), ul); extras.append(b);
+  }
+  if (v.widened_option) extras.append(para(t("v_widened"), v.widened_option));
+  if (v.small_test) extras.append(para(t("v_small_test"), v.small_test));
+  if (v.distance) extras.append(para(t("v_distance"), v.distance));
+  if (v.undo) extras.append(para(t("v_undo"), v.undo));
+  if (v.look_again) extras.append(para(t("v_look_again"), v.look_again));
+  if (extras.childElementCount) out.push(extras);
+  if (v.tripwires?.length) {
+    const ul = contentLang(el("ul", "plain facts"));
+    v.tripwires.forEach(w => { const li = el("li", null, w.signal); if (w.when) li.append(el("span", "src", w.when)); ul.append(li); });
+    out.push(card("outline", el("h3", null, t("v_tripwires")), el("p", "small", t("v_tripwires_hint")), ul));
+  }
+  return out;
 }
 function mapCard(map, call) {
   const c = card("", el("h3", null, t("v_map")));
@@ -579,7 +729,7 @@ function render() {
   clearTimeout(pollTimer);
   if (!S) return;
   if (!S.role) return notice(t("no_access"));
-  document.title = (S.room.question.length > 50 ? S.room.question.slice(0, 50) + "…" : S.room.question) + " · Clarvy";
+  document.title = (S.room.question.length > 50 ? S.room.question.slice(0, 50) + "…" : S.room.question) + " · " + t("product");
   const st = S.room.status;
   if (inputStep && st === "open" && S.role !== "observer") return vInput();
   if (st === "open") {
@@ -590,13 +740,14 @@ function render() {
   vVerdict();
   if (st === "deciding") poll();
 }
-// While waiting on other people (or on Clarvy), check again every few seconds.
+// While waiting on other people (or on the analysis), check again every few seconds.
 function poll() {
   if (demo) return;
   pollTimer = setTimeout(async () => {
     if (inputStep || document.hidden) return poll();
-    const before = JSON.stringify([S.room.status, S.roster, !!S.analysis, S.room.decide_error]);
-    try { const next = await store.load(); if (next && JSON.stringify([next.room.status, next.roster, !!next.analysis, next.room.decide_error]) !== before) { S = next; render(); return; } } catch {}
+    const sig = x => JSON.stringify([x.room.status, x.roster, !!x.analysis, x.room.decide_error, x.objections]);
+    const before = sig(S);
+    try { const next = await store.load(); if (next && sig(next) !== before) { S = next; render(); return; } } catch {}
     poll();
   }, 5000);
 }
@@ -614,6 +765,7 @@ Rooms.langToggle(() => {
 
 async function start() {
   await Rooms.loadLang(Rooms.firstLang(demo === "ar" ? "ar" : null));
+  try { MODELS = (await import("/rooms/models.js")).MODELS; } catch {}
   notice(t("loading"), true);
   $("demoNote").hidden = !demo;
   if (demo) return demo === "join" ? vJoin() : refresh();

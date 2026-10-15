@@ -1,4 +1,4 @@
-// Shared by the Decision Rooms pages (new.html, room.html, rooms.html): words, Supabase, sign-in,
+// Shared by the Decision Rooms pages (index, new, room, dashboard): words, Supabase, trial sign-in,
 // weights, file reading and small DOM helpers.
 (() => {
 const $ = id => document.getElementById(id);
@@ -50,18 +50,24 @@ const isGuest = () => !!user?.is_anonymous;      // joined with just a name
 const hasAccount = () => !!user && !user.is_anonymous;
 async function profile() {
   if (!user) return null;
-  const { data } = await sb.from("profiles").select("name,language").eq("id", user.id).maybeSingle();
+  const { data } = await sb.from("profiles").select("name,email,language").eq("id", user.id).maybeSingle();
   return data;
 }
 async function setName(name) { await sb.from("profiles").update({ name }).eq("id", user.id); }
-// Members join with just a name: an anonymous Supabase account that is still theirs alone.
-async function guestSignIn(name) {
+const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || "").trim());
+// Open trial: everyone gives a name and an email (not verified) and gets their own private account
+// (Supabase anonymous sign-in). The email is stored on their profile so we can reach them.
+async function trialSignIn(name, email) {
   if (!user) {
     const { data, error } = await sb.auth.signInAnonymously();
     if (error) throw error;
     user = data.user;
   }
-  await setName(name);
+  const patch = { name };
+  if (email) patch.email = String(email).trim();
+  const { error } = await sb.from("profiles").update(patch).eq("id", user.id);
+  if (error) throw error;
+  showMyRooms();
 }
 function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !user; }
 
@@ -196,12 +202,20 @@ function loadScript(src) {
     document.head.append(s);
   }));
 }
-// Share links that open the person's own apps; Clarvy sends nothing itself.
+// Share links that open the person's own apps; we send nothing ourselves.
 function shareLinks(msg, subject) {
   return {
     whatsapp: "https://wa.me/?text=" + encodeURIComponent(msg),
     email: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`
   };
+}
+// "By continuing you accept our Terms · Privacy" under the forms that collect a name and email.
+function agreeNote() {
+  const p = el("p", "small agree");
+  const a1 = el("a", null, t("lp_terms")); a1.href = "/terms.html"; a1.target = "_blank";
+  const a2 = el("a", null, t("lp_privacy")); a2.href = "/privacy.html"; a2.target = "_blank";
+  p.append(t("agree_lead") + " ", a1, " · ", a2);
+  return p;
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; }
@@ -244,8 +258,8 @@ async function readFile(f) {
 
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, get lang() { return lang; },
-  connect, profile, setName, guestSignIn, isGuest, hasAccount, emailCode, showMyRooms,
+  connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, fileKind, readFile
+  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile
 };
 })();

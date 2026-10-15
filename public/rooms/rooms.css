@@ -219,3 +219,22 @@ body::before{display:none}
 .drop,details.more>summary{font-size:14px}
 .roster .st{font-size:13px}
 .msg.active h3,.msg.active .meta{color:rgba(255,255,255,.7)}
+
+/* Model chooser and RAPID tick (new.html step 4) */
+.choice .tag{align-self:flex-start;margin-bottom:6px}
+.choice-h.why{color:var(--fg);margin-top:6px}
+.tick{align-items:flex-start}
+.tick::before{margin-top:2px}
+.tick-body{display:flex;flex-direction:column;gap:4px;text-align:start}
+.wm{letter-spacing:.28em;font-size:12px;white-space:nowrap}
+
+/* RAPID roles, objections and model cards (room.html) */
+.roster .who .tag{margin-inline-start:8px;vertical-align:middle}
+select.role-select{width:auto;flex:none;padding:8px 10px;font-size:14px}
+.objection{padding-block:10px;border-top:1px solid var(--line)}
+.objection:first-of-type{border-top:0}
+.objection.withdrawn,.objection.overridden{opacity:.7}
+ul.tree{gap:14px}
+ul.tree li{display:flex;flex-direction:column;gap:4px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+ul.tree li:last-child{border-bottom:0}
+.agree a{color:var(--fg)}

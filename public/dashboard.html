@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="Your Clarvy decision rooms: open, ongoing and finished.">
-<title>Decision rooms · Clarvy</title>
+<meta name="description" content="Your decision rooms: open, ongoing and finished.">
+<title>My rooms · Decision Rooms</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
@@ -60,7 +60,7 @@ main{max-width:1040px}
 <body>
 <main>
   <header class="top">
-    <a class="wm" href="/">Clarvy</a>
+    <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
   </header>
   <div id="view" aria-live="polite"><article class="msg"><p class="text thinking">One moment</p></article></div>
@@ -147,7 +147,7 @@ async function togglePanel(r, card, btn) {
 
 /* ---------- Page ---------- */
 function render() {
-  document.title = t("db_title") + " · Clarvy";
+  document.title = t("my_rooms") + " · " + t("product");
   const finished = r => ["decided", "reviewed"].includes(r.status);
   const yours = rooms.filter(r => r.role === "owner" && r.status === "open");
   const ongoing = rooms.filter(r => !finished(r) && !yours.includes(r));
@@ -214,11 +214,12 @@ function render() {
     list(t("db_old"), old, t("db_empty_old"), true));
 }
 
-function signIn() {
-  const box = el("div", "stack-sm");
-  const c = el("article", "msg you"); c.append(el("p", "text sm", t("signin_title")), box);
+// No account in this browser yet (trial accounts live in the browser that made them).
+function noRooms() {
+  const c = el("article", "msg you");
+  const go = el("a", "btn", t("mr_open_new")); go.href = demo ? "/new.html?demo=1" : "/new.html";
+  c.append(el("p", "text sm", t("db_trial_note")), el("p", "small", t("db_none_yet")), go);
   view.replaceChildren(el("h1", "db-title", t("db_title")), c);
-  Rooms.emailCode(box, { onDone: load });
 }
 
 async function load() {
@@ -235,13 +236,13 @@ async function load() {
   render();
 }
 
-Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.user) signIn(); });
+Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.user) noRooms(); });
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());
   $("demoNote").hidden = !demo;
   if (demo) return load();
   if (!(await Rooms.connect())) { const c = el("article", "msg"); c.append(el("p", "text", t("not_setup"))); return view.replaceChildren(c); }
-  if (!Rooms.user) return signIn();
+  if (!Rooms.user) return noRooms();
   load();
 })();
 })();

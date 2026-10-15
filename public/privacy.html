@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Privacy · Decision Rooms</title>
+<meta name="description" content="How Decision Rooms handles your data during the trial.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+main{max-width:760px}
+.doc{background:#fff;padding:clamp(22px,4vw,44px);display:flex;flex-direction:column;gap:14px}
+.doc h1{margin:0;font-size:clamp(30px,4.6vw,44px);font-weight:500;letter-spacing:-.025em}
+.doc h2{margin:18px 0 0;font-size:19px;font-weight:600}
+.doc p,.doc li{margin:0;font-size:16px;line-height:1.6}
+.doc ul{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:6px}
+.doc .upd{font-size:13px;color:var(--dim)}
+.todo{background:#FFF2B3;padding:0 4px}
+[lang=ar] .doc,.doc[lang=ar]{font-family:var(--arabic)}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" href="/terms.html" data-t="lp_terms">Terms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+
+  <article class="doc" lang="en" dir="ltr" id="doc-en">
+    <h1>Privacy</h1>
+    <p class="upd">Last updated 16 October 2026 · Trial version</p>
+    <p>Decision Rooms helps groups make decisions together. This page explains, in plain words, what we collect during the trial, why, who processes it, and what you can ask us to do with it.</p>
+    <p>Decision Rooms is run by <span class="todo">[operator's legal name]</span>. Contact: <span class="todo">[contact email]</span>.</p>
+
+    <h2>What we collect</h2>
+    <ul>
+      <li><strong>Your name and email.</strong> You give these when you open or join a room. We don't verify the email during the trial.</li>
+      <li><strong>Room content.</strong> The question, options, context, criteria and any files the owner adds, including the text we read from those files.</li>
+      <li><strong>Your answers.</strong> Your ratings, risk appetite, gut pick, concern, sign-off and, if you are an approver, any objection.</li>
+      <li><strong>Technical data.</strong> Your browser keeps a sign-in session so you can return to your rooms. Our server sees your IP address to limit abuse; it is held in memory only, not stored.</li>
+    </ul>
+
+    <h2>How we use it</h2>
+    <ul>
+      <li>To run your rooms and produce the analysis and recommended call.</li>
+      <li>To contact you about your rooms and ask for feedback during the trial.</li>
+      <li>We don't sell your data, use it for advertising, or use it to train AI models.</li>
+    </ul>
+
+    <h2>Who sees what inside a room</h2>
+    <ul>
+      <li><strong>Your answers are private.</strong> Only you can read them. This is enforced in the database, not just in the app. The group sees the combined result and patterns (for example "two members weigh cash risk far higher"), never who said what.</li>
+      <li>Members see each other's names and who has answered (a tick, not the content).</li>
+      <li>In rooms that use RAPID roles, everyone sees each person's role and any objection, with the approver's name, because who must agree is public in that model.</li>
+      <li>The owner sees the invite link and decides the call. Any override is recorded with its reason.</li>
+    </ul>
+
+    <h2>Who processes your data for us</h2>
+    <ul>
+      <li><strong>OpenAI</strong> analyses room content and answers to produce the recommendation, and searches the web for public facts. Under OpenAI's API terms, this data is not used to train its models by default, and may be kept for up to 30 days to detect abuse.</li>
+      <li><strong>Supabase</strong> stores rooms, answers and files, and runs sign-in. Data is encrypted at rest.</li>
+      <li><strong>Our hosting provider</strong> runs the website and the server that calls these services. Connections use HTTPS.</li>
+    </ul>
+
+    <h2>How long we keep it</h2>
+    <p>We keep trial data for the length of the trial. You can ask us to delete your account, your answers or a room you own at any time by emailing <span class="todo">[contact email]</span>; we will do it within 30 days and confirm.</p>
+
+    <h2>Your choices</h2>
+    <p>You can ask to see, correct or delete the data we hold about you, or to stop receiving trial emails. Write to <span class="todo">[contact email]</span>.</p>
+
+    <h2>Changes</h2>
+    <p>We will update this page as the product grows, and change the date at the top when we do.</p>
+  </article>
+
+  <article class="doc" lang="ar" dir="rtl" id="doc-ar" hidden>
+    <h1>الخصوصية</h1>
+    <p class="upd">آخر تحديث 16 أكتوبر 2026 · النسخة التجريبية</p>
+    <p>تساعد غرف القرار المجموعات على اتخاذ القرارات معًا. توضّح هذه الصفحة ببساطة ما نجمعه خلال الفترة التجريبية، ولماذا، ومن يعالجه، وما الذي يمكنك أن تطلبه منا بشأنه.</p>
+    <p>تُدار غرف القرار من قِبل <span class="todo">[الاسم القانوني للجهة المشغّلة]</span>. للتواصل: <span class="todo">[البريد الإلكتروني للتواصل]</span>.</p>
+
+    <h2>ما الذي نجمعه</h2>
+    <ul>
+      <li><strong>اسمك وبريدك الإلكتروني.</strong> تقدّمهما حين تفتح غرفة أو تنضم إليها. لا نتحقق من البريد خلال الفترة التجريبية.</li>
+      <li><strong>محتوى الغرفة.</strong> السؤال والخيارات والسياق والمعايير وأي ملفات يضيفها صاحب الغرفة، بما في ذلك النص الذي نقرؤه من تلك الملفات.</li>
+      <li><strong>إجاباتك.</strong> تقييماتك وقدر المخاطرة وإحساسك الأول ومصدر قلقك وتوقيعك، وأي اعتراض إن كنت ممن يجب أن يوافقوا.</li>
+      <li><strong>بيانات تقنية.</strong> يحتفظ متصفحك بجلسة دخول لتعود إلى غرفك. يرى خادمنا عنوان IP الخاص بك للحدّ من إساءة الاستخدام، ويبقى في الذاكرة فقط دون تخزين.</li>
+    </ul>
+
+    <h2>كيف نستخدمه</h2>
+    <ul>
+      <li>لتشغيل غرفك وإنتاج التحليل والقرار الموصى به.</li>
+      <li>للتواصل معك بشأن غرفك وطلب رأيك خلال الفترة التجريبية.</li>
+      <li>لا نبيع بياناتك ولا نستخدمها للإعلانات ولا لتدريب نماذج الذكاء الاصطناعي.</li>
+    </ul>
+
+    <h2>من يرى ماذا داخل الغرفة</h2>
+    <ul>
+      <li><strong>إجاباتك سرّية.</strong> لا يقرؤها أحد غيرك، وتفرض قاعدة البيانات ذلك وليس التطبيق فقط. ترى المجموعة النتيجة المجمّعة والأنماط (مثل «عضوان يعطيان مخاطر السيولة وزنًا أكبر بكثير»)، دون أن يُعرف من قال ماذا.</li>
+      <li>يرى الأعضاء أسماء بعضهم ومن أجاب (علامة فقط، دون المحتوى).</li>
+      <li>في الغرف التي تستخدم أدوار RAPID، يرى الجميع دور كل شخص وأي اعتراض مع اسم صاحبه، لأن من يجب أن يوافق معروف للجميع في هذا النموذج.</li>
+      <li>يرى صاحب الغرفة رابط الدعوة ويحسم القرار، ويُسجَّل أي تجاوز مع سببه.</li>
+    </ul>
+
+    <h2>من يعالج بياناتك نيابةً عنا</h2>
+    <ul>
+      <li><strong>OpenAI</strong> تحلّل محتوى الغرفة والإجابات لإنتاج التوصية، وتبحث في الويب عن الحقائق العامة. وفق شروط واجهة OpenAI البرمجية، لا تُستخدم هذه البيانات افتراضيًا لتدريب نماذجها، وقد تُحفظ حتى 30 يومًا لرصد إساءة الاستخدام.</li>
+      <li><strong>Supabase</strong> تخزّن الغرف والإجابات والملفات وتدير تسجيل الدخول، والبيانات مشفّرة أثناء التخزين.</li>
+      <li><strong>مزوّد الاستضافة</strong> يشغّل الموقع والخادم الذي يتصل بهذه الخدمات، والاتصالات تتم عبر HTTPS.</li>
+    </ul>
+
+    <h2>مدة الاحتفاظ</h2>
+    <p>نحتفظ ببيانات الفترة التجريبية طوال مدتها. يمكنك في أي وقت أن تطلب حذف حسابك أو إجاباتك أو غرفة تملكها بمراسلة <span class="todo">[البريد الإلكتروني للتواصل]</span>، وسننفّذ ذلك خلال 30 يومًا ونؤكّده لك.</p>
+
+    <h2>خياراتك</h2>
+    <p>يمكنك أن تطلب الاطلاع على بياناتك لدينا أو تصحيحها أو حذفها، أو التوقف عن تلقي رسائل الفترة التجريبية. راسلنا على <span class="todo">[البريد الإلكتروني للتواصل]</span>.</p>
+
+    <h2>التغييرات</h2>
+    <p>سنحدّث هذه الصفحة مع تطوّر المنتج، ونغيّر التاريخ في أعلاها حين نفعل.</p>
+  </article>
+</main>
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+  const show = () => { const ar = Rooms.lang === "ar"; document.getElementById("doc-en").hidden = ar; document.getElementById("doc-ar").hidden = !ar; document.title = (ar ? "الخصوصية" : "Privacy") + " · " + Rooms.t("product"); };
+  Rooms.langToggle(show);
+  Rooms.loadLang(Rooms.firstLang()).then(show);
+})();
+</script>
+</body>
+</html>
