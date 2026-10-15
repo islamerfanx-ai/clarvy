@@ -29,14 +29,14 @@ section{padding:56px 0 8px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
 .cardw{background:#fff;padding:22px;display:flex;flex-direction:column}
 /* fact cards: same anatomy as the reference */
-.fact{min-height:360px}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+@media (max-width:760px){.facts{grid-template-columns:1fr}}
+.fact{min-height:0}
 .fact h3{margin:0 0 16px;padding-bottom:16px;border-bottom:1px solid var(--line);font-size:20px;font-weight:500;letter-spacing:-.01em;color:var(--fg);text-transform:none}
-.fact .fig{display:grid;grid-template-columns:auto minmax(0,1fr);border-bottom:1px solid var(--line)}
-.fact .num{font-size:clamp(52px,4.6vw,68px);line-height:1;font-weight:400;letter-spacing:-.045em;padding:22px 16px 14px 0;border-inline-end:1px solid var(--line);min-width:2.2ch}
-[dir=rtl] .fact .num{padding:22px 0 14px 16px}
-.fact .cap{align-self:end;font-size:13px;line-height:1.25;padding:0 0 14px 12px}
-[dir=rtl] .fact .cap{padding:0 12px 14px 0}
-.fact .foot{margin-top:auto;padding-top:24px;font-size:15px;line-height:1.4}
+.fact .fig{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:end;border-bottom:1px solid var(--line)}
+.fact .num{font-size:clamp(56px,6vw,84px);line-height:1;font-weight:400;letter-spacing:-.045em;padding:24px 0 16px;border-inline-end:1px solid var(--line);align-self:stretch;display:flex;align-items:flex-end}
+.fact .cap{font-size:15px;line-height:1.35;padding:0 0 16px;padding-inline-start:16px;max-width:24ch}
+.fact .foot{margin-top:auto;padding-top:22px;font-size:16px;line-height:1.45;max-width:46ch}
 .fact .src{margin-top:12px;font-size:12px;color:var(--dim)}
 /* steps */
 .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
@@ -103,7 +103,7 @@ footer .links{display:flex;gap:18px}
 
   <section aria-labelledby="factsH">
     <h2 class="sec-h" id="factsH" data-t="lp_facts_t">Why group decisions go wrong</h2>
-    <div class="grid4">
+    <div class="facts">
       <article class="cardw fact"><h3 data-t="lp_f1_t"></h3><div class="fig"><span class="num">7</span><span class="cap" data-t="lp_f1_c"></span></div><p class="foot" data-t="lp_f1_f"></p><p class="src" data-t="lp_f1_s"></p></article>
       <article class="cardw fact"><h3 data-t="lp_f2_t"></h3><div class="fig"><span class="num">20%</span><span class="cap" data-t="lp_f2_c"></span></div><p class="foot" data-t="lp_f2_f"></p><p class="src" data-t="lp_f2_s"></p></article>
       <article class="cardw fact"><h3 data-t="lp_f3_t"></h3><div class="fig"><span class="num">37%</span><span class="cap" data-t="lp_f3_c"></span></div><p class="foot" data-t="lp_f3_f"></p><p class="src" data-t="lp_f3_s"></p></article>

@@ -455,7 +455,7 @@ function rolesCard() {
     const li = el("li");
     const who = el("span", "who", p.name || "·"); if (p.me) who.append(el("span", "me", " (" + t("you") + ")"));
     li.append(who);
-    if (p.role === "owner") li.append(el("span", "tag", t("rr_decides")));
+    if (p.role === "owner") li.append(el("span", "role-fixed", t("rr_decides")));
     else {
       const sel = el("select", "line role-select");
       sel.setAttribute("aria-label", (p.name || "") + " · " + t("rr_title"));

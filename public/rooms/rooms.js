@@ -256,10 +256,47 @@ async function readFile(f) {
   throw new Error("unsupported");
 }
 
+/* ---------- "Add a room" opens the setup as a pop-up over the current page ---------- */
+const embedded = new URLSearchParams(location.search).get("embed") === "1";
+if (embedded) document.documentElement.classList.add("embed");
+function openNewRoom(href = "/new.html") {
+  if (document.querySelector(".dr-pop")) return;
+  const url = new URL(href, location.origin); url.searchParams.set("embed", "1");
+  const pop = el("div", "dr-pop"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-modal", "true");
+  pop.setAttribute("aria-label", t("new_room"));
+  const panel = el("div", "dr-pop-panel");
+  const close = el("button", "dr-pop-close", "×"); close.type = "button"; close.setAttribute("aria-label", t("close") || "Close");
+  const frame = el("iframe"); frame.src = url.pathname + url.search; frame.title = t("new_room");
+  panel.append(close, frame); pop.append(panel); document.body.append(pop);
+  document.body.classList.add("dr-pop-open");
+  const shut = () => { pop.remove(); document.body.classList.remove("dr-pop-open"); removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") shut(); };
+  close.onclick = shut; pop.addEventListener("click", e => { if (e.target === pop) shut(); });
+  addEventListener("keydown", onKey);
+  close.focus();
+}
+// When the room is created inside the pop-up, the whole page moves to the new room.
+addEventListener("message", e => {
+  if (e.origin !== location.origin || e.data?.type !== "dr-open" || !String(e.data.url || "").startsWith("/room.html")) return;
+  location.href = e.data.url;
+});
+// Any link to the setup page opens the pop-up instead (landing CTAs, Add a room, empty states).
+if (!embedded) document.addEventListener("click", e => {
+  const a = e.target.closest?.('a[href^="/new.html"]');
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault(); openNewRoom(a.getAttribute("href"));
+});
+// Inside the pop-up, finishing hands the room's address to the page behind it.
+function goToRoom(url) {
+  if (embedded && window.parent !== window) window.parent.postMessage({ type: "dr-open", url }, location.origin);
+  else location.href = url;
+}
+
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile
+  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
+  openNewRoom, goToRoom, embedded
 };
 })();

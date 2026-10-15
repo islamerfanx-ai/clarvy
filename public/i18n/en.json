@@ -2,7 +2,7 @@
   "dir": "ltr",
   "lang_other": "عربي",
   "lang_other_label": "Switch to Arabic",
-  "my_rooms": "My rooms",
+  "my_rooms": "Your rooms",
   "new_room": "New room",
   "back": "Back",
   "next": "Next",
@@ -180,7 +180,7 @@
   "so_send": "Sign off",
   "so_done": "You signed off: {stance}",
   "so_counts": "{agree} agree · {commit} disagree but commit · {object} object",
-  "mr_title": "My rooms",
+  "mr_title": "Your rooms",
   "mr_empty": "No rooms yet. Open one and invite the people who should have a say.",
   "mr_open_new": "Open a room",
   "st_input": "Your answers needed",
@@ -221,7 +221,7 @@
   "email_send_link": "Email me a link",
   "resend_link": "Send the email again",
   "email_hint_link": "We'll email you a sign-in link. No password needed.",
-  "db_title": "Decision rooms",
+  "db_title": "Your rooms",
   "db_yours": "Your open rooms",
   "db_invite": "Invite people",
   "db_add": "Add a room",
@@ -392,5 +392,6 @@
   "lp_privacy": "Privacy",
   "lp_terms": "Terms",
   "lp_rights": "Decision Rooms supports decisions; it doesn't replace professional advice.",
-  "agree_lead": "By continuing you accept our"
+  "agree_lead": "By continuing you accept our",
+  "close": "Close"
 }

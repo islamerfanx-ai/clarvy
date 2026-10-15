@@ -311,7 +311,7 @@ async function create() {
   const btn = document.querySelector("#wiz .actions .btn:not(.ghost)"); if (btn) { btn.disabled = true; btn.textContent = t("creating"); }
   fail("");
   try {
-    if (demo) { try { localStorage.removeItem(DRAFT_KEY); } catch {} location.href = `/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}`; return; }
+    if (demo) { try { localStorage.removeItem(DRAFT_KEY); } catch {} Rooms.goToRoom(`/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}`); return; }
     await Rooms.trialSignIn(d.name.trim(), d.email.trim());
     const sb = Rooms.sb, me = Rooms.user.id;
     let { data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).order("created_at").limit(1).maybeSingle();
@@ -340,7 +340,7 @@ async function create() {
     const { error: invErr } = await sb.from("invites").insert({ room_id: id, created_by: me });
     if (invErr) throw invErr;
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
-    location.href = `/room.html?room=${id}&new=1${filesFailed ? "&files=failed" : ""}`;
+    Rooms.goToRoom(`/room.html?room=${id}&new=1${filesFailed ? "&files=failed" : ""}`);
   } catch (err) {
     console.error(err);
     fail(t(Rooms.errKey(err, ["room_needs_2_to_6_options", "room_needs_2_to_8_criteria"])));
