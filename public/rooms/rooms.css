@@ -257,3 +257,7 @@ body.dr-pop-open{overflow:hidden}
 /* inside the pop-up, the setup page drops its own header */
 html.embed .top{display:none}
 html.embed main{margin-inline-start:0;padding-top:68px}
+
+/* File how-to steps (new.html, last step) */
+details.howto .block{margin-top:16px}
+ol.steps-list{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.5}

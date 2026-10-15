@@ -191,5 +191,14 @@ check("someone else can't withdraw it", as_user(C, f"select withdraw_objection('
 check("approver withdraws their own", (as_user(B, f"select withdraw_objection('{O2}')") + as_user(B, f"select status from objections where id='{O2}'")), "withdrawn")
 check("no objections in rooms without RAPID", as_user(A, f"insert into objections (room_id,user_id,reason) values ('{R}','{A}','x')"), "row-level security")
 
+# ---------- Custom categories (20261017000000_custom_category.sql) ----------
+R4 = str(uuid.uuid4())
+check("custom room needs a name", as_user(G, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id) values ('{G}','custom','Move the warehouse?','{opts}','{crit}','{G}')", anonymous=True), "rooms_custom_needs_label")
+check("custom room with a name", as_user(G, f"insert into rooms (id,workspace_id,type,type_label,question,options,criteria,owner_id) values ('{R4}','{G}','custom','Logistics','Move the warehouse?','{opts}','{crit}','{G}')", anonymous=True), "INSERT 0 1")
+check("my rooms shows the custom name", as_user(G, f"select type, type_label from my_rooms() where id='{R4}'", anonymous=True), "custom | Logistics")
+as_user(G, f"insert into invites (token,room_id,created_by) values ('tok6','{R4}','{G}')", anonymous=True)
+check("invite preview shows the custom name", anon("select type, type_label from invite_preview('tok6')"), "custom | Logistics")
+check("category name has a length limit", as_user(G, f"update rooms set type_label='{'x'*41}' where id='{R4}'", anonymous=True), "check constraint")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

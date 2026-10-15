@@ -46,7 +46,7 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
@@ -245,7 +245,7 @@ const contentLang = node => { node.lang = S.room.language; node.dir = S.room.lan
 function questionCard() {
   const r = S.room;
   const q = contentLang(el("p", "text", r.question));
-  const c = card("active", meta(t("type_" + r.type), r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : ""), q);
+  const c = card("active", meta(Rooms.typeName(r), r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : ""), q);
   if (r.context || S.files?.length) {
     const more = el("details", "more");
     const sum = el("summary", null, t("nr_ctx_title").replace(/[?؟]$/, "")); sum.style.color = "#fff";
@@ -268,7 +268,7 @@ async function vJoin() {
     if (data) { roomId = p.room_id; history.replaceState(null, "", "?room=" + roomId); return refresh(); }
   }
   const q = el("p", "text", p.question); q.lang = p.language; q.dir = p.language === "ar" ? "rtl" : "ltr";
-  const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), t("type_" + p.type)), q,
+  const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), Rooms.typeName(p)), q,
     el("p", "small", t("join_hint")));
   const f = el("form", "stack-sm"); f.noValidate = true;
   const prof = Rooms.user && !demo ? await Rooms.profile() : null;
@@ -548,7 +548,7 @@ function vVerdict() {
   pills.append(el("span", "pill strong", t("conf_" + (a.confidence || "Medium"))));
   if (v.split) pills.append(el("span", "pill", t("v_split")));
   const ownerName = S.roster.find(p => p.role === "owner")?.name;
-  const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || t("type_" + r.type)), contentLang(el("p", "text", v.headline || v.call_label)),
+  const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || Rooms.typeName(r)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
   cards.push(top);
 

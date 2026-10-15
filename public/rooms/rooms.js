@@ -31,6 +31,8 @@ function langToggle(onChange) {
     onChange && onChange();
   });
 }
+// A room's category as people see it: the custom name for custom rooms.
+const typeName = r => r?.type === "custom" && r.type_label ? r.type_label : t("type_" + (r?.type || "business"));
 const fmtDate = d => new Date(d + (String(d).length === 10 ? "T00:00:00" : "")).toLocaleDateString(lang === "ar" ? "ar-u-nu-latn" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /* ---------- Supabase ---------- */
@@ -230,7 +232,17 @@ function fileKind(f) {
   if (["xlsx", "xls", "ods"].includes(ext)) return "sheet";
   if (ext === "pdf" || f.type === "application/pdf") return "pdf";
   if (ext === "docx") return "docx";
+  if (ext === "zip" || f.type === "application/zip") return "zip";
   return null;
+}
+// Slack's export is JSON per channel and day: [{user_name|user, text, ts}]. Turn it into "name: message" lines.
+function slackLines(json) {
+  try {
+    const rows = JSON.parse(json);
+    if (!Array.isArray(rows)) return "";
+    return rows.filter(m => m && typeof m.text === "string" && m.text.trim())
+      .map(m => `${m.user_profile?.real_name || m.user_name || m.user || "?"}: ${m.text}`).join("\n");
+  } catch { return ""; }
 }
 async function readFile(f) {
   const kind = fileKind(f);
@@ -239,6 +251,19 @@ async function readFile(f) {
     await loadScript(LIB + "xlsx@0.18.5/dist/xlsx.full.min.js");
     const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
     return wb.SheetNames.map(n => `## Sheet: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], { blankrows: false })).join("\n\n");
+  }
+  if (kind === "zip") {
+    // A WhatsApp export ("_chat.txt" plus media) or a Slack export (JSON files). Read the text, skip the media.
+    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js");
+    const zip = await JSZip.loadAsync(await f.arrayBuffer());
+    const parts = [];
+    for (const entry of Object.values(zip.files)) {
+      if (entry.dir || /(^|\/)(__MACOSX|\.)/.test(entry.name)) continue;
+      if (/\.txt$/i.test(entry.name)) parts.push(`## ${entry.name}\n` + await entry.async("string"));
+      else if (/\.json$/i.test(entry.name)) { const lines = slackLines(await entry.async("string")); if (lines) parts.push(`## ${entry.name}\n` + lines); }
+      if (parts.join("").length > 200000) break;
+    }
+    return parts.join("\n\n");
   }
   if (kind === "docx") {
     await loadScript(LIB + "mammoth@1.6.0/mammoth.browser.min.js");
@@ -293,7 +318,7 @@ function goToRoom(url) {
 }
 
 window.Rooms = {
-  $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, get lang() { return lang; },
+  $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,

@@ -179,7 +179,7 @@ function render() {
     const card = el("article", "rcard");
     const a = el("a", "open"); a.href = roomHref(r);
     const s = statusLine(r);
-    a.append(el("span", "meta", t("type_" + r.type)), q(r), el("span", "st" + (s.go ? " go" : ""), s.text));
+    a.append(el("span", "meta", Rooms.typeName(r)), q(r), el("span", "st" + (s.go ? " go" : ""), s.text));
     const inv = el("button", "btn invite", "+ " + t("db_invite")); inv.type = "button"; inv.setAttribute("aria-expanded", "false");
     inv.onclick = () => togglePanel(r, card, inv);
     card.append(a, inv);

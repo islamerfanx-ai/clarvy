@@ -17,7 +17,7 @@
   "step": "Step {n} of {total}",
   "type_business": "Business",
   "type_finance": "Finance",
-  "type_politics": "Public affairs",
+  "type_politics": "Politics",
   "type_trip": "Trip",
   "advice_note": "Decision Rooms supports the decision. It doesn't replace a licensed adviser.",
   "review_on": "Review on {date}",
@@ -52,7 +52,7 @@
   "nr_ctx_hint": "Numbers, deadlines, files. Everyone sees the same facts.",
   "context_ph": "Numbers, deadlines, what's already been tried",
   "drop": "Add files",
-  "files_types": "PDF, Word, Excel, CSV or text.",
+  "files_types": "PDF, Word, Excel, CSV, text, or a WhatsApp or Slack export (.zip).",
   "file_reading": "Reading...",
   "file_ready": "Ready",
   "file_bad": "Can't read this type",
@@ -393,5 +393,61 @@
   "lp_terms": "Terms",
   "lp_rights": "Decision Rooms supports decisions; it doesn't replace professional advice.",
   "agree_lead": "By continuing you accept our",
-  "close": "Close"
+  "close": "Close",
+  "type_custom": "Custom",
+  "custom_lbl": "Name the category",
+  "custom_ph": "For example: Operations, Logistics",
+  "need_custom": "Name the category first.",
+  "tmpl_custom": [
+    "Impact",
+    "Cost",
+    "Risk",
+    "Effort",
+    "Timing"
+  ],
+  "nr_you_title": "First, who are you?",
+  "nr_you_hint": "So people know who's asking. We only ask once.",
+  "files_ideas": "Where to find useful files",
+  "paste_btn": "+ Paste a conversation",
+  "paste_ph": "Paste a Slack thread, an email or any conversation here",
+  "paste_add": "Add it",
+  "paste_name": "Pasted conversation",
+  "how_wa_ios_t": "WhatsApp on iPhone",
+  "how_wa_ios": [
+    "Open the chat or group.",
+    "Tap the name at the top.",
+    "Scroll down and tap Export Chat.",
+    "Choose Without Media (or Attach Media; we only read the text).",
+    "Save it to Files or send it to yourself, then add the file here."
+  ],
+  "how_wa_and_t": "WhatsApp on Android",
+  "how_wa_and": [
+    "Open the chat or group.",
+    "Tap ⋮ (More options), then More.",
+    "Tap Export chat and choose Without media.",
+    "Save it or send it to yourself, then add the file here."
+  ],
+  "how_slack_t": "Slack thread or channel",
+  "how_slack": [
+    "For a thread: open it, select the messages and copy them.",
+    "Tap Paste a conversation here and paste it.",
+    "For a whole channel (workspace admins): Workspace settings → Import/Export Data → Export, then add the .zip here."
+  ],
+  "how_email_t": "Email thread",
+  "how_email": [
+    "Open the thread.",
+    "Choose Print (in Gmail: ⋮ → Print all).",
+    "Pick Save as PDF, then add the PDF here."
+  ],
+  "how_docs_t": "Meeting notes and documents",
+  "how_docs": [
+    "Word and PDF files can be added as they are.",
+    "In Google Docs: File → Download → Microsoft Word or PDF."
+  ],
+  "how_sheets_t": "Spreadsheets and numbers",
+  "how_sheets": [
+    "Excel and CSV files can be added as they are.",
+    "In Google Sheets: File → Download → Microsoft Excel or CSV."
+  ],
+  "how_tip": "Scanned PDFs (photos of pages) have no text we can read, so use the original file when you can."
 }
