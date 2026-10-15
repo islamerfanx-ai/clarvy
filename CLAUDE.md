@@ -5,7 +5,7 @@ Product decisions live in `docs/product-foundation.md` (section 0); models in `d
 
 ## Layout
 - `public/index.html`: the landing page (home). Facts on it are cited; keep them sourced.
-- `public/privacy.html`, `public/terms.html`: bilingual; contain `[contact email]` and `[operator's legal name]` placeholders until filled in.
+- `public/privacy.html`, `public/terms.html`: bilingual. No contact email or operator name yet (decided 2026-10-16); add both when the user provides them.
 - `public/clarvy.html`: the old solo Clarvy app (single file: CSS, WebGL halo shader, composer, decision engine, result cards, history), unlisted (`noindex`), kept for the future consumer product. The "Solo decision pipeline" section below describes it.
 - `lib/core.js`: server logic. It holds the OpenAI key, calls the Responses API (`/v1/responses`), and handles the access code, the per-IP rate limit and JSON parsing.
 - `api/ask.js`, `api/search.js`: Vercel serverless endpoints wrapping `lib/core.js`.

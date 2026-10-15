@@ -19,7 +19,10 @@ main{position:relative;z-index:1;display:flex;flex-direction:column;gap:8px;widt
 
 /* ---------- Header ---------- */
 .top{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-block:4px 14px}
-.wm{font-family:var(--mono);font-stretch:75%;font-size:13px;letter-spacing:.5em;text-transform:uppercase;color:var(--accent);text-decoration:none;direction:ltr}
+/* Brand: "Decision Rooms" in the page's own sans, large and confident */
+.wm{font-family:var(--read)!important;font-size:24px;font-weight:600;letter-spacing:-.025em;line-height:1;color:var(--fg);text-decoration:none;direction:ltr;white-space:nowrap}
+.wm:hover{opacity:.8}
+@media (max-width:480px){.wm{font-size:20px}}
 .top-acts{display:flex;gap:14px;align-items:center}
 .navlink{font-family:var(--mono);font-stretch:75%;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--fg);text-decoration:none}
 .navlink:hover{color:var(--accent)}
@@ -198,14 +201,13 @@ details.more .field{margin-top:16px}
 [dir=rtl] .lbl,[dir=rtl] h3,[dir=rtl] .meta,[dir=rtl] .linkbtn,[dir=rtl] .navlink,[dir=rtl] .roster .st,[dir=rtl] details.more>summary{font-size:13px}
 [dir=rtl] .btn,[dir=rtl] .chip{font-size:15px}
 :lang(ar){font-family:var(--arabic)}
-.wm,.lang{font-family:var(--mono)!important}
+.lang{font-family:var(--mono)!important}
 
 @media (max-width:480px){.msg{padding:18px 16px 20px}.scale button{font-size:11px}}
 @media (prefers-reduced-motion:reduce){.meter i{transition:none}.thinking::after{animation:none}}
 
 /* ---------- Editorial type (after the base rules so it wins; Arabic rules above still win by specificity) ---------- */
 body::before{display:none}
-.wm{color:var(--fg)}
 .msg{padding:24px}
 .text{font-weight:500;letter-spacing:-.02em}
 .step-title{font-weight:500;letter-spacing:-.025em}
@@ -226,7 +228,6 @@ body::before{display:none}
 .tick{align-items:flex-start}
 .tick::before{margin-top:2px}
 .tick-body{display:flex;flex-direction:column;gap:4px;text-align:start}
-.wm{letter-spacing:.28em;font-size:12px;white-space:nowrap}
 
 /* RAPID roles, objections and model cards (room.html) */
 .roster .who .tag{margin-inline-start:8px;vertical-align:middle}
