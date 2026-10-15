@@ -234,5 +234,17 @@
   "db_empty_ongoing": "Nothing in progress right now.",
   "db_empty_old": "Finished rooms show up here, with what the group decided.",
   "names_and": "{a} and {b}",
-  "names_more": "{list} and {n} more"
+  "names_more": "{list} and {n} more",
+  "ds_need_t": "Your turn",
+  "ds_need_c": "rooms waiting for your answers",
+  "ds_need_f": "About 2 minutes each. Only you see what you say.",
+  "ds_wait_t": "Gathering views",
+  "ds_wait_c": "rooms still collecting answers",
+  "ds_wait_f": "Send a reminder from the room if someone is quiet.",
+  "ds_verdict_t": "Verdicts ready",
+  "ds_verdict_c": "calls waiting for the owner",
+  "ds_verdict_f": "The owner goes with Clarvy's call or chooses differently, on the record.",
+  "ds_done_t": "Decided",
+  "ds_done_c": "rooms with a settled call",
+  "ds_done_f": "Each one has a review date, so you can check if the call was right."
 }
