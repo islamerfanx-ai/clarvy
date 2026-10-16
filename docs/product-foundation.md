@@ -25,6 +25,12 @@ The detailed specs hang off it: `docs/decision-rooms-spec.md` (Rooms) and `docs/
 | Trial access | **Open trial.** Everyone gives a name and an email (not verified): owners when they open a room, members when they join. No code or link. Goal: test with real customers and collect feedback. Rooms stay tied to that browser until an email sender adds "send me a link to come back". Set a monthly spend cap in the OpenAI dashboard. |
 | Mission and values | **Approved as drafted** (sections 1 and 2), updated for organisations. |
 | Landing page | Main button **Open a room now** (self-serve trial). **Plans shown with prices, marked "Free during the trial".** Fact cards **only with real, cited sources**. Lives at **clarvy.tejarra.com** for now. |
+| Landing animation (2026-10-16) | **Mirrored flowing lines:** threads come in from one side, meet at one teal point, and open out the same way on the other (mirrored for Arabic). |
+| Organisation type (2026-10-16) | **Asked in every new room**: Corporation or company department, Government or ministry, International body or NGO, Club or association, or **Custom** (owner types it, e.g. "Football federation"; the AI works out the roles). |
+| Who's in the room (2026-10-16) | New setup step **after "How should we decide?"**; the RAPID roles merge into it. Suggested roles come from a **ready list per organisation type** (e.g. corporation: CEO, CFO, directors, managers; international body: Secretary-General, member state delegates, committee chairs; government: minister, deputy minister, advisors). The **AI suggests roles only for custom types**, or adds one or two that fit the question. Every list offers **External advisor or consultant** and **Add a custom role**. |
+| Role invites (2026-10-16) | **One invite link per role**; people join already tagged with it. The owner sets **how many people per role** (e.g. CEO one, directors many); a full role's link closes. |
+| Role asks (2026-10-16) | The **AI drafts a specific ask per role** from the question (e.g. "CFO: add the cost numbers and the 3-year cash impact"); the owner edits or removes it. The member sees it as an **extra step after the usual four, with a text answer and optional files or links**. Answers stay **private and pooled**, like every other input. |
+| Role weight and visibility (2026-10-16) | **Everyone counts equally**; roles shape what we ask, not the math. **Nothing is hidden by role**: context, files, links and the result are shared with the whole room. Job titles are separate from RAPID roles (who someone is vs. who decides). |
 
 ## 1. Mission, vision, promise
 
@@ -135,3 +141,4 @@ After launch: review screen and track record; decision memo PDF; OODA, Test it f
 - Email sender: not needed for the trial; needed later for "send me a link to come back" and verified accounts.
 - Native Arabic review of all copy.
 - Institution tier details for multilateral bodies.
+- To build: organisation type and "Who's in the room" (decided 2026-10-16, section 0). Not started; waiting for the user's next points so it can be built together.
