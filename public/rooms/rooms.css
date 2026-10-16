@@ -328,3 +328,15 @@ main > :not(.top):not(.band){width:100%;max-width:var(--content)}
 .btn.ghost{padding:20px 25px}
 /* inside the pop-up the page is narrow, so fix the heading sizes instead of scaling them with the width */
 html.embed{--t-h4:28px;--t-h5:19px}
+/* Who's in the room: one card per role */
+.roles{display:flex;flex-direction:column;gap:10px}
+.role-card{background:var(--card);border:1px solid var(--line);padding:14px 16px;gap:12px}
+.role-top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.role-top .x{width:36px;height:36px;font-size:18px}
+.role-opts{display:flex;flex-wrap:wrap;gap:12px}
+.role-opt{display:flex;flex-direction:column;gap:4px}
+.role-card textarea{min-height:64px}
+.roster .tag.title{background:var(--yellow);color:var(--fg)}
+.invite-row{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
+.invite-row:first-of-type{border-top:0}
+.invite-row .lbl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}

@@ -32,11 +32,13 @@
 const { $, el, t, chip } = Rooms;
 const demo = new URLSearchParams(location.search).get("demo");
 const TYPES = ["business", "finance", "politics", "custom"];
+const ORGS = ["corporation", "government", "international", "club", "custom"];
+const PEOPLE = ["", 1, 2, 3, 4, 5, 10, 20, 50];
 const MAX_FILES = 8, MAX_FILE_BYTES = 20 * 1024 * 1024, MAX_TEXT = 50000;
 const DRAFT_KEY = "dr-new-room-2";
 
 // The draft survives a reload, so nothing typed is lost.
-let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false };
+let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false, orgType: null, orgLabel: "", roles: [], extra: [] };
 let files = [];   // files can't be saved in the draft; they live only in this page
 let ids = [];     // the steps for this person: "you" first if we don't know them yet
 const save = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} };
@@ -240,6 +242,128 @@ function stepModel() {
   return f;
 }
 
+/* ---------- Who's in the room: the organisation, its roles, and what to ask each one ---------- */
+// Each role gets its own invite link (optionally limited to a number of people) and an ask that
+// only that role can answer. Everyone still counts equally.
+function addRole(title, ask = "") {
+  title = String(title).trim().slice(0, 60);
+  if (!title || d.roles.length >= 12 || d.roles.some(r => r.title.toLowerCase() === title.toLowerCase())) return false;
+  const n = Math.max(0, ...d.roles.map(r => Number(String(r.id).slice(1)) || 0)) + 1;
+  d.roles.push({ id: "r" + n, title, max: null, ask: String(ask).slice(0, 600), rapid: null });
+  d.extra = (d.extra || []).filter(x => x.title.toLowerCase() !== title.toLowerCase());
+  save();
+  return true;
+}
+function stepPeople() {
+  if (!Array.isArray(d.roles)) d.roles = [];
+  const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
+  const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
+  orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); drawDraft(); };
+  const orgF = field("orgLabel", t("org_custom_lbl"), orgIn);
+  const sugg = el("div", "chips");
+  const list = el("div", "roles");
+  const extra = el("div", "field");
+  const addIn = el("input", "line"); Object.assign(addIn, { maxLength: 60, placeholder: t("role_add_ph") });
+  addIn.setAttribute("aria-label", t("role_add_ph"));
+  const addBtn = el("button", "btn soft", t("add")); addBtn.type = "button";
+  const addOne = () => { if (addRole(addIn.value)) { addIn.value = ""; drawAll(); } };
+  addBtn.onclick = addOne;
+  addIn.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addOne(); } };
+  const addRow = el("div", "add-row"); addRow.append(addIn, addBtn);
+  const draft = el("button", "linkbtn"); draft.type = "button";
+  const none = el("p", "small", t("roles_none_note"));
+
+  const drawOrgs = () => {
+    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawAll(); if (o === "custom") orgIn.focus(); })));
+    orgF.hidden = d.orgType !== "custom";
+  };
+  const drawSugg = () => {
+    const ready = d.orgType && d.orgType !== "custom" ? t("roles_" + d.orgType) : [];
+    const have = new Set(d.roles.map(r => r.title.toLowerCase()));
+    sugg.replaceChildren(...[...ready, t("role_external")].filter(x => !have.has(x.toLowerCase()))
+      .map(x => chip("+ " + x, false, () => { addRole(x); drawAll(); })));
+  };
+  const drawList = () => {
+    list.replaceChildren(...d.roles.map(r => {
+      const b = el("div", "block role-card");
+      const top = el("div", "role-top");
+      const nm = el("span", "choice-t", r.title);
+      const x = el("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", t("role_remove") + " " + r.title);
+      x.onclick = () => { d.roles = d.roles.filter(y => y !== r); save(); drawAll(); };
+      top.append(nm, x);
+      const opts = el("div", "role-opts");
+      const ppl = el("select", "line role-select"); ppl.setAttribute("aria-label", r.title + " · " + t("role_people"));
+      PEOPLE.forEach(v => { const o = el("option", null, v === "" ? t("role_any") : String(v)); o.value = String(v); if (String(r.max ?? "") === String(v)) o.selected = true; ppl.append(o); });
+      ppl.onchange = () => { r.max = ppl.value ? Number(ppl.value) : null; save(); };
+      const pf = el("label", "role-opt"); pf.append(el("span", "small", t("role_people")), ppl);
+      opts.append(pf);
+      if (d.rapid) {
+        const rp = el("select", "line role-select"); rp.setAttribute("aria-label", r.title + " · " + t("rr_title"));
+        [["", "rr_input"], ["recommender", "rr_recommender"], ["approver", "rr_approver"], ["performer", "rr_performer"]].forEach(([v, k]) => {
+          const o = el("option", null, t(k)); o.value = v; if ((r.rapid || "") === v) o.selected = true; rp.append(o);
+        });
+        rp.onchange = () => { r.rapid = rp.value || null; save(); };
+        const rf = el("label", "role-opt"); rf.append(el("span", "small", t("rr_title")), rp);
+        opts.append(rf);
+      }
+      const ask = el("textarea"); Object.assign(ask, { rows: 2, maxLength: 600, placeholder: t("role_ask_ph"), value: r.ask || "" });
+      ask.setAttribute("aria-label", r.title + " · " + t("role_ask_lbl"));
+      ask.oninput = () => { r.ask = ask.value; save(); };
+      const af = el("div", "field"); af.append(el("span", "lbl", t("role_ask_lbl")), ask);
+      b.append(top, opts, af);
+      return b;
+    }));
+    none.hidden = d.roles.length > 0;
+  };
+  const drawExtra = () => {
+    const ex = (d.extra || []).filter(x => !d.roles.some(r => r.title.toLowerCase() === x.title.toLowerCase()));
+    extra.hidden = !ex.length;
+    extra.replaceChildren(el("span", "lbl", t("roles_extra")), ...ex.map(x => {
+      const c = Rooms.choice("+ " + x.title, x.ask, false, () => { addRole(x.title, x.ask); drawAll(); });
+      return c;
+    }));
+  };
+  const drawDraft = () => {
+    draft.textContent = t(d.roles.length ? "roles_draft" : "roles_suggest");
+    draft.hidden = !d.orgType || (!d.roles.length && d.orgType !== "custom") || (d.orgType === "custom" && !d.orgLabel.trim() && !d.roles.length);
+  };
+  const drawAll = () => { drawOrgs(); drawSugg(); drawList(); drawExtra(); drawDraft(); };
+  draft.onclick = async () => {
+    draft.disabled = true; draft.textContent = t("roles_drafting"); fail("");
+    try { await draftAsks(); drawAll(); }
+    catch (e) { fail(t(e.message === "quota" ? "err_quota" : "roles_fail")); drawDraft(); }
+    finally { draft.disabled = false; }
+  };
+  drawAll();
+  const orgField = el("div", "field"); orgField.append(el("span", "lbl", t("org_lbl")), orgs);
+  const rolesField = el("div", "field"); rolesField.append(el("span", "lbl", t("roles_lbl")), el("p", "small", t("roles_hint")), sugg);
+  return form([...head(t("nr_people_title"), t("nr_people_hint")), orgField, orgF, rolesField, list, addRow, draft, extra, none, actions()], () => {
+    if (!d.orgType) return fail(t("need_org"));
+    if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
+    next();
+  });
+}
+// The server drafts an ask per role (keeping the owner's own words), or suggests roles for a custom organisation.
+async function draftAsks() {
+  if (demo) {
+    if (!d.roles.length) ["Head coach", "Treasurer", "Board member"].forEach(x => addRole(x));
+    d.roles.forEach(r => { if (!r.ask.trim()) r.ask = `Please add what you see from your side as ${r.title}: the numbers, risks or limits the others may miss.`; });
+    save(); return;
+  }
+  const data = await Rooms.post("/api/rooms/roles", {
+    question: d.question, options: d.options.filter(o => o.trim()), type: d.type, type_label: d.typeLabel,
+    org_type: d.orgType, org_label: d.orgLabel, roles: d.roles.map(r => r.title), lang: Rooms.lang
+  });
+  if (d.roles.length) {
+    for (const x of data.roles || []) {
+      const r = d.roles.find(y => y.title.toLowerCase() === String(x.title).toLowerCase());
+      if (r && !r.ask.trim() && x.ask) r.ask = x.ask;
+    }
+  } else (data.roles || []).forEach(x => addRole(x.title, x.ask));
+  d.extra = (data.extra || []).slice(0, 2);
+  save();
+}
+
 /* ---------- Last: what everyone should know, files, settings, then open the room ---------- */
 function stepContext() {
   const ta = el("textarea"); Object.assign(ta, { rows: 5, maxLength: 4000, placeholder: t("context_ph"), value: d.context });
@@ -338,10 +462,11 @@ async function create() {
   const picked = d.crits.filter(c => c.on);
   const w = Rooms.apportion(picked.map((_, i) => "c" + (i + 1)), {}, 100); // equal starting weights; members set their own
   const criteria = picked.map((c, i) => ({ id: "c" + (i + 1), label: c.label, weight: w["c" + (i + 1)] }));
+  const roles = (d.roles || []).slice(0, 12).map(r => ({ id: r.id, title: r.title.trim().slice(0, 60), max: r.max || null, ask: (r.ask || "").trim().slice(0, 600), rapid: d.rapid ? r.rapid || null : null }));
   const btn = document.querySelector("#wiz .actions .btn:not(.ghost)"); if (btn) { btn.disabled = true; btn.textContent = t("creating"); }
   fail("");
   try {
-    if (demo) { try { localStorage.removeItem(DRAFT_KEY); } catch {} Rooms.goToRoom(`/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}`); return; }
+    if (demo) { try { localStorage.removeItem(DRAFT_KEY); } catch {} Rooms.goToRoom(`/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}${d.roles.length ? "&roles=1" : ""}`); return; }
     if (!Rooms.user) await Rooms.trialSignIn(d.name.trim(), d.email.trim());
     const sb = Rooms.sb, me = Rooms.user.id;
     let { data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).order("created_at").limit(1).maybeSingle();
@@ -359,6 +484,7 @@ async function create() {
       type_label: d.type === "custom" ? d.typeLabel.trim() : null, question: d.question.trim(),
       context: d.context.trim(), options, criteria, review_date: review, named_views: d.named,
       model: d.model || "standard", rapid: !!d.rapid,
+      org_type: d.orgType || null, org_label: d.orgType === "custom" ? d.orgLabel.trim() || null : null, roles,
       links: (d.links || []).filter(Rooms.validUrl).slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;
@@ -369,7 +495,9 @@ async function create() {
       const ins = await sb.from("attachments").insert({ room_id: id, file_name: f.name, storage_path: up.error ? null : path, extracted_text: f.text, uploaded_by: me });
       if (up.error || ins.error) filesFailed = true;
     }
-    const { error: invErr } = await sb.from("invites").insert({ room_id: id, created_by: me });
+    // One link per role (with its limit), or one link for everyone when there are no roles.
+    const invites = roles.length ? roles.map(r => ({ room_id: id, created_by: me, role_id: r.id, max_uses: r.max })) : [{ room_id: id, created_by: me }];
+    const { error: invErr } = await sb.from("invites").insert(invites);
     if (invErr) throw invErr;
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
     Rooms.goToRoom(`/room.html?room=${id}&new=1${filesFailed ? "&files=failed" : ""}`);
@@ -381,7 +509,7 @@ async function create() {
 }
 
 /* ---------- Start ---------- */
-const STEPS = { you: stepYou, question: stepQuestion, options: stepOptions, criteria: stepCriteria, model: stepModel, context: stepContext };
+const STEPS = { you: stepYou, question: stepQuestion, options: stepOptions, criteria: stepCriteria, model: stepModel, people: stepPeople, context: stepContext };
 function render() { $("wiz").replaceChildren(STEPS[ids[d.at]]()); }
 Rooms.langToggle(() => { document.title = t("new_room") + " · " + t("product"); render(); });
 
@@ -399,7 +527,7 @@ async function start() {
       known = !!(p?.name && p?.email);   // asked once: people we know skip straight to the question
     }
   }
-  ids = [...(known ? [] : ["you"]), "question", "options", "criteria", "model", "context"];
+  ids = [...(known ? [] : ["you"]), "question", "options", "criteria", "model", "people", "context"];
   d.at = Math.max(0, ids.indexOf(d.atId)); // resume on the same step by name, even if "you" was skipped this time
   $("demoNote").hidden = !demo;
   render();

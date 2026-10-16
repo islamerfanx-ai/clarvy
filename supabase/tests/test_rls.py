@@ -241,5 +241,23 @@ check("policies read auth.uid() once per query", server("select count(*) from pg
 check("rooms still readable after the policy rewrite", as_user(F, f"select count(*) from rooms where id='{R2}'"), "\n1\n")
 check("trip tables closed", as_user(A, "select count(*) from trip_options"), "permission denied")
 
+# ---------- Who's in the room (20261020000000_room_roles.sql) ----------
+R5 = str(uuid.uuid4())
+roles = '[{"id":"r1","title":"CFO","max":1,"ask":"Add the cost numbers.","rapid":"approver"},{"id":"r2","title":"Director","max":null,"ask":""}]'
+check("room with organisation type and roles", as_user(G, f"insert into rooms (id,workspace_id,type,question,options,criteria,owner_id,org_type,roles,rapid) values ('{R5}','{G}','business','Enter Egypt?','{opts}','{crit}','{G}','corporation','{roles}',true)", anonymous=True), "INSERT 0 1")
+check("bad role shape is rejected", as_user(G, f"""update rooms set roles='[{{"id":"r1","title":""}}]' where id='{R5}'""", anonymous=True), "rooms_roles_shape")
+check("unknown organisation type is rejected", as_user(G, f"update rooms set org_type='cult' where id='{R5}'", anonymous=True), "check constraint")
+check("owner makes a role link with a limit", as_user(G, f"insert into invites (token,room_id,created_by,role_id,max_uses) values ('cfo1','{R5}','{G}','r1',1),('dir1','{R5}','{G}','r2',null)", anonymous=True), "INSERT 0 2")
+check("join page shows the role and its ask", anon("select role_title, role_ask, usable, is_full from invite_preview('cfo1')"), "CFO | Add the cost numbers. | True | False")
+check("joining with a role link", as_user(B, "select join_room('cfo1')"), R5)
+check("roster shows the role title", as_user(G, f"select role_title, rapid_role from room_roster('{R5}') where user_id='{B}'", anonymous=True), "CFO | approver")
+check("a full role link turns people away", as_user(C, "select join_room('cfo1')"), "role_full")
+check("join page says the role is full", anon("select usable, is_full from invite_preview('cfo1')"), "False | True")
+check("open-ended role link takes anyone", as_user(C, "select join_room('dir1')"), R5)
+check("members can't retitle themselves", as_user(C, f"update memberships set role_title='CEO' where room_id='{R5}' and user_id='{C}'"), "only_owner_changes_roles")
+check("member answers the role ask privately", as_user(B, f"""insert into inputs (room_id,user_id,weights,risk_appetite,gut_pick,role_answer,role_files) values ('{R5}','{B}','{good}','safe','a','Costs are 4M.','[{{"name":"budget.csv","text":"a,b"}}]')"""), "INSERT 0 1")
+check("others can't read that answer", as_user(C, f"select count(*) from inputs where room_id='{R5}' and user_id='{B}'"), "\n0\n")
+check("server can count role drafts", server(f"select use_quota('{G}','roles',5)"), "True")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

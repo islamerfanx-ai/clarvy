@@ -143,5 +143,5 @@ After launch: review screen and track record; decision memo PDF; OODA, Test it f
 - Email sender: not needed for the trial; needed later for "send me a link to come back" and verified accounts.
 - Native Arabic review of all copy.
 - Institution tier details for multilateral bodies.
-- To build: organisation type and "Who's in the room" (decided 2026-10-16, section 0). Not started; waiting for the user's next points so it can be built together.
-- To build: scale and safety steps (1) and (2), then sign-in after the trial (decided 2026-10-16, section 0). Not started.
+- Built 2026-10-16: organisation type and "Who's in the room" (section 0). Later: the owner adding a role after the room opens.
+- Built 2026-10-16: scale and safety steps (1) and (2) except the Turnstile bot check (needs Cloudflare keys). Still to build: sign-in after the trial, analyses job queue, secrets hardening.

@@ -46,19 +46,19 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
-      sb.from("memberships").select("role").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
-      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
+      sb.from("memberships").select("role,role_id").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
+      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links,role_answer,role_files").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.rpc("room_roster", { rid: roomId }),
       sb.from("analyses").select("frame,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
     ]);
     const role = mem.data?.role;
-    const out = { room, role, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
-    if (role === "owner") out.invite = await this.invite();
+    const out = { room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
+    if (role === "owner") out.invites = await this.invites(room);
     if (room.rapid) {
       const { data: obj } = await sb.from("objections").select("id,user_id,reason,status,override_reason,created_at").eq("room_id", roomId).order("created_at");
       out.objections = obj || [];
@@ -73,14 +73,23 @@ const live = {
     }
     return out;
   },
-  // The owner's current invite link, made fresh if the last one expired.
-  async invite() {
+  // The owner's invite links: one per role (or one for everyone), each made fresh if it expired.
+  async invites(room) {
     const sb = Rooms.sb;
-    const { data } = await sb.from("invites").select("token").eq("room_id", roomId).eq("revoked", false)
-      .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (data) return data.token;
-    const { data: made } = await sb.from("invites").insert({ room_id: roomId, created_by: Rooms.user.id }).select("token").single();
-    return made?.token || null;
+    const { data } = await sb.from("invites").select("token,role_id,max_uses,uses").eq("room_id", roomId).eq("revoked", false)
+      .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false });
+    const roles = Array.isArray(room.roles) ? room.roles : [];
+    const out = [];
+    for (const r of roles.length ? roles : [null]) {
+      let inv = (data || []).find(i => (i.role_id || null) === (r ? r.id : null));
+      if (!inv) {
+        const { data: made } = await sb.from("invites").insert({ room_id: roomId, created_by: Rooms.user.id, role_id: r ? r.id : null, max_uses: r ? r.max || null : null })
+          .select("token,role_id,max_uses,uses").single();
+        inv = made;
+      }
+      if (inv) out.push(inv);
+    }
+    return out;
   },
   async join(name, email, consent) {
     await Rooms.trialSignIn(name, email);
@@ -147,6 +156,11 @@ function demoStore(kind) {
   room.model = params.get("model") || "wrap";
   room.rapid = params.get("rapid") === "1";
   room.links = [{ url: "https://www.example.org/jeddah-retail-report" }];
+  const withRoles = params.get("roles") === "1";
+  room.roles = withRoles ? [
+    { id: "r1", title: "CFO", max: 1, ask: "Please add the fit-out cost, the cash runway after it, and what a 6-month delay would save.", rapid: room.rapid ? "approver" : null },
+    { id: "r2", title: "Director", max: null, ask: "", rapid: null }] : [];
+  room.org_type = withRoles ? "corporation" : null;
   const owner = kind === "owner";
   let role = kind === "join" ? null : owner ? "owner" : "member";
   let mine = null, analysis = null, signoff = null, myName = owner ? "Islam" : "Lina";
@@ -157,15 +171,16 @@ function demoStore(kind) {
   const roles = { Sara: owner ? null : null, Omar: room.rapid ? "approver" : null };
   const objections = room.rapid ? [{ id: "x1", user_id: "omar", reason: "Legal hasn't cleared the lease terms yet.", status: "open", override_reason: null }] : [];
   const roster = () => [
-    ...(role ? [{ user_id: "me", name: myName, role, rapid_role: null, submitted: !!mine, me: true }] : []),
-    { user_id: "sara", name: "Sara", role: owner ? "member" : "owner", rapid_role: roles.Sara, submitted: true, me: false },
-    { user_id: "omar", name: "Omar", role: "member", rapid_role: roles.Omar, submitted: owner, me: false }
+    ...(role ? [{ user_id: "me", name: myName, role, rapid_role: null, submitted: !!mine, me: true, role_title: withRoles && !owner ? "CFO" : null }] : []),
+    { user_id: "sara", name: "Sara", role: owner ? "member" : "owner", rapid_role: roles.Sara, submitted: true, me: false, role_title: withRoles && owner ? "CFO" : null },
+    { user_id: "omar", name: "Omar", role: "member", rapid_role: roles.Omar, submitted: owner, me: false, role_title: withRoles ? "Director" : null }
   ];
   return {
-    async preview() { return { room_id: "demo", type: room.type, question: room.question, language: room.language, owner_name: "Sara", named_views: false, role: "member", usable: true }; },
+    async preview() { return { room_id: "demo", type: room.type, question: room.question, language: room.language, owner_name: "Sara", named_views: false, role: "member", usable: true, role_title: withRoles ? "CFO" : null, role_ask: withRoles ? room.roles[0].ask : null, is_full: false }; },
     async load() {
       const counts = signoff ? { agree: 1, [signoff.stance]: (signoff.stance === "agree" ? 2 : 1) } : { agree: 1 };
-      return { room, role, mine, roster: roster(), analysis, files: ["Riyadh P&L 2026.xlsx"], invite: owner ? "demo-invite" : null, signoff, counts, objections: room.rapid ? objections : undefined };
+      const invites = !owner ? null : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
+      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
     async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
@@ -283,6 +298,7 @@ function questionCard() {
 async function vJoin() {
   const p = await store.preview();
   if (!p) return notice(t("invite_not_found"));
+  if (p.is_full) return notice(t("role_full"));
   if (!p.usable) return notice(t("invite_expired"));
   if (p.room_id && Rooms.user && !demo) {
     // Already in this room? Go straight there.
@@ -292,6 +308,10 @@ async function vJoin() {
   const q = el("p", "text", p.question); q.lang = p.language; q.dir = p.language === "ar" ? "rtl" : "ltr";
   const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), Rooms.typeName(p)), q,
     el("p", "small", t("join_hint")));
+  if (p.role_title) {
+    const as = el("p", "body", t("join_as", { role: p.role_title })); as.style.marginTop = "10px";
+    top.append(as);
+  }
   const f = el("form", "stack-sm"); f.noValidate = true;
   const prof = Rooms.user && !demo ? await Rooms.profile() : null;
   const field = (id, label, input) => { const l = el("label", "lbl", label); l.htmlFor = id; input.id = id; f.append(l, input); };
@@ -319,7 +339,7 @@ async function vJoin() {
       inputStep = 0;
       await refresh();
     } catch (err) {
-      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found"])));
+      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full"])));
       go.disabled = false;
     }
   };
@@ -336,14 +356,18 @@ function startInput() {
   const m = S.mine;
   draft = {
     ratings: Object.fromEntries(ids.map(id => [id, m?.ratings?.[id] ?? 3])),
-    risk: m?.risk_appetite || null, gut: m?.gut_pick || null, concern: m?.concern || "", links: [...(m?.links || [])]
+    risk: m?.risk_appetite || null, gut: m?.gut_pick || null, concern: m?.concern || "", links: [...(m?.links || [])],
+    roleAnswer: m?.role_answer || "", roleFiles: [...(m?.role_files || [])]
   };
   inputStep = 1;
   render();
 }
+// The ask written for this member's role, if there is one: it becomes a fifth step.
+const myRole = () => (Array.isArray(S.room.roles) ? S.room.roles : []).find(r => r.id === S.roleId) || null;
+const myAsk = () => (myRole()?.ask || "").trim() ? myRole() : null;
 function vInput() {
   if (!draft) return startInput();
-  const total = 4;
+  const total = myAsk() ? 5 : 4;
   const prog = el("div", "progress"); for (let i = 1; i <= total; i++) prog.append(el("i", i <= inputStep ? "on" : ""));
   const f = el("form", "stack-sm"); f.noValidate = true; f.style.gap = "16px";
   const m = el("div", "meta"); m.append(el("span", null, t("step", { n: inputStep, total })));
@@ -383,6 +407,35 @@ function vInput() {
     const draw = () => ch.replaceChildren(...S.room.options.map(o => choice(o.label, null, draft.gut === o.id, () => { draft.gut = o.id; draw(); say(st, ""); })));
     draw();
     f.append(el("h1", "step-title", t("in_gut_title")), el("p", "small", t("in_gut_hint")), ch);
+  } else if (inputStep === 5) {
+    const r = myAsk();
+    const ask = contentLang(el("p", "body", r.ask));
+    const ta = el("textarea"); Object.assign(ta, { rows: 5, maxLength: 4000, placeholder: t("role_answer_ph"), value: draft.roleAnswer });
+    ta.setAttribute("aria-label", t("in_role_title"));
+    ta.oninput = () => { draft.roleAnswer = ta.value; };
+    const fl = el("ul", "plain");
+    const drawFiles = () => fl.replaceChildren(...draft.roleFiles.map(f => {
+      const li = el("li", "file"); const nm = el("span", "nm", f.name); nm.title = f.name;
+      const x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", t("remove") + " " + f.name);
+      x.onclick = () => { draft.roleFiles = draft.roleFiles.filter(y => y !== f); drawFiles(); };
+      li.append(nm, x); return li;
+    }));
+    const drop = el("label", "drop"); drop.htmlFor = "roleFiles";
+    const inp = el("input"); Object.assign(inp, { type: "file", id: "roleFiles", multiple: true, accept: ".pdf,.docx,.xlsx,.xls,.ods,.csv,.tsv,.txt,.md,.json,.zip" });
+    drop.append(inp, el("span", null, "+ " + t("drop")));
+    inp.onchange = async () => {
+      for (const file of [...inp.files]) {
+        if (draft.roleFiles.length >= 3) break;
+        if (!Rooms.fileKind(file) || file.size > 20 * 1024 * 1024) { say(st, t("file_bad")); continue; }
+        try { const text = (await Rooms.readFile(file)).trim().slice(0, 45000); if (text) draft.roleFiles.push({ name: file.name.slice(0, 120), text }); }
+        catch { say(st, t("file_bad")); }
+      }
+      inp.value = ""; drawFiles();
+    };
+    drawFiles();
+    const ff = el("div", "field"); ff.append(el("span", "lbl", t("role_files_lbl")), drop, fl);
+    f.append(el("h1", "step-title", t("in_role_title")), el("p", "small", t("in_role_hint", { role: r.title })), ask, ta, ff);
+    setTimeout(() => ta.focus(), 50);
   } else {
     const inp = el("input", "line"); Object.assign(inp, { maxLength: 280, placeholder: t("concern_ph"), value: draft.concern, autocomplete: "off" });
     inp.setAttribute("aria-label", t("in_concern_title"));
@@ -402,7 +455,9 @@ function vInput() {
     next.disabled = true; next.textContent = t("sending");
     const ids = S.room.criteria.map(c => c.id);
     try {
-      await store.save({ ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim(), links: draft.links.filter(Rooms.validUrl).slice(0, 3) });
+      const input = { ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim(), links: draft.links.filter(Rooms.validUrl).slice(0, 3) };
+      if (myAsk()) Object.assign(input, { role_answer: draft.roleAnswer.trim().slice(0, 4000), role_files: draft.roleFiles.slice(0, 3) });
+      await store.save(input);
       inputStep = 0; draft = null;
       await refresh();
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -431,6 +486,7 @@ function vWaiting() {
   answering.forEach(p => {
     const li = el("li");
     const who = el("span", "who", p.name || "·"); if (p.me) who.append(el("span", "me", " (" + t("you") + ")"));
+    if (p.role_title) who.append(el("span", "tag title", p.role_title));
     if (r.rapid) who.append(el("span", "tag", rapidLabel(p)));
     li.append(who, el("span", "st" + (p.submitted ? " done" : ""), p.submitted ? t("answered") : t("not_yet")));
     list.append(li);
@@ -467,7 +523,7 @@ function vWaiting() {
   if (r.rapid && S.roster.find(p => p.me)?.rapid_role === "approver" && r.status === "open") cards.push(approverCard());
   if (owner && r.rapid) cards.push(rolesCard());
   // A brand-new room puts the invite first; after that it sits under the progress.
-  if (owner && S.invite) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
+  if (owner && S.invites?.length) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
   show(...cards);
 }
 
@@ -535,22 +591,37 @@ function approverCard() {
   return c;
 }
 function shareCard(withNudge) {
-  const link = `${location.origin}/room.html?join=${encodeURIComponent(S.invite)}`;
   const me = S.roster.find(p => p.me)?.name;
   const q = S.room.question;
-  const msg = me ? t("invite_msg", { name: me, question: q, link }) : t("invite_msg_anon", { question: q, link });
-  const links = Rooms.shareLinks(msg, t("invite_subject", { question: q }));
-  const box = el("div", "linkbox");
-  const inp = el("input", "line"); inp.readOnly = true; inp.value = link; inp.setAttribute("aria-label", t("share_title"));
-  const copy = btn(t("copy"), "soft", async () => { await Rooms.copyText(link); copy.textContent = t("copied"); setTimeout(() => { copy.textContent = t("copy"); }, 1600); });
-  box.append(inp, copy);
-  const row = el("div", "share");
-  const wa = el("a", "btn ghost", t("whatsapp")); wa.href = links.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
-  const em = el("a", "btn ghost", t("email_btn")); em.href = links.email;
-  row.append(wa, em);
-  if (navigator.share) row.append(btn(t("share"), "ghost", () => navigator.share({ text: msg }).catch(() => {})));
-  const c = card("you", el("p", "text sm", t("share_title")), el("p", "small", t("share_hint")), box, row);
+  const roles = Array.isArray(S.room.roles) ? S.room.roles : [];
+  const joinLink = token => `${location.origin}/room.html?join=${encodeURIComponent(token)}`;
+  const c = card("you", el("p", "text sm", t("share_title")), el("p", "small", t(roles.length ? "share_hint_roles" : "share_hint")));
+  S.invites.forEach(inv => {
+    const link = joinLink(inv.token);
+    const msg = me ? t("invite_msg", { name: me, question: q, link }) : t("invite_msg_anon", { question: q, link });
+    const links = Rooms.shareLinks(msg, t("invite_subject", { question: q }));
+    const role = roles.find(r => r.id === inv.role_id);
+    const row = el("div", "invite-row");
+    if (roles.length) {
+      const lbl = el("span", "lbl", t("invite_for", { role: role?.title || "·" }));
+      const full = inv.max_uses && inv.uses >= inv.max_uses;
+      lbl.append(el("span", "tag" + (full ? " title" : ""), full ? t("role_full_tag") : inv.max_uses ? t("role_limit", { n: inv.max_uses }) : t("role_open")));
+      row.append(lbl);
+    }
+    const box = el("div", "linkbox");
+    const inp = el("input", "line"); inp.readOnly = true; inp.value = link; inp.setAttribute("aria-label", roles.length ? t("invite_for", { role: role?.title || "" }) : t("share_title"));
+    const copy = btn(t("copy"), "soft", async () => { await Rooms.copyText(link); copy.textContent = t("copied"); setTimeout(() => { copy.textContent = t("copy"); }, 1600); });
+    box.append(inp, copy);
+    const share = el("div", "share");
+    const wa = el("a", "btn ghost", t("whatsapp")); wa.href = links.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
+    const em = el("a", "btn ghost", t("email_btn")); em.href = links.email;
+    share.append(wa, em);
+    if (navigator.share) share.append(btn(t("share"), "ghost", () => navigator.share({ text: msg }).catch(() => {})));
+    row.append(box, share);
+    c.append(row);
+  });
   if (withNudge && S.roster.some(p => p.submitted && !p.me)) {
+    const link = joinLink(S.invites[0].token);
     const nudge = el("a", "linkbtn", t("nudge")); nudge.href = Rooms.shareLinks(t("reminder_msg", { question: q, link }), "").whatsapp; nudge.target = "_blank"; nudge.rel = "noopener";
     c.append(nudge);
   }
