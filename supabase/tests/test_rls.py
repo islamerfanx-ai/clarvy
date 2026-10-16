@@ -259,5 +259,17 @@ check("member answers the role ask privately", as_user(B, f"""insert into inputs
 check("others can't read that answer", as_user(C, f"select count(*) from inputs where room_id='{R5}' and user_id='{B}'"), "\n0\n")
 check("server can count role drafts", server(f"select use_quota('{G}','roles',5)"), "True")
 
+# ---------- Decide jobs (20261021000000_decide_jobs.sql) ----------
+check("people can't claim analysis jobs", as_user(G, "select * from claim_decide_job()", anonymous=True), "permission denied")
+server(f"update rooms set status='deciding', decide_requested_at=now(), decide_started_at=null, decide_attempts=0 where id='{R5}'")
+check("server claims a waiting room", server("select id, decide_attempts from claim_decide_job()"), f"{R5} | 1")
+check("a running job isn't claimed twice", server("select count(*) from claim_decide_job()"), "\n0\n")
+check("a job that went quiet is picked up again", server("select decide_attempts from claim_decide_job('0 seconds')"), "\n2\n")
+check("after too many tries nothing is claimed", server("select count(*) from claim_decide_job('0 seconds')"), "\n0\n")
+check("and the room reopens for the owner", server(f"select status, decide_error from rooms where id='{R5}'"), "open | upstream")
+server(f"update rooms set status='deciding', decide_requested_at=now() - interval '1 minute', decide_started_at=null, decide_attempts=0, decide_error=null where id='{R5}'")
+server(f"insert into analyses (room_id) values ('{R5}')")
+check("a finished job isn't claimed", server("select count(*) from claim_decide_job('0 seconds')"), "\n0\n")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

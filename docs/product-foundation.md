@@ -144,4 +144,4 @@ After launch: review screen and track record; decision memo PDF; OODA, Test it f
 - Native Arabic review of all copy.
 - Institution tier details for multilateral bodies.
 - Built 2026-10-16: organisation type and "Who's in the room" (section 0). Later: the owner adding a role after the room opens.
-- Built 2026-10-16: scale and safety steps (1) and (2) except the Turnstile bot check (needs Cloudflare keys). Still to build: sign-in after the trial, analyses job queue, secrets hardening.
+- Built 2026-10-16: scale and safety steps (1) and (2) except the Turnstile bot check (needs Cloudflare keys). Analyses job queue built 2026-10-16. Still to build: sign-in after the trial, secrets hardening.
