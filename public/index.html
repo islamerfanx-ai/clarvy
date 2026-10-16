@@ -225,37 +225,34 @@ function meta() {
 }
 // Hero pattern: small arrows start scattered (many views) and converge into one steady line (one decision).
 function flow() {
+  // Many threads come in from one side, meet at one teal point (the call), and open out the same way on the other.
   const cv = $("flow"), ctx = cv.getContext("2d");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let W = 0, H = 0, dots = [], raf = 0;
-  const N = 170, GLYPH = "›";
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const spawn = d => Object.assign(d, { x0: rnd(0, .42), y0: rnd(.04, .96), row: Math.floor(rnd(0, 3)), t: rnd(0, 1), v: rnd(.0016, .0042), a: rnd(.18, .85) });
+  const N = 13, offs = Array.from({ length: N }, () => Math.random() * 100);
+  let W = 0, H = 0, t = 0, raf = 0;
   function size() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
     W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
-  const ease = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function thread(a, b, c1, c2, off) {
+    const path = () => { ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.bezierCurveTo(c1[0], c1[1], c2[0], c2[1], b[0], b[1]); };
+    path(); ctx.setLineDash([]); ctx.strokeStyle = "rgba(29,29,29,.18)"; ctx.lineWidth = 1; ctx.stroke();
+    path(); ctx.setLineDash([5, 30]); ctx.lineDashOffset = -off; ctx.strokeStyle = "rgba(29,29,29,.75)"; ctx.stroke();
+    ctx.setLineDash([]);
+  }
   function frame() {
     ctx.clearRect(0, 0, W, H);
-    const fs = Math.max(11, Math.min(15, W / 48));
-    ctx.font = `${fs}px "Martian Mono", ui-monospace, monospace`; ctx.textBaseline = "middle";
-    const rtl = document.documentElement.dir === "rtl";
-    const X = x => rtl ? W - x : x;
-    // the call: a steady line on the right
-    for (let x = W * .66; x < W * .97; x += fs * .62)
-      for (let r = 0; r < 3; r++) { ctx.fillStyle = `rgba(7,59,58,${.55 + r * .15})`; ctx.fillText(rtl ? "‹" : GLYPH, X(x), H / 2 + (r - 1) * fs * 1.05); }
-    // the views: drifting in from everywhere
-    for (const d of dots) {
-      const e = ease(Math.min(1, d.t));
-      const x = (d.x0 + (.66 - d.x0) * e) * W, y = (d.y0 + (.5 + (d.row - 1) * fs * 1.05 / H - d.y0) * e) * H;
-      ctx.fillStyle = `rgba(29,29,29,${d.a * (1 - e * .4)})`;
-      ctx.fillText(rtl ? "‹" : GLYPH, X(x), y);
-      if (!reduce) { d.t += d.v; if (d.t > 1.04) spawn(d).t = 0; }
+    // Arabic reads right to left, so the flow runs the other way.
+    const rtl = document.documentElement.dir === "rtl", X = x => rtl ? W - x : x;
+    const px = W / 2, py = H / 2;
+    for (let i = 0; i < N; i++) {
+      const y = H * (.06 + .88 * i / (N - 1)), off = t + offs[i];
+      thread([X(0), y], [X(px), py], [X(W * .25), y], [X(W * .3), py], off);
+      thread([X(px), py], [X(W), y], [X(W * .7), py], [X(W * .75), y], off);
     }
-    if (!reduce) raf = requestAnimationFrame(frame);
+    ctx.beginPath(); ctx.arc(px, py, Math.max(5, W / 90), 0, Math.PI * 2); ctx.fillStyle = "#073B3A"; ctx.fill();
+    if (!reduce) { t += 1; raf = requestAnimationFrame(frame); }
   }
-  dots = Array.from({ length: N }, () => spawn({}));
   size(); frame();
   addEventListener("resize", () => { cancelAnimationFrame(raf); size(); frame(); });
   document.addEventListener("visibilitychange", () => { cancelAnimationFrame(raf); if (!document.hidden) frame(); });
