@@ -146,11 +146,13 @@ function emailCode(box, { onDone }) {
 
 /* ---------- Server calls ---------- */
 const accessCode = () => { try { return localStorage.getItem("clarvy-access-code") || ""; } catch { return ""; } };
-async function ask(prompt) {
-  const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json", "x-access-code": accessCode() }, body: JSON.stringify({ prompt }) });
-  const data = await r.json().catch(() => null);
-  if (!r.ok || !data?.data) throw new Error(data?.code || "upstream");
-  return data.data;
+// AI routes need the signed-in person's token; the server counts each call against their daily limit.
+async function post(path, body) {
+  const token = sb ? (await sb.auth.getSession()).data.session?.access_token : "";
+  const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json", "x-access-code": accessCode(), ...(token ? { Authorization: "Bearer " + token } : {}) }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.code || "upstream"), data);
+  return data;
 }
 // Owner's "Decide now": the server reads everyone's private input and writes back the combined result.
 async function decideNow(roomId) {
@@ -356,7 +358,7 @@ window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  ask, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();

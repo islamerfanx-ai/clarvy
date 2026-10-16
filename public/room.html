@@ -450,7 +450,7 @@ function vWaiting() {
     const d = btn(t("decide_now"), "", async () => {
       d.disabled = true; say(st, "");
       try { await store.decide(); S.room.status = "deciding"; render(); }
-      catch (err) { d.disabled = false; say(st, t(["need_more_inputs", "rooms_not_configured", "room_not_open", "objection_open"].includes(err.message) ? err.message : "err_generic", { need: r.quorum })); }
+      catch (err) { d.disabled = false; say(st, t(["need_more_inputs", "rooms_not_configured", "room_not_open", "objection_open", "quota"].includes(err.message) ? err.message : "err_generic", { need: r.quorum })); }
     });
     d.disabled = !ready;
     main.append(d);

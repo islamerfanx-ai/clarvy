@@ -478,5 +478,7 @@
   "rep_options": "Options considered",
   "rep_links": "Links shared",
   "rep_model": "Thinking model",
-  "lp_eyebrow": "Group decisions for leaders and organisations"
+  "lp_eyebrow": "Group decisions for leaders and organisations",
+  "err_quota": "You've reached today's limit for this. It resets tomorrow.",
+  "quota": "You've reached today's limit for this. It resets tomorrow."
 }

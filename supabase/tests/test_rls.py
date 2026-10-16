@@ -54,6 +54,18 @@ def as_user(u, sql, anonymous=False):
     except Exception as e:
         return f"ERROR: {e}"
 
+def server(sql):
+    """Run one statement as the server (no row-level security), same output shape as as_user."""
+    try:
+        with conn.transaction(), conn.cursor() as cur:
+            cur.execute(sql)
+            out = cur.statusmessage
+            if cur.description:
+                out += "\n" + "\n".join(" | ".join(str(v) for v in r) for r in cur.fetchall())
+            return out + "\n"
+    except Exception as e:
+        return f"ERROR: {e}"
+
 results = []
 def check(name, out, expect):
     ok = expect in out
@@ -216,6 +228,18 @@ check("member reads report in the room", as_user(F, f"select report_for_member('
 check("outsider gets nothing by room id", as_user(E, f"select report_for_member('{R2}') is null"), "True")
 as_user(A, "update report_shares set revoked=true where token='rep1'")
 check("switched-off link shows nothing", anon("select report_by_token('rep1') is null"), "True")
+
+# ---------- Hardening (20261019000000_hardening.sql) ----------
+check("people can't count their own usage", as_user(A, f"select use_quota('{A}','decide',100)"), "permission denied")
+check("people can't read usage counts", as_user(A, "select count(*) from usage_counts"), "permission denied")
+check("server: first use is within the limit", server(f"select use_quota('{A}','decide',2)"), "True")
+server(f"select use_quota('{A}','decide',2)")
+check("server: third use goes over a limit of 2", server(f"select use_quota('{A}','decide',2)"), "False")
+check("signed-out can't call policy helpers", anon(f"select room_role('{R2}')"), "permission denied")
+check("signed-out can't call trigger functions", anon("select validate_room()"), "permission denied")
+check("policies read auth.uid() once per query", server("select count(*) from pg_policies where schemaname='public' and replace(coalesce(qual,'') || coalesce(with_check,''), 'SELECT auth.uid()', '') like '%auth.uid()%'"), "\n0\n")
+check("rooms still readable after the policy rewrite", as_user(F, f"select count(*) from rooms where id='{R2}'"), "\n1\n")
+check("trip tables closed", as_user(A, "select count(*) from trip_options"), "permission denied")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
