@@ -31,6 +31,8 @@ The detailed specs hang off it: `docs/decision-rooms-spec.md` (Rooms) and `docs/
 | Role invites (2026-10-16) | **One invite link per role**; people join already tagged with it. The owner sets **how many people per role** (e.g. CEO one, directors many); a full role's link closes. |
 | Role asks (2026-10-16) | The **AI drafts a specific ask per role** from the question (e.g. "CFO: add the cost numbers and the 3-year cash impact"); the owner edits or removes it. The member sees it as an **extra step after the usual four, with a text answer and optional files or links**. Answers stay **private and pooled**, like every other input. |
 | Role weight and visibility (2026-10-16) | **Everyone counts equally**; roles shape what we ask, not the math. **Nothing is hidden by role**: context, files, links and the result are shared with the whole room. Job titles are separate from RAPID roles (who someone is vs. who decides). |
+| Scale and safety first (2026-10-16) | Before growing: **(1) close the open AI routes and add quotas**: sign-in required for every AI call, switch off `/api/ask` and `/api/search` (open to anyone today), daily limits per user stored in Supabase (e.g. Decide now per owner, triage per user, rooms per day), a Turnstile bot check on trial sign-up, and stop trusting a client-supplied `X-Forwarded-For`. **(2) one database cleanup migration**: lock internal SECURITY DEFINER and trigger functions to internal use, fix the 3 mutable `search_path` functions, wrap `auth.uid()` as `(select auth.uid())` in the 31 policies, add the 8 missing foreign-key indexes, drop or lock the old workspace/trip/calendar tables; tested with test_rls.py before it touches the live database. Later: analyses as a job queue in Supabase that survives restarts and caps concurrent OpenAI calls; secrets hardening (env file 600, separate OpenAI project with a hard limit, new Supabase secret keys, rotation checklist, own server). |
+| Sign-in after the trial (2026-10-16) | **Stay on Supabase Auth** (not Firebase): Microsoft and Google sign-in plus magic link (needs an email sender; check for a Claude connector first). Trial (anonymous) users link a real account and keep their rooms. SAML company SSO and MFA later on a paid plan. |
 
 ## 1. Mission, vision, promise
 
@@ -142,3 +144,4 @@ After launch: review screen and track record; decision memo PDF; OODA, Test it f
 - Native Arabic review of all copy.
 - Institution tier details for multilateral bodies.
 - To build: organisation type and "Who's in the room" (decided 2026-10-16, section 0). Not started; waiting for the user's next points so it can be built together.
+- To build: scale and safety steps (1) and (2), then sign-in after the trial (decided 2026-10-16, section 0). Not started.
