@@ -114,8 +114,27 @@ function stepQuestion() {
   };
   drawTypes();
   const typeField = el("div", "field"); typeField.append(el("span", "lbl", t("nr_type_lbl")), types);
+  // Check my question: grammar fixed, what could mislead the group, and three rephrasings to pick from.
+  const check = el("button", "linkbtn", t("q_check")); check.type = "button";
+  const checked = el("div", "stack-sm");
+  check.onclick = async () => {
+    if (!d.question.trim()) { ta.focus(); return fail(t("need_question")); }
+    check.disabled = true; check.textContent = t("q_checking"); fail("");
+    try {
+      const r = demo ? { corrected: d.question.trim().replace(/\s+/g, " ").replace(/^./, c => c.toUpperCase()).replace(/[?؟]?$/, "?"), changed: true, issues: [t("q_demo_issue")], options: [{ text: d.question.trim(), why: t("q_demo_why") }] } : await Rooms.post("/api/rooms/question", { question: d.question, type: d.type, type_label: d.typeLabel, lang: Rooms.lang });
+      const pickers = el("div", "choices");
+      const use = text => { d.question = text; ta.value = text; save(); checked.replaceChildren(el("p", "small", t("q_used"))); };
+      if (r.changed) pickers.append(Rooms.choice(r.corrected, t("q_corrected"), false, () => use(r.corrected)));
+      (r.options || []).forEach(o => pickers.append(Rooms.choice(o.text, o.why, false, () => use(o.text))));
+      const nodes = [];
+      if (r.issues?.length) { const ul = el("ul", "dots"); r.issues.forEach(x => ul.append(el("li", null, x))); nodes.push(el("p", "lbl", t("q_issues")), ul); }
+      nodes.push(el("p", "lbl", t("q_pick")), pickers);
+      checked.replaceChildren(...nodes);
+    } catch (e) { fail(t(e.message === "quota" ? "err_quota" : "q_check_fail")); }
+    finally { check.disabled = false; check.textContent = t("q_check"); }
+  };
   setTimeout(() => ta.focus(), 50);
-  return form([...head(t("nr_q_title"), t("nr_q_hint")), ta, typeField, customF, actions()], () => {
+  return form([...head(t("nr_q_title"), t("nr_q_hint")), ta, check, checked, typeField, customF, actions()], () => {
     if (!d.question.trim()) return fail(t("need_question"));
     if (d.type === "custom" && !d.typeLabel.trim()) { customIn.focus(); return fail(t("need_custom")); }
     next();
@@ -450,15 +469,56 @@ function stepContext() {
   const stx = el("span"); stx.append(el("span", null, t("strict_lbl")), el("br"), el("span", "small", t("strict_hint")));
   strict.append(sc, stx);
   const strictF = el("div", "field"); strictF.append(strict);
-  more.append(el("summary", null, t("more_settings")), revF, namedF, strictF);
+  const repF = el("div", "field");
+  const repSel = el("select", "line role-select"); repSel.id = "reportMode"; repSel.style.width = "100%";
+  [["both", "rm_both"], ["team", "rm_team"], ["personal", "rm_personal"]].forEach(([v, k]) => { const o = el("option", null, t(k)); o.value = v; if ((d.reportMode || "both") === v) o.selected = true; repSel.append(o); });
+  repSel.onchange = () => { d.reportMode = repSel.value; save(); };
+  const repL = el("label", "lbl", t("rm_lbl")); repL.htmlFor = "reportMode";
+  repF.append(repL, repSel);
+  more.append(el("summary", null, t("more_settings")), revF, namedF, strictF, repF);
 
   // Useful links: everyone in the room sees them, and the analysis reads them.
   if (!Array.isArray(d.links)) d.links = [];
   const linksF = el("div", "field");
   linksF.append(el("span", "lbl", t("links_lbl")), el("p", "small", t("links_hint")), Rooms.linksEditor(d.links, 10, l => { d.links = l; save(); }));
 
+  // World brief: what is happening in the world that matters to this question, dated and sourced.
+  // The owner picks items to add to what everyone sees.
+  const briefF = el("div", "field");
+  const briefBtn = el("button", "btn soft", t("brief_btn")); briefBtn.type = "button"; briefBtn.style.width = "auto";
+  const briefBox = el("div", "stack-sm");
+  briefBtn.onclick = async () => {
+    briefBtn.disabled = true; briefBtn.textContent = t("brief_loading"); fail("");
+    try {
+      const r = demo ? { summary: t("brief_demo_summary"), items: [{ text: t("brief_demo_item"), date: new Date().toISOString().slice(0, 7), source: "Example source", url: null }] }
+        : await Rooms.post("/api/rooms/brief", { question: d.question, options: d.options.filter(o => o.trim()), context: d.context, type: d.type, type_label: d.typeLabel, lang: Rooms.lang });
+      const picked = new Set();
+      const list = el("div", "ticks");
+      (r.items || []).forEach((x, i) => {
+        const b = el("button", "tick"); b.type = "button"; b.setAttribute("aria-pressed", "false");
+        const body = el("span", "tick-body"); body.append(el("span", null, x.text), el("span", "choice-h", [x.date, x.source].filter(Boolean).join(" · ")));
+        b.append(body);
+        b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); b.setAttribute("aria-pressed", String(picked.has(i))); };
+        list.append(b);
+      });
+      const add = el("button", "btn soft", t("brief_add")); add.type = "button"; add.style.width = "auto";
+      add.onclick = () => {
+        const chosen = [...picked].sort().map(i => r.items[i]);
+        if (!chosen.length) return;
+        const lines = chosen.map(x => `• ${x.text} (${[x.date, x.source].filter(Boolean).join(", ")})`).join("\n");
+        d.context = (d.context.trim() ? d.context.trim() + "\n\n" : "") + t("brief_heading", { date: r.as_of || new Date().toISOString().slice(0, 10) }) + "\n" + lines;
+        ta.value = d.context;
+        chosen.forEach(x => { if (x.url && Rooms.validUrl(x.url) && !d.links.includes(x.url) && d.links.length < 10) d.links.push(x.url); });
+        save(); render();
+      };
+      briefBox.replaceChildren(...(r.summary ? [el("p", "body", r.summary)] : []), list, el("p", "small", t("brief_pick_hint")), add);
+    } catch (e) { fail(t(e.message === "quota" ? "err_quota" : "brief_fail")); }
+    finally { briefBtn.disabled = false; briefBtn.textContent = t("brief_btn"); }
+  };
+  briefF.append(el("span", "lbl", t("brief_lbl")), el("p", "small", t("brief_hint")), briefBtn, briefBox);
+
   setTimeout(drawFiles, 0);
-  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, linksF, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
+  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, briefF, linksF, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
   if (["finance", "politics"].includes(d.type)) nodes.push(el("p", "small", t("advice_note")));
   return form([...nodes, actions({ next: t("create") })], create);
 }
@@ -523,7 +583,7 @@ async function create() {
       org_type: d.orgType || null, org_label: d.orgType === "custom" ? d.orgLabel.trim() || null : null, roles,
       override_rule: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? "authority" : d.rapid && d.overrideRule === "approver" ? "approver" : "owner",
       override_role_id: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? d.overrideRoleId : null,
-      strict_confidential: !!d.strict,
+      strict_confidential: !!d.strict, report_mode: ["team", "personal", "both"].includes(d.reportMode) ? d.reportMode : "both",
       links: (d.links || []).filter(Rooms.validUrl).slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;
@@ -570,6 +630,7 @@ async function start() {
   d.at = Math.max(0, ids.indexOf(d.atId)); // resume on the same step by name, even if "you" was skipped this time
   $("demoNote").hidden = !demo;
   render();
+  Rooms.helper({ page: "setup", draft: () => ({ question: d.question, options: d.options, criteria: (d.crits || []).filter(c => c.on).map(c => c.label), type: d.type === "custom" ? d.typeLabel : d.type }) });
 }
 start();
 })();

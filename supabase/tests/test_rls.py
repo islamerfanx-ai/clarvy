@@ -289,5 +289,18 @@ check("report carries the decision record", rep2, "'override_rule': 'authority'"
 check("record names the objector by role, not name", ("'by_role': 'CFO'" in rep2 and "'B'" not in rep2) and "ok" or rep2, "ok")
 check("record keeps the override reason", rep2, "Board approved the budget")
 
+# ---------- Follow-up plan (20261023000000_followup.sql) ----------
+P1 = str(uuid.uuid4())
+check("owner adds a plan item for a member", as_user(G, f"insert into plan_items (id,room_id,title,assignee,due_date,created_by) values ('{P1}','{R5}','Sign the Lisbon lease','{B}','2026-11-30','{G}')", anonymous=True), "INSERT 0 1")
+check("members see the plan", as_user(C, f"select title from plan_items where room_id='{R5}'"), "Sign the Lisbon lease")
+check("members can't add to the plan", as_user(C, f"insert into plan_items (room_id,title,created_by) values ('{R5}','x','{C}')"), "row-level security")
+check("plan items go to people in the room", as_user(G, f"insert into plan_items (room_id,title,assignee,created_by) values ('{R5}','x','{D}','{G}')", anonymous=True), "row-level security")
+check("assignee moves their item along", as_user(B, f"update plan_items set status='doing', note='Draft sent' where id='{P1}'"), "UPDATE 1")
+check("assignee can't rewrite the item", as_user(B, f"update plan_items set title='Something else' where id='{P1}'"), "only_owner_edits_plan")
+check("others can't touch someone's item", as_user(C, f"update plan_items set status='done' where id='{P1}'"), "UPDATE 0")
+check("report carries the plan", as_user(C, f"select report_for_member('{R5}')"), "Sign the Lisbon lease")
+check("report mode defaults to both", as_user(C, f"select report_mode from rooms where id='{R5}'"), "both")
+check("server counts the new helpers", server(f"select use_quota('{G}','helper',5)"), "True")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

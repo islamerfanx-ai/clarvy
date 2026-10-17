@@ -340,3 +340,30 @@ html.embed{--t-h4:28px;--t-h5:19px}
 .invite-row{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-top:1px solid var(--line)}
 .invite-row:first-of-type{border-top:0}
 .invite-row .lbl{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* The follow-up plan */
+ul.plan{display:flex;flex-direction:column;gap:12px}
+.plan-item{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.plan-item:first-child{border-top:0;padding-top:0}
+.plan-item.done .rate-name{text-decoration:line-through;color:var(--dim)}
+.plan-meta{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--dim)}
+.plan-row{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+
+/* Ask the analyst: the always-on helper */
+.helper-btn{position:fixed;inset-inline-end:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:40;font:inherit;font-size:14px;padding:14px 20px;border-radius:40px;border:0;background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.18)}
+.helper-panel{position:fixed;inset-inline-end:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:41;width:min(380px,calc(100vw - 32px));max-height:min(620px,calc(100vh - 32px));display:flex;flex-direction:column;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+.helper-head{display:flex;justify-content:space-between;align-items:center}
+.helper-head strong{font-weight:500;font-size:16px}
+.helper-x{font:inherit;font-size:20px;line-height:1;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--fg);cursor:pointer}
+.helper-log{flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px;min-height:120px}
+.helper-msg{max-width:92%;padding:9px 12px;border-radius:14px;font-size:14px;line-height:1.45}
+.helper-msg p{margin:0;white-space:pre-wrap}
+.helper-msg.assistant{background:var(--accent-soft);align-self:flex-start}
+.helper-msg.user{background:var(--yellow);align-self:flex-end}
+.helper-src{margin-top:6px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.helper-src a{color:var(--accent);overflow-wrap:anywhere;margin-inline-end:8px}
+.helper-form{display:flex;gap:8px;align-items:flex-end}
+.helper-form textarea{flex:1;min-height:44px;font:inherit;font-size:14px}
+.helper-form .btn{padding:12px 16px;width:auto}
+.helper-note{margin:0;font-size:12px;color:var(--dim)}
+.helper-sugg .chip{font-size:13px}

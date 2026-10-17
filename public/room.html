@@ -46,19 +46,23 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
       sb.from("memberships").select("role,role_id").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links,role_answer,role_files").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.rpc("room_roster", { rid: roomId }),
-      sb.from("analyses").select("frame,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("analyses").select("frame,outcomes,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
     ]);
     const role = mem.data?.role;
     const out = { room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner") out.invites = await this.invites(room);
+    if (an.data) {
+      const { data: plan } = await sb.from("plan_items").select("id,kind,title,note,assignee,owner_label,due_date,status,position").eq("room_id", roomId).order("due_date", { ascending: true, nullsFirst: false }).order("position");
+      out.plan = plan || [];
+    }
     if (room.rapid) {
       const { data: obj } = await sb.from("objections").select("id,user_id,reason,status,override_reason,created_at,option_id").eq("room_id", roomId).order("created_at");
       out.objections = obj || [];
@@ -129,6 +133,17 @@ const live = {
     if (error) throw error;
     return data.token;
   },
+  // The follow-up plan: the owner writes it, an assignee moves their own items along.
+  async addPlan(items) { const { error } = await Rooms.sb.from("plan_items").insert(items.map((x, i) => ({ room_id: roomId, created_by: Rooms.user.id, position: i, ...x }))); if (error) throw error; },
+  async updatePlan(id, patch) { const { error } = await Rooms.sb.from("plan_items").update(patch).eq("id", id); if (error) throw error; },
+  async removePlan(id) { const { error } = await Rooms.sb.from("plan_items").delete().eq("id", id); if (error) throw error; },
+  async addLink(url) {
+    const { data } = await Rooms.sb.from("rooms").select("links").eq("id", roomId).single();
+    const links = (data?.links || []).filter(l => l?.url !== url).concat([{ url }]).slice(-10);
+    const { error } = await Rooms.sb.from("rooms").update({ links }).eq("id", roomId);
+    if (error) throw error;
+    S.room.links = links;
+  },
   async stopReport(token) { const { error } = await Rooms.sb.from("report_shares").update({ revoked: true }).eq("token", token); if (error) throw error; },
   async withdraw(oid) { const { error } = await Rooms.sb.rpc("withdraw_objection", { oid }); if (error) throw error; },
   async overrule(oid, why) { const { error } = await Rooms.sb.rpc("override_objection", { oid, why }); if (error) throw error; }
@@ -180,7 +195,8 @@ function demoStore(kind) {
     async load() {
       const counts = signoff ? { agree: 1, [signoff.stance]: (signoff.stance === "agree" ? 2 : 1) } : { agree: 1 };
       const invites = !owner ? null : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
-      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined };
+      room.report_mode = "both";
+      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
     async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
@@ -192,6 +208,11 @@ function demoStore(kind) {
     async stopReport() { this.reportToken = null; },
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
+    plan: [],
+    async addPlan(items) { items.forEach((x, i) => this.plan.push({ id: "p" + (this.plan.length + 1), status: "todo", note: "", position: i, ...x })); },
+    async updatePlan(id, patch) { Object.assign(this.plan.find(x => x.id === id) || {}, patch); },
+    async removePlan(id) { this.plan = this.plan.filter(x => x.id !== id); },
+    async addLink(url) { room.links.push({ url }); },
     async decide() {
       room.status = "deciding";
       setTimeout(async () => { analysis = await demoAnalysis(room, [mine, ...others.map(o => o.input)].filter(Boolean)); await refresh(); }, 2500);
@@ -775,7 +796,10 @@ function vVerdict() {
     cards.push(card("", el("h3", null, t("v_facts")), ul));
   }
   if (settled && S.role !== "observer") cards.push(signOffCard());
-  cards.push(reportCard());
+  if (settled || (S.plan || []).length) cards.push(planCard());
+  const mode = r.report_mode || "both";
+  if (S.mine && mode !== "team") cards.push(personalCard());
+  if (S.role === "owner" || mode !== "personal") cards.push(reportCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
 }
@@ -868,6 +892,124 @@ function mapCard(map, call) {
   }
   return c;
 }
+/* ---------- The follow-up plan ---------- */
+// The call becomes a plan everyone sees: actions with an owner and a date, tripwire checks and the review.
+// Each item can go into anyone's calendar (Google link or an .ics file for Outlook and Apple).
+const addDays = n => { const x = new Date(); x.setDate(x.getDate() + n); return x.toISOString().slice(0, 10); };
+function draftPlan() {
+  const v = S.analysis.verdict || {}, items = [];
+  (v.first_actions || []).forEach(x => items.push({ kind: "action", title: (typeof x === "string" ? x : x.action).slice(0, 200), owner_label: x.owner || null, due_date: addDays(2), note: x.by || "" }));
+  if (v.check_first) items.push({ kind: "action", title: v.check_first.slice(0, 200), due_date: addDays(7) });
+  if (v.small_test) items.push({ kind: "action", title: v.small_test.slice(0, 200), due_date: addDays(14) });
+  (v.experiments || []).forEach(x => items.push({ kind: "action", title: x.test.slice(0, 200), note: x.success ? t("v_success") + ": " + x.success : "", due_date: addDays(21) }));
+  (v.combination?.steps || []).forEach((x, i) => items.push({ kind: "action", title: x.step.slice(0, 200), note: x.adds || "", due_date: addDays(30 * (i + 1)) }));
+  (v.tripwires || []).forEach(w => items.push({ kind: "check", title: w.signal.slice(0, 200), note: w.when || "", due_date: addDays(30) }));
+  if (S.room.review_date) items.push({ kind: "review", title: t("plan_review_title"), due_date: S.room.review_date });
+  return items;
+}
+const icsDate = d => d.replace(/-/g, "");
+function icsFor(items) {
+  const esc = x => String(x || "").replace(/[\;,]/g, m => "\\" + m).replace(/\n/g, "\\n");
+  const ev = items.filter(x => x.due_date).map(x => {
+    const end = new Date(x.due_date + "T00:00:00Z"); end.setUTCDate(end.getUTCDate() + 1);
+    return ["BEGIN:VEVENT", `UID:${x.id || Math.random().toString(36).slice(2)}@decisionrooms`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").slice(0, 15)}Z`,
+      `DTSTART;VALUE=DATE:${icsDate(x.due_date)}`, `DTEND;VALUE=DATE:${end.toISOString().slice(0, 10).replace(/-/g, "")}`,
+      `SUMMARY:${esc(x.title)}`, `DESCRIPTION:${esc(S.room.question + (x.note ? " · " + x.note : ""))}`, "BEGIN:VALARM", "TRIGGER:-PT15H", "ACTION:DISPLAY", `DESCRIPTION:${esc(x.title)}`, "END:VALARM", "END:VEVENT"].join("\r\n");
+  });
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Decision Rooms//Plan//EN", ...ev, "END:VCALENDAR"].join("\r\n");
+}
+function downloadIcs(items, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([icsFor(items)], { type: "text/calendar" })); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+const gcal = x => { const end = new Date(x.due_date + "T00:00:00Z"); end.setUTCDate(end.getUTCDate() + 1);
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(x.title) + "&dates=" + icsDate(x.due_date) + "/" + end.toISOString().slice(0, 10).replace(/-/g, "") + "&details=" + encodeURIComponent(S.room.question + (x.note ? " · " + x.note : "")); };
+function planCard() {
+  const owner = S.role === "owner", plan = S.plan || [], me = S.roster.find(p => p.me)?.user_id;
+  const c = card("you", el("p", "text sm", t("plan_title")), el("p", "small", t("plan_hint")));
+  const st = el("p", "status err");
+  if (!plan.length) {
+    if (owner) {
+      const go = btn(t("plan_draft"), "", async () => { go.disabled = true; try { await store.addPlan(draftPlan()); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); } });
+      c.append(go, st);
+    } else c.append(el("p", "body", t("plan_none")));
+    return c;
+  }
+  const who = x => x.assignee ? S.roster.find(p => p.user_id === x.assignee)?.name : x.owner_label;
+  const list = el("ul", "plain plan");
+  plan.forEach(x => {
+    const li = el("li", "plan-item " + x.status);
+    const top = el("div", "range-top");
+    const title = contentLang(el("span", "rate-name", x.title));
+    top.append(title, el("span", "tag" + (x.kind === "check" ? " split" : ""), t("plan_kind_" + x.kind)));
+    li.append(top);
+    const meta2 = el("div", "plan-meta");
+    if (x.due_date) meta2.append(el("span", null, Rooms.fmtDate(x.due_date)));
+    if (who(x)) meta2.append(el("span", null, who(x)));
+    if (x.note) meta2.append(contentLang(el("span", "small", x.note)));
+    li.append(meta2);
+    const row = el("div", "plan-row");
+    if (owner || x.assignee === me) {
+      const sel = el("select", "line role-select"); sel.setAttribute("aria-label", x.title + " · " + t("plan_status"));
+      ["todo", "doing", "done", "blocked"].forEach(v => { const o = el("option", null, t("plan_st_" + v)); o.value = v; if (x.status === v) o.selected = true; sel.append(o); });
+      sel.onchange = async () => { sel.disabled = true; try { await store.updatePlan(x.id, { status: sel.value }); await refresh(); } catch { sel.disabled = false; } };
+      row.append(sel);
+    } else row.append(el("span", "tag", t("plan_st_" + x.status)));
+    if (x.due_date) {
+      const g = el("a", "linkbtn", t("plan_gcal")); g.href = gcal(x); g.target = "_blank"; g.rel = "noopener"; row.append(g);
+      const i = el("button", "linkbtn", t("plan_ics")); i.type = "button"; i.onclick = () => downloadIcs([x], "decision-plan-item.ics"); row.append(i);
+    }
+    if (owner) { const rm = el("button", "linkbtn", t("remove")); rm.type = "button"; rm.onclick = async () => { rm.disabled = true; try { await store.removePlan(x.id); await refresh(); } catch { rm.disabled = false; } }; row.append(rm); }
+    li.append(row);
+    list.append(li);
+  });
+  c.append(list);
+  const all = btn(t("plan_ics_all"), "soft", () => downloadIcs(plan, "decision-plan.ics"));
+  c.append(all);
+  if (owner) {
+    const add = el("div", "stack-sm");
+    const tIn = el("input", "line"); Object.assign(tIn, { maxLength: 200, placeholder: t("plan_add_ph") }); tIn.setAttribute("aria-label", t("plan_add_ph"));
+    const aSel = el("select", "line role-select"); aSel.setAttribute("aria-label", t("plan_who"));
+    [["", t("plan_who")], ...S.roster.filter(p => p.role !== "observer").map(p => [p.user_id, p.name + (p.role_title ? " · " + p.role_title : "")])].forEach(([v, txt]) => { const o = el("option", null, txt); o.value = v; aSel.append(o); });
+    const dIn = el("input", "line"); dIn.type = "date"; dIn.value = addDays(7); dIn.setAttribute("aria-label", t("plan_due"));
+    const go = btn(t("plan_add"), "ghost", async () => {
+      if (!tIn.value.trim()) { tIn.focus(); return; }
+      go.disabled = true;
+      try { await store.addPlan([{ kind: "action", title: tIn.value.trim(), assignee: !demo && aSel.value ? aSel.value : null, owner_label: demo && aSel.value ? aSel.selectedOptions[0].textContent : null, due_date: dIn.value || null }]); await refresh(); }
+      catch { go.disabled = false; say(st, t("err_generic")); }
+    });
+    const r2 = el("div", "add-row"); r2.append(aSel, dIn);
+    add.append(el("p", "lbl", t("plan_add_title")), tIn, r2, go);
+    c.append(add);
+  }
+  c.append(el("p", "small", t("plan_reminders_note")), st);
+  return c;
+}
+
+/* ---------- Your view and the call (personal report, private to each member) ---------- */
+function personalCard() {
+  const m = S.mine, v = S.analysis.verdict || {}, r = S.room;
+  const call = S.analysis.final_option || v.call;
+  const c = card("", el("h3", null, t("pr_title")), el("p", "small", t("pr_hint")));
+  const top = Object.entries(m.weights || {}).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([id]) => r.criteria.find(x => x.id === id)).filter(Boolean);
+  const scores = S.analysis.outcomes?.scores || {};
+  const lines = [];
+  lines.push(m.gut_pick === call ? t("pr_gut_same", { option: optLabel(call) }) : t("pr_gut_diff", { mine: optLabel(m.gut_pick), option: optLabel(call) }));
+  if (top.length) lines.push(t("pr_weigh", { list: top.map(x => x.label).join(", ") }));
+  top.forEach(cr => {
+    const best = r.options.map(o => [o.id, Number(scores[o.id]?.[cr.id] ?? NaN)]).filter(([, n]) => Number.isFinite(n)).sort((a, b) => b[1] - a[1])[0];
+    const mine = Number(scores[call]?.[cr.id]);
+    if (Number.isFinite(mine) && best) lines.push(best[0] === call ? t("pr_score_best", { crit: cr.label, n: mine }) : t("pr_score_other", { crit: cr.label, n: mine, best: optLabel(best[0]), m: best[1] }));
+  });
+  const mix = S.analysis.disagreement_map?.risk || {};
+  if (m.risk_appetite) lines.push(t("pr_risk", { mine: t("risk_" + m.risk_appetite), safe: mix.safe || 0, balanced: mix.balanced || 0, bold: mix.bold || 0 }));
+  const ul = contentLang(el("ul", "dots")); lines.forEach(x => ul.append(el("li", null, x)));
+  c.append(ul);
+  if (m.concern) c.append(el("p", "small", t("pr_concern", { concern: m.concern })));
+  return c;
+}
+
 // Share the result: the owner makes a read-only report link anyone can open; members open the report in the room.
 function reportCard() {
   const c = card("you", el("p", "text sm", t("rep_title")));
@@ -929,7 +1071,15 @@ function signOffCard() {
 }
 
 /* ======================= Flow ======================= */
+// Ask the analyst sits in the corner once we know the room; the owner can add its sources to the room.
+let helperOn = false;
+function startHelper() {
+  if (helperOn || !S?.room) return;
+  helperOn = true;
+  Rooms.helper({ page: "room", roomId: demo ? null : roomId, onAddSource: S.role === "owner" ? url => store.addLink(url) : null });
+}
 function render() {
+  startHelper();
   clearTimeout(pollTimer);
   if (!S) return;
   if (!S.role) return notice(t("no_access"));

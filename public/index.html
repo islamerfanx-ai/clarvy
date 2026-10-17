@@ -72,6 +72,21 @@ section{padding:72px 0 24px}
 .plan .price{font-size:var(--t-h3);font-weight:400;letter-spacing:-.03em;line-height:1}
 .plan .unit{font-size:13px;color:var(--dim);margin:6px 0 18px}
 .plan .list{font-size:15px;line-height:1.6;margin:0 0 22px;flex:1}
+/* questions */
+.faq-wrap{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px;align-items:start}
+@media (max-width:900px){.faq-wrap{grid-template-columns:1fr}}
+.faq-list{display:flex;flex-direction:column}
+.faq-list details{border-top:1px solid var(--line);padding:16px 0}
+.faq-list details:last-child{border-bottom:1px solid var(--line)}
+.faq-list summary{cursor:pointer;font-size:var(--t-h5);list-style:none;display:flex;justify-content:space-between;gap:16px}
+.faq-list summary::-webkit-details-marker{display:none}
+.faq-list summary::after{content:"+";color:var(--dim)}
+.faq-list details[open] summary::after{content:"−"}
+.faq-list p{margin:10px 0 0;color:var(--dim);font-size:16px;line-height:1.55;max-width:70ch}
+.faq-ask{display:flex;flex-direction:column;gap:10px;position:sticky;top:90px}
+.faq-ask h3{margin:0;font-size:var(--t-h5);font-weight:400}
+.faq-ask .lbl{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.faq-answer p{margin:0;font-size:15px;line-height:1.55}
 /* closing */
 .end{padding:96px 0 56px}
 .end h2{margin:0 0 32px;font-size:var(--t-display);line-height:1.1;font-weight:400;letter-spacing:-.02em;max-width:16ch}
@@ -79,6 +94,7 @@ section{padding:72px 0 24px}
 footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:26px 0 40px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
 footer a{color:var(--fg)}
 footer .links{display:flex;gap:18px}
+@media (max-width:1280px){.nav a[href="#faq"]{display:none}}
 @media (max-width:720px){.nav .navlink.opt,.nav .navchip{display:none}section{padding-top:48px}}
 </style>
 </head>
@@ -90,6 +106,7 @@ footer .links{display:flex;gap:18px}
       <a class="navlink opt" href="#how" data-t="lp_nav_how">How it works</a>
       <a class="navlink opt" href="#models" data-t="lp_nav_models">Models</a>
       <a class="navlink opt" href="#plans" data-t="lp_nav_plans">Plans</a>
+      <a class="navlink opt" href="#faq" data-t="lp_nav_faq">Questions</a>
       <a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a>
       <a class="navchip" href="/dashboard.html" data-t="mr_open_new">Open a room</a>
       <button class="lang" type="button" id="langBtn"></button>
@@ -194,6 +211,23 @@ footer .links{display:flex;gap:18px}
     </div>
   </section>
 
+  <section id="faq" aria-labelledby="faqH">
+    <h2 class="sec-h" id="faqH" data-t="lp_faq_t">Questions</h2>
+    <div class="faq-wrap">
+      <div class="faq-list" id="faqList"></div>
+      <aside class="faq-ask cardw" aria-labelledby="faqAskH">
+        <h3 id="faqAskH" data-t="lp_faq_ask_t">Ask a question</h3>
+        <p class="small" data-t="lp_faq_ask_b">Answers come from the questions on this page.</p>
+        <form id="faqForm" class="stack-sm" novalidate>
+          <label class="lbl" for="faqQ" data-t="lp_faq_ask_t">Ask a question</label>
+          <input class="line" id="faqQ" maxlength="300" autocomplete="off">
+          <button class="btn" type="submit" id="faqSend" data-t="hp_send">Send</button>
+        </form>
+        <div id="faqAnswer" class="faq-answer" aria-live="polite"></div>
+      </aside>
+    </div>
+  </section>
+
   <section class="end">
     <h2 data-t="lp_end_t"></h2>
     <a class="btn" href="/dashboard.html" data-t="lp_cta">Open a room now</a>
@@ -257,11 +291,30 @@ function flow() {
   addEventListener("resize", () => { cancelAnimationFrame(raf); size(); frame(); });
   document.addEventListener("visibilitychange", () => { cancelAnimationFrame(raf); if (!document.hidden) frame(); });
 }
-Rooms.langToggle(() => { meta(); drawModels(); });
+// Questions: the written FAQ, plus a chat that answers only from it.
+async function drawFaq() {
+  const { FAQ } = await import("/rooms/faq.js");
+  const list = $("faqList"); list.replaceChildren();
+  (FAQ[Rooms.lang] || FAQ.en).forEach(x => { const d = document.createElement("details"); const s2 = document.createElement("summary"); s2.textContent = x.q; const p = document.createElement("p"); p.textContent = x.a; d.append(s2, p); list.append(d); });
+  $("faqQ").placeholder = Rooms.t("lp_faq_ph");
+}
+$("faqForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const q = $("faqQ").value.trim(), out = $("faqAnswer"), b = $("faqSend");
+  if (!q) return $("faqQ").focus();
+  b.disabled = true; out.innerHTML = ""; const p = document.createElement("p"); p.className = "small thinking"; p.textContent = Rooms.t("hp_thinking"); out.append(p);
+  try {
+    const r = await fetch("/api/faq", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q, lang: Rooms.lang }) });
+    const data = await r.json().catch(() => ({}));
+    p.className = ""; p.textContent = r.ok ? data.answer : Rooms.t(data.code === "quota" ? "lp_faq_quota" : "hp_fail");
+  } catch { p.className = ""; p.textContent = Rooms.t("hp_fail"); }
+  b.disabled = false;
+});
+Rooms.langToggle(() => { meta(); drawModels(); drawFaq(); });
 flow();
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());
-  meta(); drawModels();
+  meta(); drawModels(); drawFaq();
   // Show "My rooms" only to people who already have rooms in this browser.
   if (await Rooms.connect()) document.querySelector('.nav a.navlink[href="/dashboard.html"]').hidden = !Rooms.user;
 })();

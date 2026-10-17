@@ -60,6 +60,9 @@ const DEMO = {
     links: [{ url: "https://www.example.org/jeddah-retail-report" }], status: "decided", review_date: "2026-12-01", created_at: "2026-10-12", override_rule: "owner" },
   owner_name: "Islam", members: 3, answered: 3, signoffs: { agree: 2, disagree_commit: 1 },
   objections: [{ by_role: "Director", reason: "Legal hasn't cleared the lease terms yet.", option_id: null, status: "withdrawn", override_reason: null, created_at: "2026-10-14", resolved_at: "2026-10-16" }],
+  plan: [{ kind: "action", title: "Ask the landlord to hold the rent-free offer for a March start", owner: "Sara", due_date: "2026-10-24", status: "doing" },
+    { kind: "check", title: "Monthly revenue in Riyadh falls below 1M for two months in a row", owner: null, due_date: "2026-11-16", status: "todo" },
+    { kind: "review", title: "Review the decision: how is it turning out?", owner: "Islam", due_date: "2026-12-01", status: "todo" }],
   analysis: { confidence: "Medium", owner_decision: "accepted", final_option: "o2", decided_at: "2026-10-16",
     frame: { facts: [{ text: "Retail rents in central Jeddah rose about 9% this year.", date: "2026-09", kind: "news", source: "Local property report, Sep 2026", url: null }] },
     verdict: { model: "wrap", call: "o2", call_label: "Wait until next spring", headline: "Wait until spring, and use the time to lock in the rent-free lease.",
@@ -214,6 +217,17 @@ function render() {
       ul.append(li);
     });
     out.push(card("", el("h3", null, t("v_facts")), ul));
+  }
+  if ((R.plan || []).length) {
+    const c = card("", el("h3", null, t("plan_title")));
+    const ul = el("ul", "plain plan");
+    R.plan.forEach(x => {
+      const li = el("li", "plan-item " + x.status);
+      const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", x.title)), el("span", "tag" + (x.kind === "check" ? " split" : ""), t("plan_kind_" + x.kind)));
+      const meta = el("div", "plan-meta"); [x.due_date ? Rooms.fmtDate(x.due_date) : null, x.owner, t("plan_st_" + x.status)].filter(Boolean).forEach(v => meta.append(el("span", null, v)));
+      li.append(top, meta); ul.append(li);
+    });
+    c.append(ul); out.push(c);
   }
   if (r.rapid) {
     const c = card("", el("h3", null, t("rep_record")));

@@ -370,11 +370,71 @@ function goToRoom(url) {
   else location.href = url;
 }
 
+/* ---------- Ask the analyst: the always-on helper ---------- */
+// A chat in the corner of setup and room pages. It helps people word the question, use each step and
+// bring in sources from the web. It only knows what everyone in the room can see, never private answers.
+// opts: {page, roomId, draft: () => ({question, options, criteria, type}), onAddSource: url => Promise}
+function helper(opts = {}) {
+  if (document.getElementById("helperBtn")) return;
+  const demoMode = new URLSearchParams(location.search).get("demo");
+  const key = "dr-helper-" + (opts.roomId || opts.page || "x");
+  let msgs = []; try { msgs = JSON.parse(sessionStorage.getItem(key)) || []; } catch {}
+  const keep = () => { try { sessionStorage.setItem(key, JSON.stringify(msgs.slice(-20))); } catch {} };
+  const btn = el("button", "helper-btn", t("hp_open")); btn.id = "helperBtn"; btn.type = "button"; btn.setAttribute("aria-expanded", "false");
+  const panel = el("section", "helper-panel"); panel.hidden = true; panel.setAttribute("aria-label", t("hp_title"));
+  const head = el("div", "helper-head"); const x = el("button", "helper-x", "×"); x.type = "button"; x.setAttribute("aria-label", t("hp_close"));
+  head.append(el("strong", null, t("hp_title")), x);
+  const log = el("div", "helper-log"); log.setAttribute("aria-live", "polite");
+  const sugg = el("div", "chips helper-sugg");
+  const f = el("form", "helper-form"); const inp = el("textarea"); Object.assign(inp, { rows: 2, maxLength: 1500, placeholder: t("hp_ph") }); inp.setAttribute("aria-label", t("hp_ph"));
+  const send = el("button", "btn", t("hp_send")); send.type = "submit"; f.append(inp, send);
+  panel.append(head, log, sugg, f, el("p", "helper-note", t("hp_note")));
+  document.body.append(panel, btn);
+  const bubble = (m) => {
+    const b = el("div", "helper-msg " + m.role); b.append(el("p", null, m.text));
+    if (m.sources?.length) {
+      const ul = el("ul", "plain helper-src");
+      m.sources.forEach(sr => {
+        const li = el("li"); const a2 = el("a", null, sr.title); a2.href = sr.url; a2.target = "_blank"; a2.rel = "noopener noreferrer"; li.append(a2);
+        if (opts.onAddSource) { const add = el("button", "linkbtn", t("hp_add_source")); add.type = "button"; add.onclick = async () => { add.disabled = true; try { await opts.onAddSource(sr.url); add.textContent = t("hp_added"); } catch { add.disabled = false; } }; li.append(add); }
+        ul.append(li);
+      });
+      b.append(ul);
+    }
+    return b;
+  };
+  const draw = () => {
+    log.replaceChildren(...(msgs.length ? msgs.map(bubble) : [bubble({ role: "assistant", text: t(opts.roomId ? "hp_hello_room" : "hp_hello_setup") })]));
+    log.scrollTop = log.scrollHeight;
+    sugg.replaceChildren(...(msgs.length ? [] : t(opts.roomId ? "hp_sugg_room" : "hp_sugg_setup").map(q => chip(q, false, () => ask(q)))));
+  };
+  const ask = async text => {
+    text = String(text || "").trim(); if (!text) return;
+    msgs.push({ role: "user", text }); inp.value = ""; draw(); keep();
+    const wait = el("div", "helper-msg assistant thinking"); wait.append(el("p", null, t("hp_thinking"))); log.append(wait); log.scrollTop = log.scrollHeight;
+    send.disabled = true;
+    try {
+      let r;
+      if (demoMode) r = { reply: t("hp_demo"), sources: [] };
+      else if (!user) r = { reply: t("hp_sign_in_first"), sources: [] };
+      else r = await post("/api/rooms/helper", { messages: msgs.map(m => ({ role: m.role, text: m.text })), room_id: opts.roomId || null, draft: opts.draft ? opts.draft() : null, page: opts.page || "", lang });
+      msgs.push({ role: "assistant", text: r.reply || t("err_generic"), sources: r.sources || [] });
+    } catch (e) {
+      msgs.push({ role: "assistant", text: t(e.message === "quota" ? "err_quota" : "hp_fail") });
+    }
+    send.disabled = false; draw(); keep();
+  };
+  const open = on => { panel.hidden = !on; btn.setAttribute("aria-expanded", String(on)); btn.hidden = on; if (on) { draw(); setTimeout(() => inp.focus(), 50); } };
+  btn.onclick = () => open(true); x.onclick = () => open(false);
+  f.onsubmit = e => { e.preventDefault(); ask(inp.value); };
+  inp.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(inp.value); } };
+}
+
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, signedConfidence, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, signedConfidence, helper, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();
