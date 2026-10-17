@@ -42,13 +42,15 @@ export function roomMath({ options, criteria, scores, outcomes, inputs }) {
   const outs = o => ["best", "likely", "worst"].map(k => ({ value: num(outcomes?.[o]?.[k]?.value, 0, 10, 5), odds: num(outcomes?.[o]?.[k]?.odds, 0, 100, 33) }));
   const best = (ids, f) => ids.reduce((b, o) => f(o) > f(b) ? o : b, ids[0]);
 
-  // Each member: how well each option fits their weights (60%) and their appetite for its outcomes (40%).
+  // Each member's view of each option, from their whole answer: how well it fits what they weigh (45%),
+  // their appetite for its outcomes (25%), and whether it is the option they said they lean to (30%).
+  // Without the gut pick, the Analyst's scores decided every member's winner and hid real splits.
   const members = inputs.map(inp => {
     const a = RISK_POWER[inp.risk_appetite] ?? 1;
     const per = {};
     for (const o of oids) {
       const fit = cids.reduce((s, c) => s + (Number(inp.weights?.[c]) || 0) / 100 * sc(o, c), 0);
-      per[o] = r1(0.6 * fit + 0.4 * certainty(outs(o), a));
+      per[o] = r1(0.45 * fit + 0.25 * certainty(outs(o), a) + (inp.gut_pick === o ? 3 : 0));
     }
     return { per, winner: best(oids, o => per[o]), gut: inp.gut_pick, risk: inp.risk_appetite, weights: inp.weights || {}, concern: String(inp.concern || "").trim() };
   });
@@ -59,6 +61,17 @@ export function roomMath({ options, criteria, scores, outcomes, inputs }) {
   const call = ranked[0];
   const tally = key => Object.fromEntries(oids.map(o => [o, members.filter(m => m[key] === o).length]));
   const dissent = members.filter(m => m.winner !== call).length;
+  const n = members.length;
+  const gutTally = tally("gut");
+  const gutTop = best(oids, o => gutTally[o]);
+  const gutAgainst = members.filter(m => m.gut && m.gut !== call).length;
+  const riskMix = Object.fromEntries(Object.keys(RISK_POWER).map(k => [k, members.filter(m => m.risk === k).length]));
+  // The room is split when a real share of people end up somewhere else than the call, by their
+  // whole answer or by their gut, or when cautious and bold members pull hard both ways.
+  const split = n >= 2 && (dissent >= Math.max(2, Math.ceil(n / 3)) || gutAgainst / n >= 0.5 ||
+    (riskMix.safe >= Math.ceil(n / 3) && riskMix.bold >= Math.ceil(n / 3)));
+  // Most of the room leaned to a different option than the numbers favour: say so up front.
+  const gutMismatch = gutTop !== call && gutTally[gutTop] > (gutTally[call] || 0) ? { gut: gutTop, call, leaning: gutTally[gutTop], members: n } : null;
 
   return {
     members: members.length,
@@ -67,15 +80,15 @@ export function roomMath({ options, criteria, scores, outcomes, inputs }) {
     // dominated: some other option is at least as good on every criterion and better on one
     dominated: oids.filter(o => oids.some(p => p !== o && cids.every(c => sc(p, c) >= sc(o, c)) && cids.some(c => sc(p, c) > sc(o, c)))),
     winners: tally("winner"),
-    gut: tally("gut"),
-    riskMix: Object.fromEntries(Object.keys(RISK_POWER).map(k => [k, members.filter(m => m.risk === k).length])),
+    gut: gutTally,
+    riskMix,
     weightSpread: criteria.map(c => {
       const ws = members.map(m => Number(m.weights[c.id]) || 0);
       const min = Math.min(...ws), max = Math.max(...ws);
       return { id: c.id, label: c.label, min, max, avg: Math.round(mean(ws)), split: max - min >= 25 };
     }),
-    dissent,
-    capConfidence: dissent >= 2,   // spec: two or more personal winners differ -> confidence at most Medium
+    dissent, gutAgainst, split, gutMismatch,
+    capConfidence: split,          // a split room's call is at most Medium confidence
     // Anonymous and shuffled, so a row can't be matched to a person by order.
     memberScores: shuffle(members.map(m => ({ winner: m.winner, scores: m.per }))).map((m, i) => ({ member: i + 1, ...m })),
     concerns: shuffle(members.map(m => m.concern).filter(Boolean))

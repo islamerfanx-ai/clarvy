@@ -61,8 +61,15 @@ const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || "").trim()
 // (Supabase anonymous sign-in). The email is stored on their profile so we can reach them.
 async function trialSignIn(name, email) {
   if (!user) {
-    const { data, error } = await sb.auth.signInAnonymously();
-    if (error) throw error;
+    // When many people join at once (a whole office on one network), sign-in can be briefly rate limited:
+    // wait and try again a few times before telling the person.
+    let data, error;
+    for (const wait of [0, 1500, 4000, 9000]) {
+      if (wait) await new Promise(r => setTimeout(r, wait));
+      ({ data, error } = await sb.auth.signInAnonymously());
+      if (!error || error.status !== 429) break;
+    }
+    if (error) throw error.status === 429 ? Object.assign(new Error("busy"), { code: "busy" }) : error;
     user = data.user;
   }
   const patch = { name };
@@ -161,6 +168,15 @@ async function decideNow(roomId) {
   const data = await r.json().catch(() => ({}));
   if (!r.ok) throw Object.assign(new Error(data.code || "upstream"), data);
   return data;
+}
+// The call's confidence after sign-off: anyone objecting, or more reluctant than willing sign-offs,
+// lowers it one step (the stored confidence is kept; this is what people see).
+function signedConfidence(level, counts) {
+  const l = ["High", "Medium", "Low"].includes(level) ? level : "Medium";
+  if (!counts) return { level: l, lowered: false };
+  const agree = counts.agree || 0, reluctant = counts.disagree_commit || 0, object = counts.object || 0;
+  if (object > 0 || reluctant > agree) return { level: { High: "Medium", Medium: "Low", Low: "Low" }[l], lowered: l !== "Low" };
+  return { level: l, lowered: false };
 }
 // Map an error (from our database functions or the server) to a words key.
 function errKey(err, known) {
@@ -358,7 +374,7 @@ window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, signedConfidence, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();

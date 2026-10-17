@@ -46,7 +46,7 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
@@ -60,7 +60,7 @@ const live = {
     const out = { room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner") out.invites = await this.invites(room);
     if (room.rapid) {
-      const { data: obj } = await sb.from("objections").select("id,user_id,reason,status,override_reason,created_at").eq("room_id", roomId).order("created_at");
+      const { data: obj } = await sb.from("objections").select("id,user_id,reason,status,override_reason,created_at,option_id").eq("room_id", roomId).order("created_at");
       out.objections = obj || [];
     }
     if (["decided", "reviewed"].includes(room.status)) {
@@ -115,8 +115,8 @@ const live = {
     const { error } = await Rooms.sb.from("memberships").update({ rapid_role }).eq("room_id", roomId).eq("user_id", uid);
     if (error) throw error;
   },
-  async object(reason) {
-    const { error } = await Rooms.sb.from("objections").insert({ room_id: roomId, user_id: Rooms.user.id, reason });
+  async object(reason, option_id) {
+    const { error } = await Rooms.sb.from("objections").insert({ room_id: roomId, user_id: Rooms.user.id, reason, option_id: option_id || null });
     if (error) throw error;
   },
   // Report share links (owner): the current one, a new one, or switch it off.
@@ -184,7 +184,7 @@ function demoStore(kind) {
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
     async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
-    async object(reason) { objections.push({ id: "x" + (objections.length + 1), user_id: "me", reason, status: "open" }); },
+    async object(reason, option_id) { objections.push({ id: "x" + (objections.length + 1), user_id: "me", reason, option_id: option_id || null, status: "open" }); },
     async withdraw(oid) { const o = objections.find(x => x.id === oid); if (o) o.status = "withdrawn"; },
     reportToken: null,
     async reportLink() { return this.reportToken; },
@@ -193,11 +193,12 @@ function demoStore(kind) {
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
     async decide() {
-      if (objections.some(o => o.status === "open")) throw new Error("objection_open");
       room.status = "deciding";
       setTimeout(async () => { analysis = await demoAnalysis(room, [mine, ...others.map(o => o.input)].filter(Boolean)); await refresh(); }, 2500);
     },
     async settle(decision, reason, option) {
+      const final = decision === "accepted" ? analysis.verdict.call : option;
+      if (objections.some(o => o.status === "open" && (!o.option_id || o.option_id === final))) throw new Error("objection_open");
       Object.assign(analysis, { owner_decision: decision, override_reason: reason, final_option: decision === "accepted" ? analysis.verdict.call : option });
       room.status = "decided";
     },
@@ -217,7 +218,7 @@ async function demoAnalysis(room, inputs) {
   const ar = room.language === "ar";
   return {
     confidence: m.capConfidence ? "Medium" : "High",
-    frame: { facts: [{ text: ar ? "ارتفعت أسعار الفائدة على قروض الشركات 0.5٪ هذا العام." : "Retail rents in central Jeddah rose about 9% this year.", source: ar ? "تقرير مصرفي، سبتمبر 2026" : "Local property report, Sep 2026", url: null }] },
+    frame: { facts: [{ text: ar ? "ارتفعت أسعار الفائدة على قروض الشركات 0.5٪ هذا العام." : "Retail rents in central Jeddah rose about 9% this year.", date: "2026-09", kind: "news", source: ar ? "تقرير مصرفي، سبتمبر 2026" : "Local property report, Sep 2026", url: null }] },
     verdict: {
       call: m.call, call_label: room.options.find(o => o.id === m.call).label,
       headline: ar ? "خذوا الخيار الأوسط الآن، وأعيدوا التقييم بعد ستة أشهر." : "Wait until spring, and use the time to lock in the rent-free lease.",
@@ -226,7 +227,10 @@ async function demoAnalysis(room, inputs) {
       check_first: ar ? null : "Ask the landlord if the 6 months rent-free still applies for a March start.",
       disappoints: ar ? null : "Members who weigh upside most, who would rather move this year.",
       bring_on_board: ar ? null : "A signed option on the site now, so waiting doesn't mean losing it.",
-      split: m.capConfidence,
+      split: m.split,
+      leaned: m.gutMismatch ? { option: m.gutMismatch.gut, label: room.options.find(o => o.id === m.gutMismatch.gut).label, count: m.gutMismatch.leaning, members: m.members } : null,
+      role_points: ar ? [] : [{ point: "The fit-out would leave less than six months of cash.", response: "accept", detail: "Waiting until spring keeps cash above six months; a pop-up costs about a tenth of the fit-out." }],
+      objections: room.rapid && !ar ? [{ objection: "Legal hasn't cleared the lease terms yet.", meets: true, how: "Waiting until spring leaves time to clear the lease before anything is signed." }] : [],
       ...demoExtras(room.model, ar)
     },
     disagreement_map: {
@@ -339,7 +343,7 @@ async function vJoin() {
       inputStep = 0;
       await refresh();
     } catch (err) {
-      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full"])));
+      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "busy"])));
       go.disabled = false;
     }
   };
@@ -502,7 +506,7 @@ function vWaiting() {
   if (owner) {
     const st = el("p", "status err"); st.setAttribute("role", "status");
     if (r.decide_error) say(st, t(r.decide_error === "rooms_not_configured" ? "rooms_not_configured" : "decide_failed"));
-    const ready = done >= r.quorum && !blocked;
+    const ready = done >= r.quorum;
     const d = btn(t("decide_now"), "", async () => {
       d.disabled = true; say(st, "");
       try { await store.decide(); S.room.status = "deciding"; render(); }
@@ -510,11 +514,11 @@ function vWaiting() {
     });
     d.disabled = !ready;
     main.append(d);
-    if (blocked) main.append(el("p", "small", t("obj_blocking")));
-    else if (done < r.quorum) main.append(el("p", "small", t("decide_need", { need: r.quorum })));
+    if (done < r.quorum) main.append(el("p", "small", t("decide_need", { need: r.quorum })));
+    else if (blocked) main.append(el("p", "small", t("obj_open_note")));
     main.append(st);
   } else if (S.mine) {
-    main.append(el("p", "small", t(blocked ? "obj_blocking" : "wait_hint_member")));
+    main.append(el("p", "small", t(blocked ? "obj_open_note" : "wait_hint_member")));
   }
   if (params.get("files") === "failed") main.append(el("p", "status err", t("files_failed")));
   const cards = [questionCard()];
@@ -556,9 +560,16 @@ function objectionsCard() {
   (S.objections || []).forEach(o => {
     const b = el("div", "block objection " + o.status);
     b.append(el("p", "body", t("obj_by", { name: nameOf(o.user_id) }) + ": " + o.reason));
+    if (o.option_id) b.append(el("p", "small", t("obj_about", { option: optLabel(o.option_id) })));
     if (o.status === "overridden") b.append(el("p", "small", t("obj_overridden", { reason: o.override_reason || "" })));
     if (o.status === "withdrawn") b.append(el("p", "small", t("obj_withdrawn")));
-    if (o.status === "open" && S.role === "owner") {
+    const rule = S.room.override_rule || "owner";
+    const mayOverride = rule === "owner" ? S.role === "owner" : rule === "authority" ? S.roleId && S.roleId === S.room.override_role_id : false;
+    if (o.status === "open" && !mayOverride && S.role === "owner") {
+      const who = (S.room.roles || []).find(x => x.id === S.room.override_role_id)?.title;
+      b.append(el("p", "small", rule === "approver" ? t("obj_only_approver") : t("obj_only_authority", { role: who || "" })));
+    }
+    if (o.status === "open" && mayOverride) {
       const why = el("input", "line"); Object.assign(why, { maxLength: 300, placeholder: t("obj_override_ph") }); why.setAttribute("aria-label", t("obj_override_ph"));
       const st = el("p", "status err");
       const go = btn(t("obj_override"), "ghost", async () => {
@@ -580,14 +591,17 @@ function objectionsCard() {
 }
 function approverCard() {
   const c = card("you", el("p", "text sm", t("obj_raise")), el("p", "small", t("obj_raise_hint")));
+  const target = el("select", "line role-select"); target.id = "objTarget"; target.style.width = "100%";
+  [["", t("obj_target_all")], ...S.room.options.map(o => [o.id, o.label])].forEach(([v, txt]) => { const op = el("option", null, txt); op.value = v; target.append(op); });
+  const tl = el("label", "lbl", t("obj_target_lbl")); tl.htmlFor = "objTarget";
   const ta = el("textarea"); Object.assign(ta, { rows: 2, maxLength: 500, placeholder: t("obj_ph") }); ta.setAttribute("aria-label", t("obj_raise"));
   const st = el("p", "status err");
   const go = btn(t("obj_send"), "ghost", async () => {
     if (!ta.value.trim()) { ta.focus(); return; }
     go.disabled = true;
-    try { await store.object(ta.value.trim()); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); }
+    try { await store.object(ta.value.trim(), target.value || null); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); }
   });
-  c.append(ta, go, st);
+  c.append(tl, target, ta, go, st);
   return c;
 }
 function shareCard(withNudge) {
@@ -639,13 +653,41 @@ function vVerdict() {
   const owner = S.role === "owner";
   const cards = [];
 
+  // Confidence also follows the sign-off: an objection or mostly reluctant commitment lowers it.
+  const conf = Rooms.signedConfidence(a.confidence, settled ? S.counts : null);
   const pills = el("div", "pills");
-  pills.append(el("span", "pill strong", t("conf_" + (a.confidence || "Medium"))));
+  pills.append(el("span", "pill strong", t("conf_" + conf.level)));
+  if (conf.lowered) pills.append(el("span", "pill", t("conf_lowered")));
   if (v.split) pills.append(el("span", "pill", t("v_split")));
   const ownerName = S.roster.find(p => p.role === "owner")?.name;
   const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || Rooms.typeName(r)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
   cards.push(top);
+  // Say it plainly when most of the room leaned to another option than the call.
+  if (v.room_vs_call || v.leaned) cards.push(card("outline", el("h3", null, t("v_room_elsewhere")),
+    contentLang(el("p", "body", v.room_vs_call || t("v_leaned", { label: v.leaned.label, n: v.leaned.count, total: v.leaned.members })))));
+  if (settled && (S.counts?.object || 0) > 0) cards.push(card("outline", el("p", "body", t("v_late_objection", { n: S.counts.object }))));
+  // Objections: does this call meet them? An approver whose objection is met can withdraw it here.
+  const openObj = (S.objections || []).filter(o => o.status === "open");
+  const blocking = openObj.filter(o => !o.option_id || o.option_id === v.call);
+  if (v.objections?.length || openObj.length) {
+    const c = card("you", el("h3", null, t("v_objections")));
+    (v.objections || []).forEach(o => {
+      const b = el("div", "block");
+      const top2 = el("div", "range-top"); top2.append(contentLang(el("span", "rate-name", o.objection)), el("span", "tag" + (o.meets ? "" : " split"), t(o.meets ? "v_meets" : "v_not_meets")));
+      b.append(top2); if (o.how) b.append(contentLang(el("p", "body", o.how)));
+      c.append(b);
+    });
+    const mine = openObj.find(o => S.roster.find(p => p.me)?.user_id === o.user_id);
+    if (mine && !settled) {
+      const w = btn(t("obj_withdraw"), "soft", async () => { w.disabled = true; try { await store.withdraw(mine.id); await refresh(); } catch { w.disabled = false; } });
+      c.append(el("p", "small", t(v.objections?.some(o => o.meets) ? "v_withdraw_prompt" : "v_withdraw_any")), w);
+    }
+    if (blocking.length && owner && !settled) c.append(el("p", "small", t("obj_settle_blocked")));
+    cards.push(c);
+  }
+  if (r.rapid && (S.objections || []).length) cards.push(objectionsCard());
+  if (r.rapid && !settled && S.roster.find(p => p.me)?.rapid_role === "approver") cards.push(approverCard());
 
   // The owner settles the call; everyone else sees it once settled.
   if (settled) {
@@ -665,14 +707,15 @@ function vVerdict() {
       if (!why.value.trim()) { why.focus(); return say(st, t("need_reason")); }
       confirm.disabled = true;
       try { await store.settle("overridden", why.value.trim(), chosen); await refresh(); }
-      catch { confirm.disabled = false; say(st, t("err_generic")); }
+      catch (err) { confirm.disabled = false; say(st, t(Rooms.errKey(err, ["objection_open"]) === "objection_open" ? "obj_settle_blocked" : "err_generic")); }
     });
     pick.append(el("h3", null, t("v_override_pick")), opts, why, confirm);
     const accept = btn(t("v_accept"), "", async () => {
       accept.disabled = true;
       try { await store.settle("accepted"); await refresh(); }
-      catch { accept.disabled = false; say(st, t("err_generic")); }
+      catch (err) { accept.disabled = false; say(st, t(Rooms.errKey(err, ["objection_open"]) === "objection_open" ? "obj_settle_blocked" : "err_generic")); }
     });
+    accept.disabled = blocking.length > 0;
     const other = el("button", "linkbtn", t("v_override")); other.type = "button";
     other.onclick = () => { pick.hidden = !pick.hidden; };
     cards.push(card("you", el("p", "text sm", t("v_owner_title")), accept, other, pick, st));
@@ -681,6 +724,29 @@ function vVerdict() {
   }
 
   if (v.check_first) cards.push(card("outline", el("h3", null, t("v_check")), contentLang(el("p", "body", v.check_first))));
+  // Points people in key roles raised, and how the call deals with each (never who raised it).
+  if (v.role_points?.length) {
+    const c = card("", el("h3", null, t("v_role_points")));
+    v.role_points.forEach(x => {
+      const b = el("div", "block");
+      const top2 = el("div", "range-top"); top2.append(contentLang(el("span", "rate-name", x.point)), el("span", "tag" + (x.response === "test" ? " split" : ""), t("resp_" + x.response)));
+      b.append(top2); if (x.detail) b.append(contentLang(el("p", "body", x.detail)));
+      c.append(b);
+    });
+    cards.push(c);
+  }
+  if (v.combination?.steps?.length) {
+    const c = card("", el("h3", null, t("v_combination")));
+    if (v.combination.summary) c.append(contentLang(el("p", "body", v.combination.summary)));
+    const ol = contentLang(el("ol", "steps-list")); v.combination.steps.forEach(x => ol.append(el("li", null, x.step + (x.adds ? " · " + x.adds : ""))));
+    c.append(ol); cards.push(c);
+  }
+  if (v.member_option) cards.push(card("", el("h3", null, t("v_member_option")), contentLang(el("p", "body", v.member_option))));
+  if (v.statement) {
+    const p2 = contentLang(el("p", "body", v.statement));
+    const cp = btn(t("copy"), "soft", async () => { await Rooms.copyText(v.statement); cp.textContent = t("copied"); setTimeout(() => { cp.textContent = t("copy"); }, 1600); });
+    cards.push(card("outline", el("h3", null, t("v_statement")), p2, cp));
+  }
   cards.push(...modelCards(v));
 
   const why = card("");
@@ -697,6 +763,7 @@ function vVerdict() {
     const ul = contentLang(el("ul", "plain facts"));
     facts.forEach(f => {
       const li = el("li", null, f.text);
+      if (f.date || (f.kind && !["news", "data"].includes(f.kind))) li.append(el("span", "tag" + (["draft", "vendor"].includes(f.kind) ? " split" : ""), [f.date, f.kind && f.kind !== "news" ? t("kind_" + f.kind) : null].filter(Boolean).join(" · ")));
       if (f.source || f.url) {
         const s = el("span", "src");
         if (f.url) { const link = el("a", null, f.source || new URL(f.url).hostname); link.href = f.url; link.target = "_blank"; link.rel = "noopener noreferrer"; s.append(link); }
@@ -739,7 +806,11 @@ function modelCards(v) {
   }
   const extras = card("");
   if (v.best_practice) extras.append(para(t("v_best_practice"), v.best_practice));
-  if (v.first_actions?.length) { const b = el("div", "block"); const ul = contentLang(el("ul", "dots")); v.first_actions.forEach(x => ul.append(el("li", null, x))); b.append(el("h3", null, t("v_first_actions")), ul); extras.append(b); }
+  if (v.first_actions?.length) {
+    const b = el("div", "block"); const ul = contentLang(el("ul", "dots"));
+    v.first_actions.forEach(x => { const li = el("li", null, typeof x === "string" ? x : x.action); if (x.owner || x.by) li.append(el("span", "small", " · " + [x.owner, x.by].filter(Boolean).join(", "))); ul.append(li); });
+    b.append(el("h3", null, t("v_first_actions")), ul); extras.append(b);
+  }
   if (v.experiments?.length) {
     const b = el("div", "block"); const ul = contentLang(el("ul", "dots"));
     v.experiments.forEach(x => { const li = el("li", null, x.test); if (x.success) li.append(el("span", "small", " · " + t("v_success") + ": " + x.success)); ul.append(li); });

@@ -38,7 +38,7 @@ const MAX_FILES = 8, MAX_FILE_BYTES = 20 * 1024 * 1024, MAX_TEXT = 50000;
 const DRAFT_KEY = "dr-new-room-2";
 
 // The draft survives a reload, so nothing typed is lost.
-let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false, orgType: null, orgLabel: "", roles: [], extra: [] };
+let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false, orgType: null, orgLabel: "", roles: [], extra: [], sugFor: "", overrideRule: "owner", overrideRoleId: null, strict: false };
 let files = [];   // files can't be saved in the draft; they live only in this page
 let ids = [];     // the steps for this person: "you" first if we don't know them yet
 const save = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} };
@@ -89,7 +89,7 @@ function stepYou() {
     if (!Rooms.validEmail(d.email)) { emailIn.focus(); return fail(t("need_email")); }
     if (!demo) {
       try { await Rooms.trialSignIn(d.name.trim(), d.email.trim()); }
-      catch (err) { console.error(err); return fail(t("err_generic")); }
+      catch (err) { console.error(err); return fail(t(err.message === "busy" ? "busy" : "err_generic")); }
     }
     next();
   });
@@ -259,6 +259,7 @@ function stepPeople() {
   const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
   const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
   orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); drawDraft(); };
+  orgIn.onchange = () => suggestNow();
   const orgF = field("orgLabel", t("org_custom_lbl"), orgIn);
   const sugg = el("div", "chips");
   const list = el("div", "roles");
@@ -274,7 +275,7 @@ function stepPeople() {
   const none = el("p", "small", t("roles_none_note"));
 
   const drawOrgs = () => {
-    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawAll(); if (o === "custom") orgIn.focus(); })));
+    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawAll(); if (o === "custom") orgIn.focus(); else suggestNow(); })));
     orgF.hidden = d.orgType !== "custom";
   };
   const drawSugg = () => {
@@ -317,17 +318,44 @@ function stepPeople() {
   };
   const drawExtra = () => {
     const ex = (d.extra || []).filter(x => !d.roles.some(r => r.title.toLowerCase() === x.title.toLowerCase()));
-    extra.hidden = !ex.length;
-    extra.replaceChildren(el("span", "lbl", t("roles_extra")), ...ex.map(x => {
+    extra.hidden = !ex.length && !suggesting;
+    extra.replaceChildren(el("span", "lbl", t("roles_extra")), ...(suggesting && !ex.length ? [el("p", "small thinking", t("roles_drafting"))] : []), ...ex.map(x => {
       const c = Rooms.choice("+ " + x.title, x.ask, false, () => { addRole(x.title, x.ask); drawAll(); });
       return c;
     }));
   };
   const drawDraft = () => {
     draft.textContent = t(d.roles.length ? "roles_draft" : "roles_suggest");
-    draft.hidden = !d.orgType || (!d.roles.length && d.orgType !== "custom") || (d.orgType === "custom" && !d.orgLabel.trim() && !d.roles.length);
+    draft.hidden = !d.orgType || (d.orgType === "custom" && !d.orgLabel.trim());
   };
-  const drawAll = () => { drawOrgs(); drawSugg(); drawList(); drawExtra(); drawDraft(); };
+  // RAPID: who may override an approver's objection.
+  const gov = el("div", "field");
+  const drawGov = () => {
+    gov.hidden = !d.rapid;
+    if (!d.rapid) return;
+    const sel = el("select", "line role-select"); sel.id = "overrideRule"; sel.style.width = "100%";
+    [["owner", "gov_owner"], ["approver", "gov_approver"], ...d.roles.map(r => ["authority:" + r.id, null, r.title])].forEach(([v, k, title]) => {
+      const o = el("option", null, k ? t(k) : t("gov_authority", { role: title })); o.value = v;
+      if (v === d.overrideRule || v === "authority:" + d.overrideRoleId && d.overrideRule === "authority") o.selected = true;
+      sel.append(o);
+    });
+    sel.onchange = () => { const [rule, id] = sel.value.split(":"); d.overrideRule = rule; d.overrideRoleId = id || null; save(); };
+    const l = el("label", "lbl", t("gov_lbl")); l.htmlFor = "overrideRule";
+    gov.replaceChildren(l, el("p", "small", t("gov_hint")), sel);
+  };
+  const drawAll = () => { drawOrgs(); drawExtra(); drawSugg(); drawList(); drawDraft(); drawGov(); };
+  let suggesting = false;
+  // Roles that fit this question, suggested as soon as the organisation is known (once per organisation).
+  const suggestNow = async () => {
+    const key = [d.orgType, d.orgLabel.trim(), d.question].join("|");
+    if (demo || !d.orgType || (d.orgType === "custom" && !d.orgLabel.trim()) || d.sugFor === key) return;
+    d.sugFor = key; suggesting = true; drawExtra();
+    try {
+      const data = await Rooms.post("/api/rooms/roles", { question: d.question, options: d.options.filter(o => o.trim()), type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, roles: [], lang: Rooms.lang });
+      d.extra = [...(data.roles || []), ...(data.extra || [])].slice(0, 6);
+    } catch { d.sugFor = ""; }
+    suggesting = false; save(); drawAll();
+  };
   draft.onclick = async () => {
     draft.disabled = true; draft.textContent = t("roles_drafting"); fail("");
     try { await draftAsks(); drawAll(); }
@@ -337,17 +365,20 @@ function stepPeople() {
   drawAll();
   const orgField = el("div", "field"); orgField.append(el("span", "lbl", t("org_lbl")), orgs);
   const rolesField = el("div", "field"); rolesField.append(el("span", "lbl", t("roles_lbl")), el("p", "small", t("roles_hint")), sugg);
-  return form([...head(t("nr_people_title"), t("nr_people_hint")), orgField, orgF, rolesField, list, addRow, draft, extra, none, actions()], () => {
+  setTimeout(suggestNow, 0);
+  return form([...head(t("nr_people_title"), t("nr_people_hint")), orgField, orgF, extra, rolesField, list, addRow, draft, none, gov, actions()], () => {
     if (!d.orgType) return fail(t("need_org"));
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
+    if (d.rapid && d.overrideRule === "authority" && !d.roles.some(r => r.id === d.overrideRoleId)) { d.overrideRule = "owner"; d.overrideRoleId = null; save(); }
     next();
   });
 }
 // The server drafts an ask per role (keeping the owner's own words), or suggests roles for a custom organisation.
 async function draftAsks() {
   if (demo) {
-    if (!d.roles.length) ["Head coach", "Treasurer", "Board member"].forEach(x => addRole(x));
-    d.roles.forEach(r => { if (!r.ask.trim()) r.ask = `Please add what you see from your side as ${r.title}: the numbers, risks or limits the others may miss.`; });
+    const ar = Rooms.lang === "ar";
+    if (!d.roles.length) d.extra = (ar ? ["المدرب", "أمين الصندوق", "عضو مجلس الإدارة"] : ["Head coach", "Treasurer", "Board member"]).map(title => ({ title, ask: "" }));
+    d.roles.forEach(r => { if (!r.ask.trim()) r.ask = ar ? `ما الأرقام أو الحدود التي تراها من موقعك كـ${r.title} وقد تغيب عن الآخرين؟` : `What numbers or limits do you see as ${r.title} that the others might miss?`; });
     save(); return;
   }
   const data = await Rooms.post("/api/rooms/roles", {
@@ -359,8 +390,8 @@ async function draftAsks() {
       const r = d.roles.find(y => y.title.toLowerCase() === String(x.title).toLowerCase());
       if (r && !r.ask.trim() && x.ask) r.ask = x.ask;
     }
-  } else (data.roles || []).forEach(x => addRole(x.title, x.ask));
-  d.extra = (data.extra || []).slice(0, 2);
+    d.extra = (data.extra || []).slice(0, 2);
+  } else d.extra = (data.roles || []).slice(0, 6);
   save();
 }
 
@@ -414,7 +445,12 @@ function stepContext() {
   const nt = el("span"); nt.append(el("span", null, t("named_lbl")), el("br"), el("span", "small", t("named_hint")));
   named.append(nc, nt);
   const namedF = el("div", "field"); namedF.append(named);
-  more.append(el("summary", null, t("more_settings")), revF, namedF);
+  const strict = el("label", "check");
+  const sc = el("input"); sc.type = "checkbox"; sc.id = "strict"; sc.checked = !!d.strict; sc.onchange = () => { d.strict = sc.checked; save(); };
+  const stx = el("span"); stx.append(el("span", null, t("strict_lbl")), el("br"), el("span", "small", t("strict_hint")));
+  strict.append(sc, stx);
+  const strictF = el("div", "field"); strictF.append(strict);
+  more.append(el("summary", null, t("more_settings")), revF, namedF, strictF);
 
   // Useful links: everyone in the room sees them, and the analysis reads them.
   if (!Array.isArray(d.links)) d.links = [];
@@ -485,6 +521,9 @@ async function create() {
       context: d.context.trim(), options, criteria, review_date: review, named_views: d.named,
       model: d.model || "standard", rapid: !!d.rapid,
       org_type: d.orgType || null, org_label: d.orgType === "custom" ? d.orgLabel.trim() || null : null, roles,
+      override_rule: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? "authority" : d.rapid && d.overrideRule === "approver" ? "approver" : "owner",
+      override_role_id: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? d.overrideRoleId : null,
+      strict_confidential: !!d.strict,
       links: (d.links || []).filter(Rooms.validUrl).slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;

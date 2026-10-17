@@ -57,10 +57,11 @@ let R = null, MODELS = {};
 const DEMO = {
   room: { question: "Should we open a second location in Jeddah this year, or wait until next spring?", type: "business", language: "en", model: "wrap", rapid: true,
     options: [{ id: "o1", label: "Open in Jeddah this year" }, { id: "o2", label: "Wait until next spring" }, { id: "o3", label: "Grow Riyadh instead" }],
-    links: [{ url: "https://www.example.org/jeddah-retail-report" }], status: "decided", review_date: "2026-12-01", created_at: "2026-10-12" },
+    links: [{ url: "https://www.example.org/jeddah-retail-report" }], status: "decided", review_date: "2026-12-01", created_at: "2026-10-12", override_rule: "owner" },
   owner_name: "Islam", members: 3, answered: 3, signoffs: { agree: 2, disagree_commit: 1 },
+  objections: [{ by_role: "Director", reason: "Legal hasn't cleared the lease terms yet.", option_id: null, status: "withdrawn", override_reason: null, created_at: "2026-10-14", resolved_at: "2026-10-16" }],
   analysis: { confidence: "Medium", owner_decision: "accepted", final_option: "o2", decided_at: "2026-10-16",
-    frame: { facts: [{ text: "Retail rents in central Jeddah rose about 9% this year.", source: "Local property report, Sep 2026", url: null }] },
+    frame: { facts: [{ text: "Retail rents in central Jeddah rose about 9% this year.", date: "2026-09", kind: "news", source: "Local property report, Sep 2026", url: null }] },
     verdict: { model: "wrap", call: "o2", call_label: "Wait until next spring", headline: "Wait until spring, and use the time to lock in the rent-free lease.",
       reasons: ["It protects cash through the tightest months.", "It keeps the Jeddah option open at low cost.", "It has the broadest support in the group."],
       risks: ["A competitor could take the best site first.", "The rent-free offer may not last until spring."],
@@ -101,8 +102,10 @@ function render() {
   if (!a) { out.push(card("", el("p", "text sm", t("rep_not_ready")))); $("view").replaceChildren(...out); return; }
 
   // The call
+  const conf = Rooms.signedConfidence(a.confidence, a.owner_decision ? R.signoffs : null);
   const pills = el("div", "pills");
-  pills.append(el("span", "pill strong", t("conf_" + (a.confidence || "Medium"))));
+  pills.append(el("span", "pill strong", t("conf_" + conf.level)));
+  if (conf.lowered) pills.append(el("span", "pill", t("conf_lowered")));
   if (v.split) pills.append(el("span", "pill", t("v_split")));
   out.push(card("active", el("div", "meta", r.rapid && R.owner_name ? t("v_recommend_to", { name: R.owner_name }) : t("v_call")),
     contentLang(el("p", "text", v.headline || v.call_label)), contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills));
@@ -110,7 +113,22 @@ function render() {
     out.push(card("outline", el("h3", null, t("v_final")), contentLang(el("p", "text sm", optLabel(a.final_option || v.call))),
       el("p", "small", a.owner_decision === "overridden" ? t("v_overridden", { reason: a.override_reason || "" }) : t("v_accepted"))));
   }
+  if (v.room_vs_call || v.leaned) out.push(card("outline", block(t("v_room_elsewhere"), para(v.room_vs_call || t("v_leaned", { label: v.leaned.label, n: v.leaned.count, total: v.leaned.members })))));
+  if (a.owner_decision && (R.signoffs?.object || 0) > 0) out.push(card("outline", para(t("v_late_objection", { n: R.signoffs.object }))));
   if (v.check_first) out.push(card("outline", block(t("v_check"), para(v.check_first))));
+  if (v.objections?.length) {
+    const c = card("", el("h3", null, t("v_objections")));
+    v.objections.forEach(o => { const b = el("div", "block"); const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", o.objection)), el("span", "tag" + (o.meets ? "" : " split"), t(o.meets ? "v_meets" : "v_not_meets"))); b.append(top); if (o.how) b.append(para(o.how)); c.append(b); });
+    out.push(c);
+  }
+  if (v.role_points?.length) {
+    const c = card("", el("h3", null, t("v_role_points")));
+    v.role_points.forEach(x => { const b = el("div", "block"); const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", x.point)), el("span", "tag" + (x.response === "test" ? " split" : ""), t("resp_" + x.response))); b.append(top); if (x.detail) b.append(para(x.detail)); c.append(b); });
+    out.push(c);
+  }
+  if (v.combination?.steps?.length) out.push(card("", el("h3", null, t("v_combination")), ...(v.combination.summary ? [para(v.combination.summary)] : []), dots(v.combination.steps.map(x => x.step + (x.adds ? " · " + x.adds : "")))));
+  if (v.member_option) out.push(card("", block(t("v_member_option"), para(v.member_option))));
+  if (v.statement) out.push(card("outline", block(t("v_statement"), para(v.statement))));
 
   // Why and risks
   const why = card("");
@@ -141,7 +159,7 @@ function render() {
   }
   const extras = card("");
   if (v.best_practice) extras.append(block(t("v_best_practice"), para(v.best_practice)));
-  if (v.first_actions?.length) extras.append(block(t("v_first_actions"), dots(v.first_actions)));
+  if (v.first_actions?.length) extras.append(block(t("v_first_actions"), dots(v.first_actions.map(x => typeof x === "string" ? x : x.action + (x.owner || x.by ? " · " + [x.owner, x.by].filter(Boolean).join(", ") : "")))));
   if (v.experiments?.length) extras.append(block(t("v_experiments"), dots(v.experiments.map(x => x.test + (x.success ? " · " + t("v_success") + ": " + x.success : "")))));
   if (v.widened_option) extras.append(block(t("v_widened"), para(v.widened_option)));
   if (v.small_test) extras.append(block(t("v_small_test"), para(v.small_test)));
@@ -191,10 +209,24 @@ function render() {
     const ul = contentLang(el("ul", "plain facts"));
     facts.forEach(f => {
       const li = el("li", null, f.text);
+      if (f.date || (f.kind && !["news", "data"].includes(f.kind))) li.append(el("span", "tag" + (["draft", "vendor"].includes(f.kind) ? " split" : ""), [f.date, f.kind && f.kind !== "news" ? t("kind_" + f.kind) : null].filter(Boolean).join(" · ")));
       if (f.source || f.url) { const s = el("span", "src"); if (f.url) { const l = el("a", null, f.source || new URL(f.url).hostname); l.href = f.url; l.target = "_blank"; l.rel = "noopener noreferrer"; s.append(l); } else s.textContent = f.source; li.append(s); }
       ul.append(li);
     });
     out.push(card("", el("h3", null, t("v_facts")), ul));
+  }
+  if (r.rapid) {
+    const c = card("", el("h3", null, t("rep_record")));
+    c.append(el("p", "small", t("rep_rule_" + (r.override_rule || "owner"), { role: r.override_role || "" })));
+    (R.objections || []).forEach(o => {
+      const b = el("div", "block");
+      const when = [o.created_at, o.resolved_at].filter(Boolean).map(d => Rooms.fmtDate(String(d).slice(0, 10))).join(" → ");
+      b.append(el("p", "body", `${o.by_role}: ${o.reason}` + (o.option_id ? " (" + t("obj_about", { option: optLabel(o.option_id) }) + ")" : "")),
+        el("p", "small", [t("obj_status_" + o.status), o.override_reason ? t("rep_override_reason", { reason: o.override_reason }) : null, when].filter(Boolean).join(" · ")));
+      c.append(b);
+    });
+    if (!(R.objections || []).length) c.append(el("p", "body", t("rep_no_objections")));
+    out.push(c);
   }
   const cols = el("div", "cols");
   cols.append(card("", el("h3", null, t("rep_options")), dots((r.options || []).map(o => o.label))));

@@ -33,16 +33,24 @@ export const RAPID = {
 // The triage model call only reads signals from the question; these rules turn them into a
 // recommendation, so every recommendation is explainable and the same input always gets the same answer.
 // signals: {door: "one-way"|"two-way", stakes: "low"|"medium"|"high", clarity: "clear"|"unclear",
-//           breadth: "focused"|"broad", approvals: boolean}
+//           breadth: "focused"|"broad", approvals: boolean,
+//           pace: "stable"|"changing"|"crisis", framing: "narrow"|"open"}
+// Order matters: a crisis or a fast-moving situation needs sense-making first; a reversible, modest call
+// should be fast; a narrow yes/no with real stakes needs its options widened; only a broad, analytical
+// question goes to MECE (the drill showed MECE winning almost everything before).
 export function recommend(s = {}) {
   const fits = [];
-  if (s.clarity === "unclear") fits.push("cynefin");
-  if (s.breadth === "broad") fits.push("mece");
-  if (s.door === "one-way" && s.stakes !== "low") fits.push("wrap");
+  if (s.pace === "crisis" || s.pace === "changing" || s.clarity === "unclear") fits.push("cynefin");
   if (s.door === "two-way" && s.stakes !== "high") fits.push("quick");
+  if (s.framing === "narrow" && s.door === "one-way") fits.push("wrap");
+  if (s.breadth === "broad" && s.clarity !== "unclear" && s.pace !== "crisis") fits.push("mece");
+  if (s.door === "one-way" && s.stakes !== "low") fits.push("wrap");
   fits.push("standard");
   const order = [...new Set([...fits, "wrap", "standard", "mece", "cynefin", "quick"])];
-  return { model: order[0], why: "why_" + order[0], alternatives: order.slice(1, 3), rapid: s.approvals === true };
+  const model = order[0];
+  const why = model === "cynefin" && s.clarity !== "unclear" ? "why_cynefin_fast" : "why_" + model;
+  // RAPID only when outside sign-off is real and the call is hard to undo.
+  return { model, why, alternatives: order.slice(1, 3), rapid: s.approvals === true && s.door === "one-way" && s.stakes !== "low" };
 }
 
 // A rough guess with no AI call (demo mode, or when triage is unavailable).
@@ -53,6 +61,9 @@ export function guessSignals({ question = "", options = [], context = "" }) {
     stakes: /\b(million|billion|board|law|regulation|merger|company|government)\b|مليون|مليار|قانون|حكومة/.test(text) ? "high" : "medium",
     clarity: options.filter(o => String(o).trim()).length < 2 ? "unclear" : "clear",
     breadth: /\b(market|expand|strategy|country|region|economy)\b|سوق|توسّع|استراتيجية|اقتصاد/.test(text) ? "broad" : "focused",
-    approvals: /\b(board|legal|regulator|approval|committee|member states|council)\b|مجلس|موافقة|لجنة|قانوني/.test(text)
+    approvals: /\b(board|legal|regulator|approval|committee|member states|council)\b|مجلس|موافقة|لجنة|قانوني/.test(text),
+    pace: /\b(crisis|attack|outage|breach|ransomware|recall|viral|emergency|urgent)\b|أزمة|هجوم|طارئ|عاجل/.test(text) ? "crisis"
+      : /\b(week to week|fast-moving|shifting|volatile|uncertain)\b|متقلب|متغير/.test(text) ? "changing" : "stable",
+    framing: /^(should|do|does|is|are|can|will)\b|\byes or no\b|^هل\b/.test(question.trim().toLowerCase()) ? "narrow" : "open"
   };
 }
