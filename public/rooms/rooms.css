@@ -369,3 +369,27 @@ ul.plan{display:flex;flex-direction:column;gap:12px}
 .helper-sugg .chip{font-size:13px}
 .plan-item .range-top{align-items:flex-start;gap:12px}
 .plan-item .range-top .tag{flex:none;align-self:flex-start;white-space:nowrap}
+
+/* The room thinking, stage by stage */
+.think-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.think-clock{font:400 13px/1 "Martian Mono",ui-monospace,monospace;color:var(--dim);font-variant-numeric:tabular-nums}
+ol.think-steps{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
+.think-step{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;padding:10px 0;position:relative}
+.think-step:not(:last-child)::before{content:"";position:absolute;inset-inline-start:10px;top:30px;bottom:-6px;width:2px;background:var(--line)}
+.think-step.done:not(:last-child)::before{background:var(--accent)}
+.think-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:var(--card);display:grid;place-items:center;position:relative;z-index:1;transition:background .3s,border-color .3s}
+.think-step.done .think-dot{background:var(--accent);border-color:var(--accent)}
+.think-step.done .think-dot::after{content:"";width:6px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.think-step.now .think-dot{border-color:var(--accent)}
+.think-step.now .think-dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);animation:thinkPulse 1.2s ease-in-out infinite}
+.think-body{display:flex;flex-direction:column;gap:3px;min-width:0}
+.think-label{font-size:16px;line-height:1.35;transition:color .3s}
+.think-step.later .think-label{color:var(--faint)}
+.think-step.done .think-label{color:var(--dim)}
+.think-step.now .think-label{color:var(--fg);background:linear-gradient(90deg,var(--fg) 0%,var(--fg) 40%,var(--dim) 50%,var(--fg) 60%,var(--fg) 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:thinkShine 2.4s linear infinite}
+.think-sub{font-size:13px;color:var(--dim);min-height:1.2em}
+.think-sub.in{animation:thinkIn .45s ease both}
+@keyframes thinkPulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+@keyframes thinkShine{from{background-position:120% 0}to{background-position:-120% 0}}
+@keyframes thinkIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.think-step.now .think-dot::after,.think-step.now .think-label,.think-sub.in{animation:none}.think-step.now .think-label{-webkit-text-fill-color:currentColor;background:none}}

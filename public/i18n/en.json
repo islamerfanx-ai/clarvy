@@ -725,5 +725,50 @@
   "lp_faq_ask_t": "Ask a question",
   "lp_faq_ask_b": "Answers come from the questions on this page.",
   "lp_faq_ph": "For example: who sees my answers?",
-  "lp_faq_quota": "That's a lot of questions for today. The answers above cover most of them."
+  "lp_faq_quota": "That's a lot of questions for today. The answers above cover most of them.",
+  "ts_reading": "Reading everyone's answers",
+  "ts_sensemaking": "Working out what kind of situation this is",
+  "ts_facts": "Checking what's happening in the world",
+  "ts_math": "Combining every view",
+  "ts_judging_wrap": "Widening the options and making the call",
+  "ts_judging_quick": "Making a fast, reversible call",
+  "ts_judging_cynefin": "Choosing how to act in this situation",
+  "ts_judging_mece": "Answering each part of the question",
+  "ts_judging_standard": "Weighing the options and making the call",
+  "ts_writing": "Writing the reasons, risks and tripwires",
+  "tsub_reading": [
+    "{n} people answered",
+    "Counting what each person weighs",
+    "Reading the asks for each role"
+  ],
+  "tsub_sensemaking": [
+    "Is it clear, complicated, complex or chaotic?",
+    "Looking for what would show it's changing"
+  ],
+  "tsub_facts": [
+    "Searching for recent, dated facts",
+    "Looking at markets and prices",
+    "Checking rules and regulations",
+    "Looking at logistics and supply",
+    "Reading the links the group shared",
+    "Preferring official sources"
+  ],
+  "tsub_math": [
+    "What each person weighs",
+    "Their appetite for risk",
+    "Their gut pick",
+    "Where the group splits"
+  ],
+  "tsub_judging": [
+    "Testing each option against the facts",
+    "Answering the role asks",
+    "Checking the objections",
+    "Looking for an option nobody listed"
+  ],
+  "tsub_writing": [
+    "Three reasons",
+    "The risks to watch",
+    "Tripwires that should make you rethink",
+    "One thing to check first"
+  ]
 }

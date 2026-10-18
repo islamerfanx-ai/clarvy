@@ -46,7 +46,7 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode,decide_stage").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
@@ -215,7 +215,10 @@ function demoStore(kind) {
     async addLink(url) { room.links.push({ url }); },
     async decide() {
       room.status = "deciding";
-      setTimeout(async () => { analysis = await demoAnalysis(room, [mine, ...others.map(o => o.input)].filter(Boolean)); await refresh(); }, 2500);
+      // Walk through the same stages the server reports, a couple of seconds each.
+      const stages = ["reading", ...(room.model === "cynefin" ? ["sensemaking"] : []), "facts", "math", "judging", "writing"];
+      stages.forEach((st, i) => setTimeout(() => { room.decide_stage = st; thinkingUpdate(); }, i * 2600));
+      setTimeout(async () => { room.decide_stage = null; analysis = await demoAnalysis(room, [mine, ...others.map(o => o.input)].filter(Boolean)); await refresh(); }, stages.length * 2600 + 800);
     },
     async settle(decision, reason, option) {
       const final = decision === "accepted" ? analysis.verdict.call : option;
@@ -663,8 +666,61 @@ function shareCard(withNudge) {
   return c;
 }
 /* ---------- Thinking ---------- */
+// While the room decides, show its thinking stage by stage: done steps get a tick, the current one
+// shows what it is doing right now, later ones wait. The stage comes from the server (rooms.decide_stage);
+// with no stage yet (queued, or an older server), it estimates from the time since Decide now.
+const STAGES = ["reading", "sensemaking", "facts", "math", "judging", "writing"];
+const STAGE_EST = { reading: 0, sensemaking: 4, facts: 10, math: 50, judging: 55, writing: 85 };   // seconds, for the estimate
+let think = null;   // the live thinking screen, kept between polls so the animation doesn't restart
+function stageList() { return STAGES.filter(s2 => s2 !== "sensemaking" || S.room.model === "cynefin"); }
 function vThinking() {
-  show(questionCard(), card("you", el("p", "text sm thinking", t("thinking")), el("p", "small", t("thinking_hint"))));
+  const list = el("ol", "think-steps");
+  const clock = el("span", "think-clock", "0:00");
+  const head = el("div", "think-head"); head.append(el("p", "text sm", t("thinking")), clock);
+  const c = card("you", head, list, el("p", "small", t("thinking_hint")));
+  const steps = stageList().map(id => {
+    const li = el("li", "think-step");
+    const dot = el("span", "think-dot"); dot.setAttribute("aria-hidden", "true");
+    const body = el("div", "think-body");
+    const label = el("span", "think-label", t("ts_" + id + (id === "judging" ? "_" + (MODELS[S.room.model] ? S.room.model : "standard") : "")));
+    const sub = el("span", "think-sub");
+    body.append(label, sub); li.append(dot, body); list.append(li);
+    return { id, li, sub };
+  });
+  show(questionCard(), c);
+  if (think) { clearInterval(think.tick); clearInterval(think.rot); }
+  think = { steps, clock, started: think?.started || Date.now(), current: null, subIdx: 0 };
+  think.tick = setInterval(() => { const s2 = Math.floor((Date.now() - think.started) / 1000); clock.textContent = Math.floor(s2 / 60) + ":" + String(s2 % 60).padStart(2, "0"); if (!S.room.decide_stage) thinkingUpdate(); }, 1000);
+  think.rot = setInterval(() => rotateSub(), 2600);
+  thinkingUpdate();
+}
+function thinkingUpdate() {
+  if (!think || !think.steps[0].li.isConnected) return;
+  const ids = think.steps.map(x => x.id);
+  let cur = S.room.decide_stage;
+  if (!cur || !ids.includes(cur)) {   // estimate from the clock when the server hasn't said yet
+    const el2 = (Date.now() - think.started) / 1000;
+    cur = ids.filter(id => STAGE_EST[id] <= el2).pop() || ids[0];
+  }
+  const at = ids.indexOf(cur);
+  think.steps.forEach((x, i) => {
+    x.li.className = "think-step " + (i < at ? "done" : i === at ? "now" : "later");
+    x.li.setAttribute("aria-current", i === at ? "step" : "false");
+  });
+  if (think.current !== cur) { think.current = cur; think.subIdx = 0; rotateSub(true); }
+}
+// The line under the current step changes every few seconds, like a running commentary.
+function rotateSub(reset) {
+  if (!think || !think.current) return;
+  const x = think.steps.find(y => y.id === think.current); if (!x) return;
+  const lines = t("tsub_" + think.current);
+  const list2 = Array.isArray(lines) ? lines : [lines];
+  const n = S.roster.filter(p => p.submitted).length;
+  const text = String(list2[think.subIdx % list2.length]).replace("{n}", n);
+  if (!reset) think.subIdx++;
+  x.sub.classList.remove("in"); void x.sub.offsetWidth;
+  x.sub.textContent = text; x.sub.classList.add("in");
+  think.steps.forEach(y => { if (y !== x) y.sub.textContent = ""; });
 }
 
 /* ---------- Verdict ---------- */
@@ -1090,7 +1146,8 @@ function render() {
     if (!S.mine && S.role === "member") return startInput();   // members go straight to their answers
     vWaiting(); return poll();
   }
-  if (!S.analysis) { vThinking(); return poll(); }
+  if (!S.analysis) { if (think && think.steps[0].li.isConnected) thinkingUpdate(); else vThinking(); return poll(); }
+  if (think) { clearInterval(think.tick); clearInterval(think.rot); think = null; }
   vVerdict();
   if (st === "deciding") poll();
 }
@@ -1099,11 +1156,11 @@ function poll() {
   if (demo) return;
   pollTimer = setTimeout(async () => {
     if (inputStep || document.hidden) return poll();
-    const sig = x => JSON.stringify([x.room.status, x.roster, !!x.analysis, x.room.decide_error, x.objections]);
+    const sig = x => JSON.stringify([x.room.status, x.roster, !!x.analysis, x.room.decide_error, x.objections, x.room.decide_stage]);
     const before = sig(S);
     try { const next = await store.load(); if (next && sig(next) !== before) { S = next; render(); return; } } catch {}
     poll();
-  }, 5000);
+  }, S && S.room.status === "deciding" && !S.analysis ? 2500 : 5000);
 }
 async function refresh() {
   try { S = await store.load(); }
