@@ -674,53 +674,59 @@ const STAGE_EST = { reading: 0, sensemaking: 4, facts: 10, math: 50, judging: 55
 let think = null;   // the live thinking screen, kept between polls so the animation doesn't restart
 function stageList() { return STAGES.filter(s2 => s2 !== "sensemaking" || S.room.model === "cynefin"); }
 function vThinking() {
-  const list = el("ol", "think-steps");
+  // One live line (a spark, the current stage, a timer), a typed commentary under it, finished stages
+  // collected below with ticks, and a thin bar with one segment per stage.
+  const spark = el("span", "spark"); spark.setAttribute("aria-hidden", "true");
+  spark.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22"><g fill="currentColor">' +
+    [0, 45, 90, 135].map(r => `<g transform="rotate(${r} 12 12)"><rect x="11" y="2" width="2" height="20" rx="1"/></g>`).join("") + "</g></svg>";
+  const now = el("span", "live-label");
   const clock = el("span", "think-clock", "0:00");
-  const head = el("div", "think-head"); head.append(el("p", "text sm", t("thinking")), clock);
-  const c = card("you", head, list, el("p", "small", t("thinking_hint")));
-  const steps = stageList().map(id => {
-    const li = el("li", "think-step");
-    const dot = el("span", "think-dot"); dot.setAttribute("aria-hidden", "true");
-    const body = el("div", "think-body");
-    const label = el("span", "think-label", t("ts_" + id + (id === "judging" ? "_" + (MODELS[S.room.model] ? S.room.model : "standard") : "")));
-    const sub = el("span", "think-sub");
-    body.append(label, sub); li.append(dot, body); list.append(li);
-    return { id, li, sub };
-  });
+  const line = el("div", "live-line"); line.append(spark, now, clock);
+  const sub = el("p", "live-sub"); sub.setAttribute("aria-live", "polite");
+  const bar = el("div", "live-bar"); bar.setAttribute("aria-hidden", "true");
+  const done = el("ul", "live-done");
+  const ids = stageList();
+  ids.forEach(() => bar.append(el("i")));
+  const c = card("you", el("p", "eyebrow-sm", t("thinking")), line, sub, bar, done, el("p", "small", t("thinking_hint")));
   show(questionCard(), c);
-  if (think) { clearInterval(think.tick); clearInterval(think.rot); }
-  think = { steps, clock, started: think?.started || Date.now(), current: null, subIdx: 0 };
+  if (think) { clearInterval(think.tick); clearInterval(think.rot); clearInterval(think.type); }
+  think = { ids, now, sub, bar, done, clock, started: think?.started || Date.now(), current: null, subIdx: 0, steps: [{ li: line }] };
   think.tick = setInterval(() => { const s2 = Math.floor((Date.now() - think.started) / 1000); clock.textContent = Math.floor(s2 / 60) + ":" + String(s2 % 60).padStart(2, "0"); if (!S.room.decide_stage) thinkingUpdate(); }, 1000);
-  think.rot = setInterval(() => rotateSub(), 2600);
+  think.rot = setInterval(() => rotateSub(), 3200);
   thinkingUpdate();
 }
+const stageLabel = id => t("ts_" + id + (id === "judging" ? "_" + (MODELS[S.room.model] ? S.room.model : "standard") : ""));
 function thinkingUpdate() {
-  if (!think || !think.steps[0].li.isConnected) return;
-  const ids = think.steps.map(x => x.id);
+  if (!think || !think.now.isConnected) return;
+  const ids = think.ids;
   let cur = S.room.decide_stage;
   if (!cur || !ids.includes(cur)) {   // estimate from the clock when the server hasn't said yet
     const el2 = (Date.now() - think.started) / 1000;
     cur = ids.filter(id => STAGE_EST[id] <= el2).pop() || ids[0];
   }
   const at = ids.indexOf(cur);
-  think.steps.forEach((x, i) => {
-    x.li.className = "think-step " + (i < at ? "done" : i === at ? "now" : "later");
-    x.li.setAttribute("aria-current", i === at ? "step" : "false");
-  });
-  if (think.current !== cur) { think.current = cur; think.subIdx = 0; rotateSub(true); }
+  [...think.bar.children].forEach((x, i) => { x.className = i < at ? "done" : i === at ? "now" : ""; });
+  if (think.current === cur) return;
+  think.current = cur;
+  think.now.classList.remove("in"); void think.now.offsetWidth;
+  think.now.textContent = stageLabel(cur); think.now.classList.add("in");
+  // finished stages, newest last
+  think.done.replaceChildren(...ids.slice(0, at).map(id => { const li = el("li", null, stageLabel(id)); return li; }));
+  if (think.done.lastChild) think.done.lastChild.classList.add("in");
+  think.subIdx = 0; rotateSub(true);
 }
-// The line under the current step changes every few seconds, like a running commentary.
+// The commentary under the live line types itself out, then changes every few seconds.
 function rotateSub(reset) {
   if (!think || !think.current) return;
-  const x = think.steps.find(y => y.id === think.current); if (!x) return;
   const lines = t("tsub_" + think.current);
   const list2 = Array.isArray(lines) ? lines : [lines];
+  if (!reset) think.subIdx++;
   const n = S.roster.filter(p => p.submitted).length;
   const text = String(list2[think.subIdx % list2.length]).replace("{n}", n);
-  if (!reset) think.subIdx++;
-  x.sub.classList.remove("in"); void x.sub.offsetWidth;
-  x.sub.textContent = text; x.sub.classList.add("in");
-  think.steps.forEach(y => { if (y !== x) y.sub.textContent = ""; });
+  clearInterval(think.type);
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) { think.sub.textContent = text; return; }
+  let k = 0; think.sub.textContent = "";
+  think.type = setInterval(() => { k += 2; think.sub.textContent = text.slice(0, k); if (k >= text.length) clearInterval(think.type); }, 28);
 }
 
 /* ---------- Verdict ---------- */
@@ -1146,8 +1152,8 @@ function render() {
     if (!S.mine && S.role === "member") return startInput();   // members go straight to their answers
     vWaiting(); return poll();
   }
-  if (!S.analysis) { if (think && think.steps[0].li.isConnected) thinkingUpdate(); else vThinking(); return poll(); }
-  if (think) { clearInterval(think.tick); clearInterval(think.rot); think = null; }
+  if (!S.analysis) { if (think && think.now.isConnected) thinkingUpdate(); else vThinking(); return poll(); }
+  if (think) { clearInterval(think.tick); clearInterval(think.rot); clearInterval(think.type); think = null; }
   vVerdict();
   if (st === "deciding") poll();
 }

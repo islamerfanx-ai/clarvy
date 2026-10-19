@@ -370,26 +370,28 @@ ul.plan{display:flex;flex-direction:column;gap:12px}
 .plan-item .range-top{align-items:flex-start;gap:12px}
 .plan-item .range-top .tag{flex:none;align-self:flex-start;white-space:nowrap}
 
-/* The room thinking, stage by stage */
-.think-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+/* The room thinking: one live line, typed commentary, finished stages, a segmented bar */
+.eyebrow-sm{margin:0;font-size:13px;color:var(--dim)}
+.live-line{display:flex;align-items:center;gap:12px}
+.spark{color:var(--accent);display:grid;place-items:center;flex:none;animation:sparkTurn 3.2s cubic-bezier(.6,0,.4,1) infinite}
+.spark rect{transform-box:fill-box;transform-origin:center;animation:sparkRay 1.6s ease-in-out infinite}
+.spark g:nth-child(2) rect{animation-delay:.2s}.spark g:nth-child(3) rect{animation-delay:.4s}.spark g:nth-child(4) rect{animation-delay:.6s}
+.live-label{flex:1;min-width:0;font-size:var(--t-h5);line-height:1.3;background:linear-gradient(90deg,var(--fg) 0%,var(--fg) 38%,var(--accent) 50%,var(--fg) 62%,var(--fg) 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:thinkShine 2.6s linear infinite}
+.live-label.in{animation:thinkShine 2.6s linear infinite,thinkIn .5s ease both}
 .think-clock{font:400 13px/1 "Martian Mono",ui-monospace,monospace;color:var(--dim);font-variant-numeric:tabular-nums}
-ol.think-steps{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column}
-.think-step{display:grid;grid-template-columns:22px minmax(0,1fr);gap:12px;padding:10px 0;position:relative}
-.think-step:not(:last-child)::before{content:"";position:absolute;inset-inline-start:10px;top:30px;bottom:-6px;width:2px;background:var(--line)}
-.think-step.done:not(:last-child)::before{background:var(--accent)}
-.think-dot{width:22px;height:22px;border-radius:50%;border:2px solid var(--line);background:var(--card);display:grid;place-items:center;position:relative;z-index:1;transition:background .3s,border-color .3s}
-.think-step.done .think-dot{background:var(--accent);border-color:var(--accent)}
-.think-step.done .think-dot::after{content:"";width:6px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
-.think-step.now .think-dot{border-color:var(--accent)}
-.think-step.now .think-dot::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--accent);animation:thinkPulse 1.2s ease-in-out infinite}
-.think-body{display:flex;flex-direction:column;gap:3px;min-width:0}
-.think-label{font-size:16px;line-height:1.35;transition:color .3s}
-.think-step.later .think-label{color:var(--faint)}
-.think-step.done .think-label{color:var(--dim)}
-.think-step.now .think-label{color:var(--fg);background:linear-gradient(90deg,var(--fg) 0%,var(--fg) 40%,var(--dim) 50%,var(--fg) 60%,var(--fg) 100%);background-size:220% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:thinkShine 2.4s linear infinite}
-.think-sub{font-size:13px;color:var(--dim);min-height:1.2em}
-.think-sub.in{animation:thinkIn .45s ease both}
-@keyframes thinkPulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+.live-sub{margin:0;min-height:1.5em;font-size:14px;color:var(--dim);padding-inline-start:34px}
+.live-sub::after{content:"";display:inline-block;width:7px;height:1em;margin-inline-start:2px;vertical-align:-2px;background:var(--accent);opacity:.55;animation:blink 1s steps(1) infinite}
+.live-bar{display:flex;gap:4px;margin:4px 0 2px}
+.live-bar i{flex:1;height:4px;border-radius:4px;background:var(--line);overflow:hidden;position:relative}
+.live-bar i.done{background:var(--accent)}
+.live-bar i.now::after{content:"";position:absolute;inset:0;width:40%;border-radius:4px;background:var(--accent);animation:barRun 1.4s ease-in-out infinite}
+ul.live-done{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+ul.live-done li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--dim)}
+ul.live-done li::before{content:"";width:14px;height:14px;flex:none;border-radius:50%;background:var(--accent) no-repeat center/9px 9px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M1.5 5.2l2.2 2.2L8.5 2.6' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+ul.live-done li.in{animation:thinkIn .45s ease both}
+@keyframes sparkTurn{0%{transform:rotate(0)}50%{transform:rotate(180deg) scale(.86)}100%{transform:rotate(360deg)}}
+@keyframes sparkRay{0%,100%{transform:scaleY(1)}50%{transform:scaleY(.45)}}
 @keyframes thinkShine{from{background-position:120% 0}to{background-position:-120% 0}}
 @keyframes thinkIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.think-step.now .think-dot::after,.think-step.now .think-label,.think-sub.in{animation:none}.think-step.now .think-label{-webkit-text-fill-color:currentColor;background:none}}
+@keyframes barRun{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
+@media (prefers-reduced-motion:reduce){.spark,.spark rect,.live-bar i.now::after,.live-sub::after,ul.live-done li.in,.live-label,.live-label.in{animation:none}.live-label{-webkit-text-fill-color:currentColor;background:none}.live-bar i.now{background:var(--accent);opacity:.5}}
