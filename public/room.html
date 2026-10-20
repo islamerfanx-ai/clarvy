@@ -46,12 +46,12 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode,decide_stage").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode,decide_stage,decide_by").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
       sb.from("memberships").select("role,role_id").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
-      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links,role_answer,role_files").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
+      sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links,role_answer,role_files,comments").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.rpc("room_roster", { rid: roomId }),
       sb.from("analyses").select("frame,outcomes,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
@@ -80,6 +80,10 @@ const live = {
   // The owner's invite links: one per role (or one for everyone), each made fresh if it expired.
   async invites(room) {
     const sb = Rooms.sb;
+    // Rooms with personal invites list each person (joined or not); older rooms keep their role links.
+    const { data: people } = await sb.from("invites").select("token,role_id,max_uses,uses,person_name,person_contact,joined_by,expires_at")
+      .eq("room_id", roomId).eq("revoked", false).not("person_name", "is", null).order("created_at");
+    if (people?.length) return people;
     const { data } = await sb.from("invites").select("token,role_id,max_uses,uses").eq("room_id", roomId).eq("revoked", false)
       .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false });
     const roles = Array.isArray(room.roles) ? room.roles : [];
@@ -94,6 +98,19 @@ const live = {
       if (inv) out.push(inv);
     }
     return out;
+  },
+  // The owner adds someone from the room, until the call is made.
+  async addPerson(name, contact, roleId) {
+    const { data, error } = await Rooms.sb.from("invites").insert({ room_id: roomId, created_by: Rooms.user.id, person_name: name, person_contact: contact || null, role_id: roleId || null, max_uses: 1 })
+      .select("token,role_id,max_uses,uses,person_name,person_contact,joined_by,expires_at").single();
+    if (error) throw error;
+    Rooms.sb.from("contacts").upsert({ owner_id: Rooms.user.id, name, contact: contact || "", role_title: (S.room.roles || []).find(r => r.id === roleId)?.title || null, used_at: new Date().toISOString() }, { onConflict: "owner_id,name,contact" }).then(() => {});
+    return data;
+  },
+  async setRoom(patch) {
+    const { error } = await Rooms.sb.from("rooms").update(patch).eq("id", roomId);
+    if (error) throw error;
+    Object.assign(S.room, patch);
   },
   async join(name, email, consent) {
     await Rooms.trialSignIn(name, email);
@@ -171,7 +188,7 @@ function demoStore(kind) {
   room.model = params.get("model") || "wrap";
   room.rapid = params.get("rapid") === "1";
   room.links = [{ url: "https://www.example.org/jeddah-retail-report" }];
-  const withRoles = params.get("roles") === "1";
+  const withRoles = params.get("roles") === "1", withPeople = params.get("people") === "1";
   room.roles = withRoles ? [
     { id: "r1", title: "CFO", max: 1, ask: "Please add the fit-out cost, the cash runway after it, and what a 6-month delay would save.", rapid: room.rapid ? "approver" : null },
     { id: "r2", title: "Director", max: null, ask: "", rapid: null }] : [];
@@ -184,6 +201,11 @@ function demoStore(kind) {
     { name: "Omar", input: { weights: { c1: 45, c2: 15, c3: 15, c4: 25 }, risk_appetite: "bold", gut_pick: "o1", concern: "A competitor could take the best Jeddah site first." } }
   ];
   const roles = { Sara: owner ? null : null, Omar: room.rapid ? "approver" : null };
+  room.decide_by = params.get("late") ? "2026-10-01" : "2026-10-27";
+  const people = [
+    { token: "demo-1", role_id: withRoles ? "r1" : null, max_uses: 1, uses: 1, person_name: "Sara Haddad", person_contact: "sara@example.com", joined_by: "sara" },
+    { token: "demo-2", role_id: withRoles ? "r2" : null, max_uses: 1, uses: 1, person_name: "Omar Nasser", person_contact: "+971 50 555 0101", joined_by: "omar" },
+    { token: "demo-3", role_id: withRoles ? "r2" : null, max_uses: 1, uses: 0, person_name: "Kenji Watanabe", person_contact: "kenji@example.com", joined_by: null }];
   const objections = room.rapid ? [{ id: "x1", user_id: "omar", reason: "Legal hasn't cleared the lease terms yet.", status: "open", override_reason: null }] : [];
   const roster = () => [
     ...(role ? [{ user_id: "me", name: myName, role, rapid_role: null, submitted: !!mine, me: true, role_title: withRoles && !owner ? "CFO" : null }] : []),
@@ -191,10 +213,11 @@ function demoStore(kind) {
     { user_id: "omar", name: "Omar", role: "member", rapid_role: roles.Omar, submitted: owner, me: false, role_title: withRoles ? "Director" : null }
   ];
   return {
-    async preview() { return { room_id: "demo", type: room.type, question: room.question, language: room.language, owner_name: "Sara", named_views: false, role: "member", usable: true, role_title: withRoles ? "CFO" : null, role_ask: withRoles ? room.roles[0].ask : null, is_full: false }; },
+    async preview() { return { room_id: "demo", type: room.type, question: room.question, language: room.language, owner_name: "Sara", named_views: false, role: "member", usable: true, role_title: withRoles ? "CFO" : null, role_ask: withRoles ? room.roles[0].ask : null, is_full: false,
+      person_name: withPeople ? "Kenji Watanabe" : null, person_contact: withPeople ? "kenji@example.com" : null }; },
     async load() {
       const counts = signoff ? { agree: 1, [signoff.stance]: (signoff.stance === "agree" ? 2 : 1) } : { agree: 1 };
-      const invites = !owner ? null : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
+      const invites = !owner ? null : withPeople ? people : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
       room.report_mode = "both";
       return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined };
     },
@@ -208,6 +231,8 @@ function demoStore(kind) {
     async stopReport() { this.reportToken = null; },
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
+    async addPerson(name, contact, roleId) { const x = { token: "demo-" + (people.length + 1), role_id: roleId || null, max_uses: 1, uses: 0, person_name: name, person_contact: contact || null, joined_by: null }; people.push(x); return x; },
+    async setRoom(patch) { Object.assign(room, patch); },
     plan: [],
     async addPlan(items) { items.forEach((x, i) => this.plan.push({ id: "p" + (this.plan.length + 1), status: "todo", note: "", position: i, ...x })); },
     async updatePlan(id, patch) { Object.assign(this.plan.find(x => x.id === id) || {}, patch); },
@@ -304,7 +329,9 @@ const contentLang = node => { node.lang = S.room.language; node.dir = S.room.lan
 function questionCard() {
   const r = S.room;
   const q = contentLang(el("p", "text", r.question));
-  const c = card("active", meta(Rooms.typeName(r), r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : ""), q);
+  // While the room is open it shows the decide-by date; once decided, the review date.
+  const when = ["decided", "reviewed"].includes(r.status) ? (r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : "") : r.decide_by ? t("decide_by_on", { date: Rooms.fmtDate(r.decide_by) }) : "";
+  const c = card("active", meta(Rooms.typeName(r), when), q);
   const links = (Array.isArray(r.links) ? r.links : []).map(l => l?.url).filter(Boolean);
   if (r.context || S.files?.length || links.length) {
     const more = el("details", "more");
@@ -326,16 +353,17 @@ function questionCard() {
 async function vJoin() {
   const p = await store.preview();
   if (!p) return notice(t("invite_not_found"));
-  if (p.is_full) return notice(t("role_full"));
-  if (!p.usable) return notice(t("invite_expired"));
   if (p.room_id && Rooms.user && !demo) {
-    // Already in this room? Go straight there.
+    // Already in this room? Go straight there, even from a personal link that is now used.
     const { data } = await Rooms.sb.from("memberships").select("role").eq("room_id", p.room_id).eq("user_id", Rooms.user.id).maybeSingle();
     if (data) { roomId = p.room_id; history.replaceState(null, "", "?room=" + roomId); return refresh(); }
   }
+  if (p.is_full) return notice(t(p.person_name ? "invite_used" : "role_full"));
+  if (!p.usable) return notice(t("invite_expired"));
   const q = el("p", "text", p.question); q.lang = p.language; q.dir = p.language === "ar" ? "rtl" : "ltr";
-  const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), Rooms.typeName(p)), q,
-    el("p", "small", t("join_hint")));
+  const first = p.person_name ? p.person_name.trim().split(/\s+/)[0] : "";
+  const top = card("active", meta(p.owner_name ? t("join_from", { name: p.owner_name }) : t("join_anon"), Rooms.typeName(p)),
+    ...(first ? [el("p", "text sm hi", t("join_hi", { name: first }))] : []), q, el("p", "small", t("join_hint")));
   if (p.role_title) {
     const as = el("p", "body", t("join_as", { role: p.role_title })); as.style.marginTop = "10px";
     top.append(as);
@@ -343,15 +371,17 @@ async function vJoin() {
   const f = el("form", "stack-sm"); f.noValidate = true;
   const prof = Rooms.user && !demo ? await Rooms.profile() : null;
   const field = (id, label, input) => { const l = el("label", "lbl", label); l.htmlFor = id; input.id = id; f.append(l, input); };
-  const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "given-name", maxLength: 60, placeholder: t("name_ph"), value: prof?.name || "" });
-  const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, placeholder: t("email_ph"), value: prof?.email || "" });
+  // A personal link fills in what the owner already knows; the person can still change it.
+  const invEmail = Rooms.validEmail(p.person_contact) ? p.person_contact.trim() : "";
+  const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "given-name", maxLength: 60, placeholder: t("name_ph"), value: prof?.name || p.person_name || "" });
+  const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, placeholder: t("email_ph"), value: prof?.email || invEmail });
   field("jName", t("name_lbl"), nameIn);
   field("jEmail", t("email_lbl"), emailIn);
   f.append(el("p", "small", t("email_why")));
   const consent = el("input"); consent.type = "checkbox";
   if (p.named_views) { const c = el("label", "check"); c.append(consent, el("span", null, t("join_consent"))); f.append(c); }
   if (p.role === "observer") f.append(el("p", "small", t("join_observer")));
-  const go = el("button", "btn", t("join_start")); go.type = "submit";
+  const go = el("button", "btn", t(first && nameIn.value && emailIn.value ? "join_start_ready" : "join_start")); go.type = "submit";
   const st = el("p", "status"); st.setAttribute("role", "status");
   f.append(go, Rooms.agreeNote(), st);
   f.onsubmit = async e => {
@@ -367,12 +397,12 @@ async function vJoin() {
       inputStep = 0;
       await refresh();
     } catch (err) {
-      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "busy"])));
+      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "invite_used", "busy"])));
       go.disabled = false;
     }
   };
   show(top, card("you", f));
-  (nameIn.value ? emailIn : nameIn).focus();
+  if (!nameIn.value) nameIn.focus(); else if (!emailIn.value) emailIn.focus(); else go.focus();
 }
 
 /* ---------- No session in this browser (trial accounts live in the browser that joined) ---------- */
@@ -385,7 +415,7 @@ function startInput() {
   draft = {
     ratings: Object.fromEntries(ids.map(id => [id, m?.ratings?.[id] ?? 3])),
     risk: m?.risk_appetite || null, gut: m?.gut_pick || null, concern: m?.concern || "", links: [...(m?.links || [])],
-    roleAnswer: m?.role_answer || "", roleFiles: [...(m?.role_files || [])]
+    roleAnswer: m?.role_answer || "", roleFiles: [...(m?.role_files || [])], comments: { ...(m?.comments || {}) }
   };
   inputStep = 1;
   render();
@@ -421,7 +451,14 @@ function vInput() {
         return b;
       }));
       draw();
-      r.append(nm, sc);
+      // An optional comment, folded until opened; read pooled and unnamed.
+      const cm = el("details", "more rate-note");
+      cm.open = !!draft.comments[c.id];
+      const ci = el("input", "line"); Object.assign(ci, { maxLength: 300, value: draft.comments[c.id] || "", placeholder: t("rate_note_ph"), autocomplete: "off" });
+      ci.setAttribute("aria-label", c.label + " · " + t("rate_note"));
+      ci.oninput = () => { draft.comments[c.id] = ci.value; };
+      cm.append(el("summary", null, t("rate_note")), ci);
+      r.append(nm, sc, cm);
       list.append(r);
     });
     f.append(el("h1", "step-title", t("in_rate_title")), note, list);
@@ -483,7 +520,8 @@ function vInput() {
     next.disabled = true; next.textContent = t("sending");
     const ids = S.room.criteria.map(c => c.id);
     try {
-      const input = { ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim(), links: draft.links.filter(Rooms.validUrl).slice(0, 3) };
+      const comments = Object.fromEntries(Object.entries(draft.comments || {}).map(([k, v]) => [k, String(v).trim().slice(0, 300)]).filter(([k, v]) => v && ids.includes(k)));
+      const input = { ratings: draft.ratings, weights: Rooms.apportion(ids, draft.ratings, 100), risk_appetite: draft.risk, gut_pick: draft.gut, concern: draft.concern.trim(), links: draft.links.filter(Rooms.validUrl).slice(0, 3), comments };
       if (myAsk()) Object.assign(input, { role_answer: draft.roleAnswer.trim().slice(0, 4000), role_files: draft.roleFiles.slice(0, 3) });
       await store.save(input);
       inputStep = 0; draft = null;
@@ -546,6 +584,8 @@ function vWaiting() {
   }
   if (params.get("files") === "failed") main.append(el("p", "status err", t("files_failed")));
   const cards = [questionCard()];
+  const late = owner && r.status === "open" && r.decide_by && r.decide_by < new Date().toISOString().slice(0, 10) && done < Math.max(r.quorum, answering.length);
+  if (late) cards.push(card("attention", el("p", "lbl", t("na_title")), el("p", "body", t("na_late", { date: Rooms.fmtDate(r.decide_by), n: answering.length - done }))));
   if (r.rapid && (S.objections || []).length) cards.push(objectionsCard());
   cards.push(main);
   if (r.rapid && S.roster.find(p => p.me)?.rapid_role === "approver" && r.status === "open") cards.push(approverCard());
@@ -628,7 +668,67 @@ function approverCard() {
   c.append(tl, target, ta, go, st);
   return c;
 }
+// People invited one by one: who has joined, who has answered, a one-tap send for each, and a form to add
+// someone until the call is made.
+function peopleCard() {
+  const me = S.roster.find(p => p.me)?.name, q = S.room.question, open = S.room.status === "open";
+  const roles = Array.isArray(S.room.roles) ? S.room.roles : [];
+  const c = card("you", el("p", "text sm", t("people_title")), el("p", "small", t("people_hint")));
+  const list = el("ul", "roster");
+  S.invites.forEach(inv => {
+    const li = el("li", "person-row");
+    const who = el("span", "who", inv.person_name);
+    const role = roles.find(r => r.id === inv.role_id);
+    if (role) who.append(el("span", "tag title", role.title));
+    const member = inv.joined_by ? S.roster.find(p => p.user_id === inv.joined_by) : null;
+    const state = member ? (member.submitted ? "answered" : "joined") : "invited";
+    const right = el("span", "st" + (state === "answered" ? " done" : ""), t("ps_" + state));
+    li.append(who, right);
+    if (!member && open) {
+      const link = `${location.origin}/room.html?join=${encodeURIComponent(inv.token)}`;
+      const first = inv.person_name.split(" ")[0];
+      const msg = t(inv.uses ? "reminder_msg" : "invite_msg_person", { person: first, name: me || t("someone"), question: q, link });
+      const L = Rooms.personLinks(inv.person_contact || "", msg, t("invite_subject", { question: q }));
+      const share = el("div", "share person-share");
+      const wa = el("a", "linkbtn", t("whatsapp")); wa.href = L.whatsapp; wa.target = "_blank"; wa.rel = "noopener";
+      const em = el("a", "linkbtn", t("email_btn")); em.href = L.email;
+      const cp = el("button", "linkbtn", t("copy")); cp.type = "button";
+      cp.onclick = async () => { await Rooms.copyText(link); cp.textContent = t("copied"); setTimeout(() => { cp.textContent = t("copy"); }, 1600); };
+      share.append(wa, em, cp);
+      li.append(share);
+    } else if (member && !member.submitted && open) {
+      const link = `${location.origin}/room.html?room=${encodeURIComponent(roomId)}`;
+      const L = Rooms.personLinks(inv.person_contact || "", t("reminder_msg", { question: q, link }), t("invite_subject", { question: q }));
+      const nudge = el("a", "linkbtn", t("nudge")); nudge.href = L.phone || !L.mail ? L.whatsapp : L.email; nudge.target = "_blank"; nudge.rel = "noopener";
+      li.append(nudge);
+    }
+    list.append(li);
+  });
+  c.append(list);
+  if (open) {
+    const more = el("details", "more");
+    more.append(el("summary", null, t("person_add_later")));
+    const nm = el("input", "line"); Object.assign(nm, { maxLength: 80, placeholder: t("person_name_ph") }); nm.setAttribute("aria-label", t("person_name"));
+    const ct = el("input", "line"); Object.assign(ct, { maxLength: 120, placeholder: t("person_contact_ph") }); ct.setAttribute("aria-label", t("person_contact"));
+    const rs = el("select", "line role-select"); rs.setAttribute("aria-label", t("person_role"));
+    [["", t("no_role")], ...roles.map(r => [r.id, r.title])].forEach(([v, txt]) => { const o = el("option", null, txt); o.value = v; rs.append(o); });
+    const st = el("p", "status err");
+    const go = btn(t("person_add"), "soft", async () => {
+      const name = nm.value.trim(), contact = ct.value.trim();
+      if (!name) { nm.focus(); return say(st, t("need_person_name")); }
+      if (contact && !Rooms.validEmail(contact) && !Rooms.phoneDigits(contact)) { ct.focus(); return say(st, t("need_contact")); }
+      go.disabled = true;
+      try { await store.addPerson(name, contact, rs.value || null); await refresh(); }
+      catch (e) { go.disabled = false; say(st, t(Rooms.errKey(e, []))); }
+    });
+    const r2 = el("div", "add-row"); r2.append(ct, ...(roles.length ? [rs] : []));
+    more.append(nm, r2, go, st);
+    c.append(more);
+  }
+  return c;
+}
 function shareCard(withNudge) {
+  if (S.invites[0]?.person_name) return peopleCard();
   const me = S.roster.find(p => p.me)?.name;
   const q = S.room.question;
   const roles = Array.isArray(S.room.roles) ? S.room.roles : [];
@@ -994,6 +1094,7 @@ function planCard() {
   if (!plan.length) {
     if (owner) {
       const go = btn(t("plan_draft"), "", async () => { go.disabled = true; try { await store.addPlan(draftPlan()); await refresh(); } catch { go.disabled = false; say(st, t("err_generic")); } });
+      c.append(el("p", "small", t("review_after_plan")));
       c.append(go, st);
     } else c.append(el("p", "body", t("plan_none")));
     return c;
@@ -1045,6 +1146,24 @@ function planCard() {
     add.append(el("p", "lbl", t("plan_add_title")), tIn, r2, go);
     c.append(add);
   }
+  if (owner) {
+    // When to check how it went: asked here, after the decision, next to the plan.
+    const rv = el("input", "line"); Object.assign(rv, { type: "date", value: S.room.review_date || "", min: new Date().toISOString().slice(0, 10) });
+    rv.id = "reviewDate";
+    rv.onchange = async () => {
+      if (!rv.value) return;
+      rv.disabled = true;
+      try {
+        await store.setRoom({ review_date: rv.value });
+        const rev = plan.find(x => x.kind === "review");
+        if (rev) await store.updatePlan(rev.id, { due_date: rv.value });
+        await refresh();
+      } catch { rv.disabled = false; say(st, t("err_generic")); }
+    };
+    const rf = el("div", "field"); const rl = el("label", "lbl", t("review_lbl")); rl.htmlFor = "reviewDate";
+    rf.append(rl, el("p", "small", t("review_hint")), rv);
+    c.append(rf);
+  }
   c.append(el("p", "small", t("plan_reminders_note")), st);
   return c;
 }
@@ -1081,6 +1200,13 @@ function reportCard() {
     c.append(a); return c;
   }
   c.append(el("p", "small", t("rep_hint")));
+  // Which reports the team gets, chosen when the report is made.
+  const repSel = el("select", "line role-select"); repSel.id = "reportMode"; repSel.style.width = "100%";
+  [["both", "rm_both"], ["team", "rm_team"], ["personal", "rm_personal"]].forEach(([v, k]) => { const o = el("option", null, t(k)); o.value = v; if ((S.room.report_mode || "both") === v) o.selected = true; repSel.append(o); });
+  repSel.onchange = async () => { repSel.disabled = true; try { await store.setRoom({ report_mode: repSel.value }); await refresh(); } catch { repSel.disabled = false; } };
+  const repL = el("label", "lbl", t("rm_lbl")); repL.htmlFor = "reportMode";
+  const repF = el("div", "field"); repF.append(repL, repSel);
+  c.append(repF);
   const body = el("div", "stack-sm"); c.append(body);
   const st = el("p", "status err");
   const draw = token => {

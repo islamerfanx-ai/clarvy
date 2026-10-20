@@ -35,12 +35,14 @@ const TYPES = ["business", "finance", "politics", "custom"];
 const ORGS = ["corporation", "government", "international", "club", "custom"];
 const PEOPLE = ["", 1, 2, 3, 4, 5, 10, 20, 50];
 const MAX_FILES = 8, MAX_FILE_BYTES = 20 * 1024 * 1024, MAX_TEXT = 50000;
-const DRAFT_KEY = "dr-new-room-2";
+const DRAFT_KEY = "dr-new-room-3", ORG_KEY = "dr-last-org";
 
 // The draft survives a reload, so nothing typed is lost.
-let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", review: "", named: false, orgType: null, orgLabel: "", roles: [], extra: [], sugFor: "", overrideRule: "owner", overrideRoleId: null, strict: false };
+let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", named: false, orgType: null, orgLabel: "", roles: [], people: [], extra: [], sugFor: "", overrideRule: "owner", overrideRoleId: null, strict: false, decideBy: "",
+          qRes: null, qKeys: [], qOrig: "", optsDraft: null, critsDraft: null, brief: null, briefFor: "", briefErr: "", briefPicked: [] };
 let files = [];   // files can't be saved in the draft; they live only in this page
-let ids = [];     // the steps for this person: "you" first if we don't know them yet
+let ids = [];     // the steps, by name
+let known = false; // a returning owner: their name and email are filled in, they just confirm
 const save = () => { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {} };
 const template = tp => t("tmpl_" + tp).map(label => ({ label, on: true }));
 const category = () => d.type === "custom" ? `custom: ${d.typeLabel.trim()}` : d.type;
@@ -76,17 +78,30 @@ function field(id, label, input, hint) {
   f.append(l, input); if (hint) f.append(el("p", "small", hint)); return f;
 }
 
-/* ---------- First (once): your name and email ---------- */
+/* ---------- First: you and your organisation (shown for every new room) ---------- */
 function stepYou() {
   const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "name", maxLength: 80, value: d.name });
   nameIn.oninput = () => { d.name = nameIn.value; save(); };
   const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, value: d.email, placeholder: t("email_ph") });
   emailIn.oninput = () => { d.email = emailIn.value; save(); };
-  setTimeout(() => (d.name ? emailIn : nameIn).focus(), 50);
-  return form([...head(t("nr_you_title"), t("nr_you_hint")), field("ownerName", t("your_name"), nameIn),
-    field("ownerEmail", t("email_lbl"), emailIn, t("email_why")), actions(), Rooms.agreeNote()], async () => {
+  const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
+  const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
+  orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); };
+  const orgF = field("orgLabel", t("org_custom_lbl"), orgIn);
+  const drawOrgs = () => {
+    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawOrgs(); if (o === "custom") orgIn.focus(); })));
+    orgF.hidden = d.orgType !== "custom";
+  };
+  drawOrgs();
+  const orgField = el("div", "field org-pick"); orgField.append(el("span", "lbl", t("org_lbl")), el("p", "small", t("org_why")), orgs, orgF);
+  setTimeout(() => { if (!d.name) nameIn.focus(); else if (!d.email) emailIn.focus(); }, 50);
+  return form([...head(t(known ? "nr_you_title_back" : "nr_you_title"), t(known ? "nr_you_hint_back" : "nr_you_hint")),
+    field("ownerName", t("your_name"), nameIn), field("ownerEmail", t("email_lbl"), emailIn, t("email_why")), orgField, actions(), Rooms.agreeNote()], async () => {
     if (!d.name.trim()) { nameIn.focus(); return fail(t("need_name")); }
     if (!Rooms.validEmail(d.email)) { emailIn.focus(); return fail(t("need_email")); }
+    if (!d.orgType) return fail(t("need_org"));
+    if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
+    try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
     if (!demo) {
       try { await Rooms.trialSignIn(d.name.trim(), d.email.trim()); }
       catch (err) { console.error(err); return fail(t(err.message === "busy" ? "busy" : "err_generic")); }
@@ -96,10 +111,39 @@ function stepYou() {
 }
 
 /* ---------- The question and its category ---------- */
+// Pressing Next checks the question once: grammar fixed (with Undo on the next page), three rephrasings,
+// and a first draft of the options and what to weigh. The world brief starts at the same moment.
+async function checkQuestion() {
+  const q = d.question.trim();
+  if (d.qRes && (d.qKeys || []).includes(q)) return d.qRes;
+  const r = demo ? demoCheck(q) : await Rooms.post("/api/rooms/question", { question: q, type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, draft: true, lang: Rooms.lang });
+  d.qRes = r; d.qKeys = [q, String(r.corrected || "").trim()]; save();
+  return r;
+}
+function demoCheck(q) {
+  const ar = Rooms.lang === "ar";
+  return {
+    corrected: q.replace(/\s+/g, " ").replace(/^./, c => c.toUpperCase()).replace(/[?؟.]?$/, ar ? "؟" : "?"), changed: true, issues: [t("q_demo_issue")],
+    options: [{ text: q, why: t("q_demo_why") }],
+    alternatives: ar ? ["نبدأ الآن", "تجربة لستة أشهر أولًا", "شراكة مع جهة محلية", "ننتظر حتى العام المقبل"] : ["Go ahead now", "Run a 6-month pilot first", "Partner with a local firm", "Wait until next year"],
+    criteria: template(d.type).map(c => c.label)
+  };
+}
+function applyCheck(r) {
+  if (!r) return;
+  if (r.changed && r.corrected && r.corrected.trim() !== d.question.trim()) { d.qOrig = d.question; d.question = r.corrected.trim(); }
+  // Fill the next page, unless the owner already wrote their own options or list.
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if ((r.alternatives || []).length >= 2 && (d.options.every(o => !o.trim()) || same(d.options, d.optsDraft))) { d.options = r.alternatives.slice(0, 6); d.optsDraft = [...d.options]; }
+  if ((r.criteria || []).length >= 2 && (!d.crits || same(d.crits, d.critsDraft) || same(d.crits, template(d.type)))) {
+    d.crits = r.criteria.slice(0, 8).map(label => ({ label, on: true })); d.critsDraft = structuredClone(d.crits);
+  }
+  save();
+}
 function stepQuestion() {
   const ta = el("textarea"); Object.assign(ta, { id: "question", rows: 3, maxLength: 300, placeholder: t("question_ph"), value: d.question });
   ta.setAttribute("aria-label", t("nr_q_title"));
-  ta.oninput = () => { d.question = ta.value; save(); };
+  ta.oninput = () => { d.question = ta.value; d.qOrig = ""; save(); };
   const types = el("div", "chips"); types.setAttribute("role", "group");
   const customIn = el("input", "line"); Object.assign(customIn, { maxLength: 40, value: d.typeLabel, placeholder: t("custom_ph") });
   customIn.oninput = () => { d.typeLabel = customIn.value; save(); };
@@ -114,16 +158,25 @@ function stepQuestion() {
   };
   drawTypes();
   const typeField = el("div", "field"); typeField.append(el("span", "lbl", t("nr_type_lbl")), types);
-  // Check my question: grammar fixed, what could mislead the group, and three rephrasings to pick from.
+  // Starter questions for this kind of organisation, one tap to use.
+  const starters = el("details", "more starters");
+  starters.open = !d.question.trim();
+  const stList = el("div", "choices");
+  (t("starters_" + (d.orgType || "custom")) || []).forEach(text => stList.append(Rooms.choice(text, null, false, () => {
+    d.question = text; d.qOrig = ""; ta.value = text; save(); starters.open = false; ta.focus();
+  })));
+  starters.append(el("summary", null, t("starters_lbl")), stList);
+  // Check my question: the same check Next runs, shown here first.
   const check = el("button", "linkbtn", t("q_check")); check.type = "button";
+  const checkF = el("div", "field"); checkF.append(check, el("p", "small", t("q_check_hint")));
   const checked = el("div", "stack-sm");
   check.onclick = async () => {
     if (!d.question.trim()) { ta.focus(); return fail(t("need_question")); }
     check.disabled = true; check.textContent = t("q_checking"); fail("");
     try {
-      const r = demo ? { corrected: d.question.trim().replace(/\s+/g, " ").replace(/^./, c => c.toUpperCase()).replace(/[?؟]?$/, "?"), changed: true, issues: [t("q_demo_issue")], options: [{ text: d.question.trim(), why: t("q_demo_why") }] } : await Rooms.post("/api/rooms/question", { question: d.question, type: d.type, type_label: d.typeLabel, lang: Rooms.lang });
+      const r = await checkQuestion();
       const pickers = el("div", "choices");
-      const use = text => { d.question = text; ta.value = text; save(); checked.replaceChildren(el("p", "small", t("q_used"))); };
+      const use = text => { d.question = text; d.qOrig = ""; ta.value = text; save(); checked.replaceChildren(el("p", "small", t("q_used"))); };
       if (r.changed) pickers.append(Rooms.choice(r.corrected, t("q_corrected"), false, () => use(r.corrected)));
       (r.options || []).forEach(o => pickers.append(Rooms.choice(o.text, o.why, false, () => use(o.text))));
       const nodes = [];
@@ -133,16 +186,55 @@ function stepQuestion() {
     } catch (e) { fail(t(e.message === "quota" ? "err_quota" : "q_check_fail")); }
     finally { check.disabled = false; check.textContent = t("q_check"); }
   };
-  setTimeout(() => ta.focus(), 50);
-  return form([...head(t("nr_q_title"), t("nr_q_hint")), ta, check, checked, typeField, customF, actions()], () => {
+  if (!d.question.trim()) setTimeout(() => ta.focus(), 50);
+  const f = form([...head(t("nr_q_title"), t("nr_q_hint")), ta, starters, checkF, checked, typeField, customF, actions()], async () => {
     if (!d.question.trim()) return fail(t("need_question"));
     if (d.type === "custom" && !d.typeLabel.trim()) { customIn.focus(); return fail(t("need_custom")); }
+    const nb = f.querySelector(".actions .btn:not(.ghost)"); nb.disabled = true; nb.textContent = t("q_preparing");
+    try { applyCheck(await checkQuestion()); } catch (e) { console.warn("question check:", e.message); }   // the owner can always go on without it
+    startBrief();
     next();
   });
+  return f;
 }
 
-/* ---------- The options ---------- */
+/* ---------- World brief, started in the background when the question is set ---------- */
+let briefRun = null, briefDraw = null;
+function startBrief() {
+  const key = d.question.trim();
+  if (!key || (d.briefFor === key && (d.brief || briefRun))) return;
+  d.briefFor = key; d.brief = null; d.briefErr = ""; d.briefPicked = []; save();
+  const run = briefRun = (demo
+    ? new Promise(res => setTimeout(() => res({ summary: t("brief_demo_summary"), as_of: new Date().toISOString().slice(0, 10), items: [{ text: t("brief_demo_item"), date: new Date().toISOString().slice(0, 7), source: "Example source", url: null }] }), 2500))
+    : Rooms.post("/api/rooms/brief", { question: key, options: d.options.filter(o => o.trim()), context: d.context, type: d.type, type_label: d.typeLabel, lang: Rooms.lang }))
+    .then(r => { if (d.briefFor === key) { d.brief = r; save(); } })
+    .catch(e => { if (d.briefFor === key) { d.briefErr = e.message === "quota" ? "err_quota" : "brief_fail"; save(); } })
+    .finally(() => { if (briefRun === run) briefRun = null; briefDraw?.(); });
+}
+
+/* ---------- The options and what to weigh, on one page ---------- */
 function stepOptions() {
+  if (!d.crits) { d.crits = template(d.type); save(); }
+  // The question as it now stands: corrected by the AI (with Undo), or other ways to ask it.
+  const qBox = el("div", "block qline");
+  const drawQ = () => {
+    const kids = [el("span", "lbl", t(d.qOrig ? "q_auto_lbl" : "q_your_lbl")), el("p", "body", d.question)];
+    if (d.qOrig) {
+      const undo = el("button", "linkbtn", t("q_undo")); undo.type = "button";
+      undo.onclick = () => { d.question = d.qOrig; d.qOrig = ""; save(); drawQ(); };
+      kids.push(undo);
+    }
+    const alts = (d.qRes?.options || []).filter(o => o.text.trim() !== d.question.trim());
+    if (alts.length) {
+      const more = el("details", "more"); more.append(el("summary", null, t("q_other_ways")));
+      const ch = el("div", "choices");
+      alts.forEach(o => ch.append(Rooms.choice(o.text, o.why, false, () => { if (!d.qOrig) d.qOrig = d.question; d.question = o.text; save(); drawQ(); })));
+      more.append(ch); kids.push(more);
+    }
+    qBox.replaceChildren(...kids);
+  };
+  drawQ();
+
   const list = el("div", "items");
   const add = el("button", "linkbtn", t("add_option")); add.type = "button";
   const draw = () => {
@@ -160,42 +252,40 @@ function stepOptions() {
   };
   add.onclick = () => { d.options.push(""); save(); draw(); list.lastChild.querySelector("input").focus(); };
   draw();
-  setTimeout(() => list.querySelector("input")?.focus(), 50);
-  return form([...head(t("nr_opts_title"), t("nr_opts_hint")), list, add, actions()], () => {
-    if (d.options.filter(o => o.trim()).length < 2) return fail(t("need_options"));
-    next();
-  });
-}
 
-/* ---------- What to weigh ---------- */
-function stepCriteria() {
-  if (!d.crits) { d.crits = template(d.type); save(); }
-  const list = el("div", "ticks");
-  const draw = () => list.replaceChildren(...d.crits.map(c => {
-    const b = el("button", "tick", c.label); b.type = "button"; b.setAttribute("aria-pressed", String(c.on));
-    b.onclick = () => { c.on = !c.on; save(); draw(); };
-    return b;
-  }));
-  draw();
-  const addIn = el("input", "line"); Object.assign(addIn, { maxLength: 80, placeholder: t("crit_add_ph") });
-  addIn.setAttribute("aria-label", t("crit_add_ph"));
-  const addBtn = el("button", "btn soft", t("add")); addBtn.type = "button";
-  const addOne = () => {
-    const v = addIn.value.trim(); if (!v || d.crits.length >= 8) return;
-    d.crits.push({ label: v, on: true }); addIn.value = ""; save(); draw();
+  // What to weigh: a list you edit in place.
+  const crits = el("div", "items");
+  const addC = el("button", "linkbtn", t("crit_add")); addC.type = "button";
+  const drawC = () => {
+    d.crits = d.crits.filter(c => c.on !== false);
+    crits.replaceChildren(...d.crits.map((c, i) => {
+      const row = el("div", "item");
+      const inp = el("input", "line"); Object.assign(inp, { value: c.label, maxLength: 80, placeholder: t("crit_add_ph") });
+      inp.setAttribute("aria-label", t("crit_add_ph"));
+      inp.oninput = () => { c.label = inp.value; save(); };
+      const x = el("button", "x", "×"); x.type = "button"; x.disabled = d.crits.length <= 2; x.setAttribute("aria-label", t("remove"));
+      x.onclick = () => { d.crits.splice(i, 1); save(); drawC(); };
+      row.append(inp, x);
+      return row;
+    }));
+    addC.hidden = d.crits.length >= 8;
   };
-  addBtn.onclick = addOne;
-  addIn.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addOne(); } };
-  const addRow = el("div", "add-row"); addRow.append(addIn, addBtn);
-  const sug = el("button", "linkbtn", t("suggest")); sug.type = "button";
+  addC.onclick = () => { d.crits.push({ label: "", on: true }); save(); drawC(); crits.lastChild.querySelector("input").focus(); };
+  drawC();
+  const sug = el("button", "linkbtn", t("suggest_again")); sug.type = "button";
   sug.onclick = async () => {
     sug.disabled = true; sug.textContent = t("suggesting"); fail("");
-    try { d.crits = await suggest(); save(); draw(); }
+    try { d.crits = await suggest(); d.critsDraft = structuredClone(d.crits); save(); drawC(); }
     catch (e) { fail(t(e.message === "quota" ? "err_quota" : "suggest_fail")); }
-    finally { sug.disabled = false; sug.textContent = t("suggest"); }
+    finally { sug.disabled = false; sug.textContent = t("suggest_again"); }
   };
-  return form([...head(t("nr_crit_title"), t("nr_crit_hint")), list, addRow, sug, actions()], () => {
-    if (d.crits.filter(c => c.on).length < 2) return fail(t("need_criteria"));
+  const optsF = el("div", "field"); optsF.append(el("span", "lbl", t("nr_opts_title")), el("p", "small", t(d.optsDraft ? "nr_opts_hint_ai" : "nr_opts_hint")), list, add);
+  const critF = el("div", "field"); critF.append(el("span", "lbl", t("nr_crit_title")), el("p", "small", t("nr_crit_hint")), crits, addC, sug);
+  return form([...head(t("nr_opts_page_title")), qBox, optsF, critF, actions()], () => {
+    if (d.options.filter(o => o.trim()).length < 2) return fail(t("need_options"));
+    const n = d.crits.filter(c => c.label.trim()).length;
+    if (n < 2) return fail(t("need_criteria"));
+    d.crits = d.crits.filter(c => c.label.trim()).map(c => ({ label: c.label.trim(), on: true })); save();
     next();
   });
 }
@@ -234,6 +324,9 @@ function stepModel() {
   recommendation().then(rec => {
     if (d.at !== here) return;
     let all = false;
+    // Why this model, said plainly, before the list.
+    const why = el("div", "block why-band");
+    why.append(el("span", "lbl", t("why_this_model", { model: M.MODELS[rec.model].framework })), el("p", "body", t(rec.why)));
     const list = el("div", "choices");
     const more = el("button", "linkbtn"); more.type = "button"; more.onclick = () => { all = !all; draw(); };
     const draw = () => {
@@ -241,7 +334,7 @@ function stepModel() {
       list.replaceChildren(...show.map(id => {
         const m = M.MODELS[id];
         const c = Rooms.choice(m.framework, m.line[Rooms.lang] || m.line.en, d.model === id, () => { d.model = id; save(); draw(); });
-        if (id === rec.model) { c.prepend(el("span", "tag split", t("recommended"))); c.append(el("span", "choice-h why", t(rec.why))); }
+        if (id === rec.model) c.prepend(el("span", "tag split", t("recommended")));
         return c;
       }));
       more.textContent = t(all ? "fewer_models" : "see_all_models");
@@ -250,73 +343,107 @@ function stepModel() {
     const drawRapid = () => {
       rapid.setAttribute("aria-pressed", String(!!d.rapid));
       const b = el("span", "tick-body");
-      b.append(el("span", "choice-t", t("rapid_lbl")), el("span", "choice-h", M.RAPID.line[Rooms.lang] || M.RAPID.line.en));
+      b.append(el("span", "choice-t", t("rapid_lbl")), el("span", "choice-h", t("rapid_explain")));
       if (rec.rapid) b.append(el("span", "choice-h why", t("rapid_suggested")));
       rapid.replaceChildren(b);
     };
     rapid.onclick = () => { d.rapid = !d.rapid; save(); drawRapid(); };
     draw(); drawRapid();
-    box.replaceChildren(list, more, rapid);
+    box.replaceChildren(why, list, more, rapid);
   });
   return f;
 }
 
-/* ---------- Who's in the room: the organisation, its roles, and what to ask each one ---------- */
-// Each role gets its own invite link (optionally limited to a number of people) and an ask that
-// only that role can answer. Everyone still counts equally.
-function addRole(title, ask = "") {
-  title = String(title).trim().slice(0, 60);
-  if (!title || d.roles.length >= 12 || d.roles.some(r => r.title.toLowerCase() === title.toLowerCase())) return false;
-  const n = Math.max(0, ...d.roles.map(r => Number(String(r.id).slice(1)) || 0)) + 1;
-  d.roles.push({ id: "r" + n, title, max: null, ask: String(ask).slice(0, 600), rapid: null });
-  d.extra = (d.extra || []).filter(x => x.title.toLowerCase() !== title.toLowerCase());
-  save();
-  return true;
+/* ---------- Who's in the room: people one by one, each with a role and their own link ---------- */
+// People with the same role share that role's ask (the owner ticks the asks they want) and its RAPID part.
+// Everyone still counts equally.
+function roleFor(title) {
+  title = String(title || "").trim().slice(0, 60);
+  if (!title) return null;
+  let r = d.roles.find(x => x.title.toLowerCase() === title.toLowerCase());
+  if (r) return r;
+  if (d.roles.length >= 12) return null;
+  const n = Math.max(0, ...d.roles.map(x => Number(String(x.id).slice(1)) || 0)) + 1;
+  const sug = (d.extra || []).find(x => x.title.toLowerCase() === title.toLowerCase());
+  r = { id: "r" + n, title, max: null, asks: sug?.asks?.length ? sug.asks : sug?.ask ? [sug.ask] : [], picked: [], own: "", rapid: null };
+  if (r.asks.length) r.picked = [0];
+  d.roles.push(r);
+  return r;
+}
+const roleAsk = r => [...(r.picked || []).map(i => r.asks?.[i]).filter(Boolean), (r.own || "").trim()].filter(Boolean).join("\n").slice(0, 600);
+const validContact = c => !c.trim() || Rooms.validEmail(c) || !!Rooms.phoneDigits(c);
+let contactsCache = null;
+async function savedContacts() {
+  if (contactsCache) return contactsCache;
+  if (demo) return (contactsCache = [{ name: "Kenji Watanabe", contact: "kenji@example.com", role_title: "CFO" }, { name: "Amara Okafor", contact: "+971 50 123 4567", role_title: "Legal counsel" }]);
+  try {
+    const { data } = await Rooms.sb.from("contacts").select("name,contact,role_title").order("used_at", { ascending: false }).limit(60);
+    return (contactsCache = data || []);
+  } catch { return (contactsCache = []); }
 }
 function stepPeople() {
+  if (!Array.isArray(d.people)) d.people = [];
   if (!Array.isArray(d.roles)) d.roles = [];
-  const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
-  const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
-  orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); drawDraft(); };
-  orgIn.onchange = () => suggestNow();
-  const orgF = field("orgLabel", t("org_custom_lbl"), orgIn);
+  if (!d.decideBy) { const x = new Date(); x.setDate(x.getDate() + 7); d.decideBy = x.toISOString().slice(0, 10); save(); }
+  const nameIn = el("input", "line"); Object.assign(nameIn, { maxLength: 80, placeholder: t("person_name_ph"), autocomplete: "off" });
+  const roleIn = el("input", "line"); Object.assign(roleIn, { maxLength: 60, placeholder: t("person_role_ph"), autocomplete: "off" });
+  roleIn.setAttribute("list", "roleList");
+  const contactIn = el("input", "line"); Object.assign(contactIn, { maxLength: 120, placeholder: t("person_contact_ph"), autocomplete: "off" });
+  const dl = el("datalist"); dl.id = "roleList";
+  const addBtn = el("button", "btn soft", t("person_add")); addBtn.type = "button";
+  const book = el("div", "field");
   const sugg = el("div", "chips");
   const list = el("div", "roles");
-  const extra = el("div", "field");
-  const addIn = el("input", "line"); Object.assign(addIn, { maxLength: 60, placeholder: t("role_add_ph") });
-  addIn.setAttribute("aria-label", t("role_add_ph"));
-  const addBtn = el("button", "btn soft", t("add")); addBtn.type = "button";
-  const addOne = () => { if (addRole(addIn.value)) { addIn.value = ""; drawAll(); } };
-  addBtn.onclick = addOne;
-  addIn.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addOne(); } };
-  const addRow = el("div", "add-row"); addRow.append(addIn, addBtn);
-  const draft = el("button", "linkbtn"); draft.type = "button";
-  const none = el("p", "small", t("roles_none_note"));
+  const none = el("p", "small", t("people_none_note"));
 
-  const drawOrgs = () => {
-    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawAll(); if (o === "custom") orgIn.focus(); else suggestNow(); })));
-    orgF.hidden = d.orgType !== "custom";
+  const addPerson = (name, role, contact) => {
+    name = String(name || "").trim().slice(0, 80); contact = String(contact || "").trim().slice(0, 120);
+    if (!name) { nameIn.focus(); return fail(t("need_person_name")); }
+    if (!validContact(contact)) { contactIn.focus(); return fail(t("need_contact")); }
+    if (d.people.length >= 50) return fail(t("people_max"));
+    if (d.people.some(p => p.name.toLowerCase() === name.toLowerCase() && p.contact === contact)) return fail(t("person_twice"));
+    const r = roleFor(role);
+    d.people.push({ id: crypto.randomUUID().slice(0, 8), name, contact, roleId: r ? r.id : null });
+    fail(""); save(); drawAll(); draftSoon();
+    return true;
+  };
+  addBtn.onclick = () => { if (addPerson(nameIn.value, roleIn.value, contactIn.value)) { nameIn.value = ""; contactIn.value = ""; nameIn.focus(); } };
+  [nameIn, roleIn, contactIn].forEach(x => x.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); addBtn.click(); } });
+
+  const drawBook = async () => {
+    const saved = (await savedContacts()).filter(c => !d.people.some(p => p.name === c.name && p.contact === (c.contact || "")));
+    book.hidden = !saved.length;
+    book.replaceChildren(el("span", "lbl", t("book_lbl")), ...(saved.length ? [(() => {
+      const ch = el("div", "chips");
+      saved.slice(0, 12).forEach(c => ch.append(chip("+ " + c.name + (c.role_title ? " · " + c.role_title : ""), false, () => addPerson(c.name, c.role_title || "", c.contact || ""))));
+      return ch;
+    })()] : []));
   };
   const drawSugg = () => {
     const ready = d.orgType && d.orgType !== "custom" ? t("roles_" + d.orgType) : [];
-    const have = new Set(d.roles.map(r => r.title.toLowerCase()));
-    sugg.replaceChildren(...[...ready, t("role_external")].filter(x => !have.has(x.toLowerCase()))
-      .map(x => chip("+ " + x, false, () => { addRole(x); drawAll(); })));
+    const all = [...new Set([...d.roles.map(r => r.title), ...(d.extra || []).map(x => x.title), ...ready, t("role_external")])];
+    dl.replaceChildren(...all.map(x => { const o = el("option"); o.value = x; return o; }));
+    sugg.replaceChildren(...all.slice(0, 10).map(x => chip(x, roleIn.value.trim().toLowerCase() === x.toLowerCase(), () => { roleIn.value = x; drawSugg(); nameIn.value.trim() ? contactIn.focus() : nameIn.focus(); })));
   };
+  roleIn.oninput = drawSugg;
   const drawList = () => {
-    list.replaceChildren(...d.roles.map(r => {
+    // Drop roles nobody has any more.
+    d.roles = d.roles.filter(r => d.people.some(p => p.roleId === r.id));
+    const groups = [...d.roles.map(r => ({ r, people: d.people.filter(p => p.roleId === r.id) })), { r: null, people: d.people.filter(p => !p.roleId) }].filter(g => g.people.length);
+    list.replaceChildren(...groups.map(({ r, people }) => {
       const b = el("div", "block role-card");
-      const top = el("div", "role-top");
-      const nm = el("span", "choice-t", r.title);
-      const x = el("button", "x", "×"); x.type = "button"; x.setAttribute("aria-label", t("role_remove") + " " + r.title);
-      x.onclick = () => { d.roles = d.roles.filter(y => y !== r); save(); drawAll(); };
-      top.append(nm, x);
-      const opts = el("div", "role-opts");
-      const ppl = el("select", "line role-select"); ppl.setAttribute("aria-label", r.title + " · " + t("role_people"));
-      PEOPLE.forEach(v => { const o = el("option", null, v === "" ? t("role_any") : String(v)); o.value = String(v); if (String(r.max ?? "") === String(v)) o.selected = true; ppl.append(o); });
-      ppl.onchange = () => { r.max = ppl.value ? Number(ppl.value) : null; save(); };
-      const pf = el("label", "role-opt"); pf.append(el("span", "small", t("role_people")), ppl);
-      opts.append(pf);
+      b.append(el("span", "choice-t", r ? r.title : t("no_role")));
+      const ul = el("ul", "plain people");
+      people.forEach(p => {
+        const li = el("li", "file");
+        const nm = el("span", "nm", p.name); nm.title = p.name;
+        const ct = el("span", "st", p.contact || t("no_contact"));
+        const x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", t("remove") + " " + p.name);
+        x.onclick = () => { d.people = d.people.filter(y => y !== p); save(); drawAll(); };
+        li.append(nm, ct, x); ul.append(li);
+      });
+      b.append(ul);
+      if (!r) return b;
       if (d.rapid) {
         const rp = el("select", "line role-select"); rp.setAttribute("aria-label", r.title + " · " + t("rr_title"));
         [["", "rr_input"], ["recommender", "rr_recommender"], ["approver", "rr_approver"], ["performer", "rr_performer"]].forEach(([v, k]) => {
@@ -324,28 +451,28 @@ function stepPeople() {
         });
         rp.onchange = () => { r.rapid = rp.value || null; save(); };
         const rf = el("label", "role-opt"); rf.append(el("span", "small", t("rr_title")), rp);
-        opts.append(rf);
+        b.append(rf);
       }
-      const ask = el("textarea"); Object.assign(ask, { rows: 2, maxLength: 600, placeholder: t("role_ask_ph"), value: r.ask || "" });
-      ask.setAttribute("aria-label", r.title + " · " + t("role_ask_lbl"));
-      ask.oninput = () => { r.ask = ask.value; save(); };
-      const af = el("div", "field"); af.append(el("span", "lbl", t("role_ask_lbl")), ask);
-      b.append(top, opts, af);
+      // What we'll ask them: tick any of the suggestions, or write your own.
+      const af = el("div", "field"); af.append(el("span", "lbl", t("role_ask_lbl")), el("p", "small", t("role_ask_hint")));
+      if (r.asks?.length) {
+        const ticks = el("div", "ticks");
+        const drawTicks = () => ticks.replaceChildren(...r.asks.map((a, i) => {
+          const tb = el("button", "tick"); tb.type = "button"; tb.setAttribute("aria-pressed", String((r.picked || []).includes(i)));
+          const body = el("span", "tick-body"); body.append(el("span", null, a)); tb.append(body);
+          tb.onclick = () => { r.picked = (r.picked || []).includes(i) ? r.picked.filter(j => j !== i) : [...(r.picked || []), i]; save(); drawTicks(); };
+          return tb;
+        }));
+        drawTicks(); af.append(ticks);
+      } else if (drafting) af.append(el("p", "small thinking", t("roles_drafting")));
+      const own = el("textarea"); Object.assign(own, { rows: 2, maxLength: 600, placeholder: t("role_ask_own_ph"), value: r.own || "" });
+      own.setAttribute("aria-label", r.title + " · " + t("role_ask_own_ph"));
+      own.oninput = () => { r.own = own.value; save(); };
+      af.append(own);
+      b.append(af);
       return b;
     }));
-    none.hidden = d.roles.length > 0;
-  };
-  const drawExtra = () => {
-    const ex = (d.extra || []).filter(x => !d.roles.some(r => r.title.toLowerCase() === x.title.toLowerCase()));
-    extra.hidden = !ex.length && !suggesting;
-    extra.replaceChildren(el("span", "lbl", t("roles_extra")), ...(suggesting && !ex.length ? [el("p", "small thinking", t("roles_drafting"))] : []), ...ex.map(x => {
-      const c = Rooms.choice("+ " + x.title, x.ask, false, () => { addRole(x.title, x.ask); drawAll(); });
-      return c;
-    }));
-  };
-  const drawDraft = () => {
-    draft.textContent = t(d.roles.length ? "roles_draft" : "roles_suggest");
-    draft.hidden = !d.orgType || (d.orgType === "custom" && !d.orgLabel.trim());
+    none.hidden = d.people.length > 0;
   };
   // RAPID: who may override an approver's objection.
   const gov = el("div", "field");
@@ -362,55 +489,68 @@ function stepPeople() {
     const l = el("label", "lbl", t("gov_lbl")); l.htmlFor = "overrideRule";
     gov.replaceChildren(l, el("p", "small", t("gov_hint")), sel);
   };
-  const drawAll = () => { drawOrgs(); drawExtra(); drawSugg(); drawList(); drawDraft(); drawGov(); };
-  let suggesting = false;
-  // Roles that fit this question, suggested as soon as the organisation is known (once per organisation).
+  const by = el("input", "line"); Object.assign(by, { type: "date", value: d.decideBy || "", min: new Date().toISOString().slice(0, 10) });
+  by.onchange = () => { d.decideBy = by.value; save(); };
+  const byF = field("decideBy", t("decide_by_lbl"), by, t("decide_by_hint"));
+
+  let drafting = false, draftTimer = null;
+  // Asks for roles that have none yet, drafted a moment after a role is added.
+  const draftSoon = () => {
+    clearTimeout(draftTimer);
+    if (!d.roles.some(r => !r.asks?.length && !r.tried)) return;
+    draftTimer = setTimeout(async () => {
+      drafting = true; drawList();
+      try { await draftAsks(); } catch (e) { if (e.message === "quota") fail(t("err_quota")); }
+      drafting = false; drawAll();
+    }, 700);
+  };
+  // Roles that fit this question and organisation, suggested once per organisation and question.
   const suggestNow = async () => {
-    const key = [d.orgType, d.orgLabel.trim(), d.question].join("|");
-    if (demo || !d.orgType || (d.orgType === "custom" && !d.orgLabel.trim()) || d.sugFor === key) return;
-    d.sugFor = key; suggesting = true; drawExtra();
+    const key = [d.orgType, (d.orgLabel || "").trim(), d.question].join("|");
+    if (demo || !d.orgType || d.sugFor === key) return;
+    d.sugFor = key;
     try {
       const data = await Rooms.post("/api/rooms/roles", { question: d.question, options: d.options.filter(o => o.trim()), type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, roles: [], lang: Rooms.lang });
       d.extra = [...(data.roles || []), ...(data.extra || [])].slice(0, 6);
     } catch { d.sugFor = ""; }
-    suggesting = false; save(); drawAll();
+    save(); drawSugg();
   };
-  draft.onclick = async () => {
-    draft.disabled = true; draft.textContent = t("roles_drafting"); fail("");
-    try { await draftAsks(); drawAll(); }
-    catch (e) { fail(t(e.message === "quota" ? "err_quota" : "roles_fail")); drawDraft(); }
-    finally { draft.disabled = false; }
-  };
+  const drawAll = () => { drawSugg(); drawList(); drawGov(); drawBook(); };
   drawAll();
-  const orgField = el("div", "field"); orgField.append(el("span", "lbl", t("org_lbl")), orgs);
-  const rolesField = el("div", "field"); rolesField.append(el("span", "lbl", t("roles_lbl")), el("p", "small", t("roles_hint")), sugg);
-  setTimeout(suggestNow, 0);
-  return form([...head(t("nr_people_title"), t("nr_people_hint")), orgField, orgF, extra, rolesField, list, addRow, draft, none, gov, actions()], () => {
-    if (!d.orgType) return fail(t("need_org"));
-    if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
+  setTimeout(() => { suggestNow(); draftSoon(); }, 0);
+  const addF = el("div", "block add-person");
+  const grid = el("div", "person-grid");
+  grid.append(field("pName", t("person_name"), nameIn), field("pRole", t("person_role"), roleIn), field("pContact", t("person_contact"), contactIn));
+  addF.append(grid, sugg, dl, addBtn);
+  return form([...head(t("nr_people_title"), t("nr_people_hint2")), book, addF, list, none, byF, gov, actions()], () => {
     if (d.rapid && d.overrideRule === "authority" && !d.roles.some(r => r.id === d.overrideRoleId)) { d.overrideRule = "owner"; d.overrideRoleId = null; save(); }
+    if (nameIn.value.trim()) { if (!addPerson(nameIn.value, roleIn.value, contactIn.value)) return; nameIn.value = ""; contactIn.value = ""; }
     next();
   });
 }
-// The server drafts an ask per role (keeping the owner's own words), or suggests roles for a custom organisation.
+// The server drafts up to 3 asks per role; the owner ticks the ones they want.
 async function draftAsks() {
+  const todo = d.roles.filter(r => !r.asks?.length && !r.tried);
+  if (!todo.length) return;
+  todo.forEach(r => { r.tried = true; });
   if (demo) {
     const ar = Rooms.lang === "ar";
-    if (!d.roles.length) d.extra = (ar ? ["المدرب", "أمين الصندوق", "عضو مجلس الإدارة"] : ["Head coach", "Treasurer", "Board member"]).map(title => ({ title, ask: "" }));
-    d.roles.forEach(r => { if (!r.ask.trim()) r.ask = ar ? `ما الأرقام أو الحدود التي تراها من موقعك كـ${r.title} وقد تغيب عن الآخرين؟` : `What numbers or limits do you see as ${r.title} that the others might miss?`; });
+    todo.forEach(r => {
+      r.asks = ar ? [`ما الأرقام أو الحدود التي تراها من موقعك كـ${r.title} وقد تغيب عن الآخرين؟`, "ما الذي قد يجعلك ترفض هذا؟", "ما الذي يلزم لتنفيذه في الوقت المحدد؟"]
+        : [`What numbers or limits do you see as ${r.title} that the others might miss?`, "What would make you send this back?", "What would it take to deliver this on time?"];
+      r.picked = [0];
+    });
     save(); return;
   }
   const data = await Rooms.post("/api/rooms/roles", {
     question: d.question, options: d.options.filter(o => o.trim()), type: d.type, type_label: d.typeLabel,
-    org_type: d.orgType, org_label: d.orgLabel, roles: d.roles.map(r => r.title), lang: Rooms.lang
+    org_type: d.orgType, org_label: d.orgLabel, roles: todo.map(r => r.title), lang: Rooms.lang
   });
-  if (d.roles.length) {
-    for (const x of data.roles || []) {
-      const r = d.roles.find(y => y.title.toLowerCase() === String(x.title).toLowerCase());
-      if (r && !r.ask.trim() && x.ask) r.ask = x.ask;
-    }
-    d.extra = (data.extra || []).slice(0, 2);
-  } else d.extra = (data.roles || []).slice(0, 6);
+  for (const x of data.roles || []) {
+    const r = todo.find(y => y.title.toLowerCase() === String(x.title).toLowerCase());
+    if (r) { r.asks = (x.asks?.length ? x.asks : [x.ask]).filter(Boolean).slice(0, 3); if (r.asks.length && !(r.picked || []).length) r.picked = [0]; }
+  }
+  if ((data.extra || []).length) d.extra = [...(d.extra || []), ...data.extra].filter((x, i, a) => a.findIndex(y => y.title === x.title) === i).slice(0, 8);
   save();
 }
 
@@ -423,7 +563,7 @@ function stepContext() {
   // Files: upload, or paste a conversation (Slack, email...), with how-to help for common sources.
   const drop = el("label", "drop"); drop.htmlFor = "files";
   const inp = el("input"); Object.assign(inp, { type: "file", id: "files", multiple: true, accept: ".pdf,.docx,.xlsx,.xls,.ods,.csv,.tsv,.txt,.md,.json,.zip" });
-  drop.append(inp, el("span", null, "+ " + t("drop")));
+  drop.append(inp, el("span", null, "+ " + t("import_files")));
   inp.onchange = () => { addFiles(inp.files); inp.value = ""; };
   ["dragenter", "dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("over"); }));
@@ -445,7 +585,7 @@ function stepContext() {
 
   const list = el("ul", "plain"); list.id = "fileList";
   const how = el("details", "more howto");
-  how.append(el("summary", null, t("files_ideas")));
+  how.append(el("summary", null, t("help_export")));
   [["how_wa_ios_t", "how_wa_ios"], ["how_wa_and_t", "how_wa_and"], ["how_slack_t", "how_slack"], ["how_email_t", "how_email"], ["how_docs_t", "how_docs"], ["how_sheets_t", "how_sheets"]].forEach(([title, steps]) => {
     const b = el("div", "block"); const ol = el("ol", "steps-list");
     t(steps).forEach(s => ol.append(el("li", null, s)));
@@ -454,11 +594,8 @@ function stepContext() {
   });
   how.append(el("p", "small", t("how_tip")));
 
-  // Settings that rarely change
+  // Settings that rarely change. The review date is asked after the decision; the report choice when the report is made.
   const more = el("details", "more");
-  const rev = el("input", "line"); Object.assign(rev, { type: "date", id: "review", value: d.review, min: new Date().toISOString().slice(0, 10) });
-  rev.onchange = () => { d.review = rev.value; save(); };
-  const revF = el("div", "field"); const rl = el("label", "lbl", t("review_lbl")); rl.htmlFor = "review"; revF.append(rl, rev);
   const named = el("label", "check");
   const nc = el("input"); nc.type = "checkbox"; nc.checked = d.named; nc.onchange = () => { d.named = nc.checked; save(); };
   const nt = el("span"); nt.append(el("span", null, t("named_lbl")), el("br"), el("span", "small", t("named_hint")));
@@ -469,53 +606,38 @@ function stepContext() {
   const stx = el("span"); stx.append(el("span", null, t("strict_lbl")), el("br"), el("span", "small", t("strict_hint")));
   strict.append(sc, stx);
   const strictF = el("div", "field"); strictF.append(strict);
-  const repF = el("div", "field");
-  const repSel = el("select", "line role-select"); repSel.id = "reportMode"; repSel.style.width = "100%";
-  [["both", "rm_both"], ["team", "rm_team"], ["personal", "rm_personal"]].forEach(([v, k]) => { const o = el("option", null, t(k)); o.value = v; if ((d.reportMode || "both") === v) o.selected = true; repSel.append(o); });
-  repSel.onchange = () => { d.reportMode = repSel.value; save(); };
-  const repL = el("label", "lbl", t("rm_lbl")); repL.htmlFor = "reportMode";
-  repF.append(repL, repSel);
-  more.append(el("summary", null, t("more_settings")), revF, namedF, strictF, repF);
+  more.append(el("summary", null, t("more_settings")), namedF, strictF);
 
   // Useful links: everyone in the room sees them, and the analysis reads them.
   if (!Array.isArray(d.links)) d.links = [];
   const linksF = el("div", "field");
   linksF.append(el("span", "lbl", t("links_lbl")), el("p", "small", t("links_hint")), Rooms.linksEditor(d.links, 10, l => { d.links = l; save(); }));
 
-  // World brief: what is happening in the world that matters to this question, dated and sourced.
-  // The owner picks items to add to what everyone sees.
+  // World brief: started when the question was set. Tick what everyone should see; it goes in with the room.
   const briefF = el("div", "field");
-  const briefBtn = el("button", "btn soft", t("brief_btn")); briefBtn.type = "button"; briefBtn.style.width = "auto";
   const briefBox = el("div", "stack-sm");
-  briefBtn.onclick = async () => {
-    briefBtn.disabled = true; briefBtn.textContent = t("brief_loading"); fail("");
-    try {
-      const r = demo ? { summary: t("brief_demo_summary"), items: [{ text: t("brief_demo_item"), date: new Date().toISOString().slice(0, 7), source: "Example source", url: null }] }
-        : await Rooms.post("/api/rooms/brief", { question: d.question, options: d.options.filter(o => o.trim()), context: d.context, type: d.type, type_label: d.typeLabel, lang: Rooms.lang });
-      const picked = new Set();
-      const list = el("div", "ticks");
-      (r.items || []).forEach((x, i) => {
-        const b = el("button", "tick"); b.type = "button"; b.setAttribute("aria-pressed", "false");
-        const body = el("span", "tick-body"); body.append(el("span", null, x.text), el("span", "choice-h", [x.date, x.source].filter(Boolean).join(" · ")));
-        b.append(body);
-        b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); b.setAttribute("aria-pressed", String(picked.has(i))); };
-        list.append(b);
-      });
-      const add = el("button", "btn soft", t("brief_add")); add.type = "button"; add.style.width = "auto";
-      add.onclick = () => {
-        const chosen = [...picked].sort().map(i => r.items[i]);
-        if (!chosen.length) return;
-        const lines = chosen.map(x => `• ${x.text} (${[x.date, x.source].filter(Boolean).join(", ")})`).join("\n");
-        d.context = (d.context.trim() ? d.context.trim() + "\n\n" : "") + t("brief_heading", { date: r.as_of || new Date().toISOString().slice(0, 10) }) + "\n" + lines;
-        ta.value = d.context;
-        chosen.forEach(x => { if (x.url && Rooms.validUrl(x.url) && !d.links.includes(x.url) && d.links.length < 10) d.links.push(x.url); });
-        save(); render();
-      };
-      briefBox.replaceChildren(...(r.summary ? [el("p", "body", r.summary)] : []), list, el("p", "small", t("brief_pick_hint")), add);
-    } catch (e) { fail(t(e.message === "quota" ? "err_quota" : "brief_fail")); }
-    finally { briefBtn.disabled = false; briefBtn.textContent = t("brief_btn"); }
+  briefDraw = () => {
+    const r = d.brief;
+    if (!r && briefRun) return briefBox.replaceChildren(el("p", "small thinking", t("brief_running")));
+    if (!r) {
+      const again = el("button", "btn soft", t(d.briefErr ? "brief_retry" : "brief_btn")); again.type = "button"; again.style.width = "auto";
+      again.onclick = () => { d.briefFor = ""; startBrief(); briefDraw(); };
+      return briefBox.replaceChildren(...(d.briefErr ? [el("p", "small", t(d.briefErr))] : []), again);
+    }
+    const picked = new Set(d.briefPicked || []);
+    const list = el("div", "ticks");
+    (r.items || []).forEach((x, i) => {
+      const b = el("button", "tick"); b.type = "button"; b.setAttribute("aria-pressed", String(picked.has(i)));
+      const body = el("span", "tick-body"); body.append(el("span", null, x.text), el("span", "choice-h", [x.date, x.source].filter(Boolean).join(" · ")));
+      b.append(body);
+      b.onclick = () => { picked.has(i) ? picked.delete(i) : picked.add(i); d.briefPicked = [...picked]; save(); b.setAttribute("aria-pressed", String(picked.has(i))); };
+      list.append(b);
+    });
+    briefBox.replaceChildren(...(r.summary ? [el("p", "body", r.summary)] : []), list, el("p", "small", t("brief_pick_hint2")));
   };
-  briefF.append(el("span", "lbl", t("brief_lbl")), el("p", "small", t("brief_hint")), briefBtn, briefBox);
+  if (!d.brief && !briefRun && !d.briefErr && d.question.trim()) startBrief();
+  briefF.append(el("span", "lbl", t("brief_lbl")), el("p", "small", t("brief_hint")), briefBox);
+  briefDraw();
 
   setTimeout(drawFiles, 0);
   const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, briefF, linksF, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
@@ -553,16 +675,32 @@ async function addFiles(list) {
 
 /* ---------- Create ---------- */
 const safeName = n => n.normalize("NFKD").replace(/[^\w.-]+/g, "_").slice(-80) || "file";
+// The world-brief facts the owner ticked, added to what everyone should know.
+function contextWithBrief() {
+  const r = d.brief, chosen = (d.briefPicked || []).slice().sort((a, b) => a - b).map(i => r?.items?.[i]).filter(Boolean);
+  if (!chosen.length) return d.context.trim();
+  const lines = chosen.map(x => `• ${x.text} (${[x.date, x.source].filter(Boolean).join(", ")})`).join("\n");
+  return ((d.context.trim() ? d.context.trim() + "\n\n" : "") + t("brief_heading", { date: r.as_of || new Date().toISOString().slice(0, 10) }) + "\n" + lines).slice(0, 4000);
+}
 async function create() {
   const options = d.options.map(o => o.trim()).filter(Boolean).map((label, i) => ({ id: "o" + (i + 1), label }));
-  const picked = d.crits.filter(c => c.on);
+  const picked = d.crits.filter(c => c.on !== false && c.label.trim());
   const w = Rooms.apportion(picked.map((_, i) => "c" + (i + 1)), {}, 100); // equal starting weights; members set their own
-  const criteria = picked.map((c, i) => ({ id: "c" + (i + 1), label: c.label, weight: w["c" + (i + 1)] }));
-  const roles = (d.roles || []).slice(0, 12).map(r => ({ id: r.id, title: r.title.trim().slice(0, 60), max: r.max || null, ask: (r.ask || "").trim().slice(0, 600), rapid: d.rapid ? r.rapid || null : null }));
+  const criteria = picked.map((c, i) => ({ id: "c" + (i + 1), label: c.label.trim(), weight: w["c" + (i + 1)] }));
+  const people = (d.people || []).slice(0, 50);
+  const roles = (d.roles || []).filter(r => people.some(p => p.roleId === r.id)).slice(0, 12)
+    .map(r => ({ id: r.id, title: r.title.trim().slice(0, 60), max: null, ask: roleAsk(r), rapid: d.rapid ? r.rapid || null : null }));
   const btn = document.querySelector("#wiz .actions .btn:not(.ghost)"); if (btn) { btn.disabled = true; btn.textContent = t("creating"); }
   fail("");
   try {
-    if (demo) { try { localStorage.removeItem(DRAFT_KEY); } catch {} Rooms.goToRoom(`/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}${d.roles.length ? "&roles=1" : ""}`); return; }
+    const links = (d.links || []).filter(Rooms.validUrl);
+    (d.briefPicked || []).forEach(i => { const u = d.brief?.items?.[i]?.url; if (u && Rooms.validUrl(u) && !links.includes(u)) links.push(u); });
+    if (demo) {
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      const to = `/room.html?demo=owner&model=${d.model || "standard"}${d.rapid ? "&rapid=1" : ""}${roles.length ? "&roles=1" : ""}&people=1`;
+      if (!people.length) return Rooms.goToRoom(to);
+      return vSend(to, people.map((p, i) => ({ token: "demo-" + (i + 1), person_name: p.name, person_contact: p.contact, role_id: p.roleId })), roles);
+    }
     if (!Rooms.user) await Rooms.trialSignIn(d.name.trim(), d.email.trim());
     const sb = Rooms.sb, me = Rooms.user.id;
     let { data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).order("created_at").limit(1).maybeSingle();
@@ -574,17 +712,17 @@ async function create() {
     // Ids are made here rather than read back, because the owner can only read the room once the
     // insert's trigger has made them a member.
     const id = crypto.randomUUID();
-    const review = d.review || (() => { const x = new Date(); x.setDate(x.getDate() + 42); return x.toISOString().slice(0, 10); })();
+    const review = (() => { const x = new Date(); x.setDate(x.getDate() + 42); return x.toISOString().slice(0, 10); })();   // changed after the decision, next to the plan
     const { error } = await sb.from("rooms").insert({
       id, workspace_id: ws.id, owner_id: me, language: Rooms.lang, type: d.type,
       type_label: d.type === "custom" ? d.typeLabel.trim() : null, question: d.question.trim(),
-      context: d.context.trim(), options, criteria, review_date: review, named_views: d.named,
-      model: d.model || "standard", rapid: !!d.rapid,
+      context: contextWithBrief(), options, criteria, review_date: review, named_views: d.named,
+      model: d.model || "standard", rapid: !!d.rapid, decide_by: d.decideBy || null,
       org_type: d.orgType || null, org_label: d.orgType === "custom" ? d.orgLabel.trim() || null : null, roles,
       override_rule: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? "authority" : d.rapid && d.overrideRule === "approver" ? "approver" : "owner",
       override_role_id: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? d.overrideRoleId : null,
-      strict_confidential: !!d.strict, report_mode: ["team", "personal", "both"].includes(d.reportMode) ? d.reportMode : "both",
-      links: (d.links || []).filter(Rooms.validUrl).slice(0, 10).map(url => ({ url }))
+      strict_confidential: !!d.strict, report_mode: "both",
+      links: links.slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;
     let filesFailed = false;
@@ -594,12 +732,22 @@ async function create() {
       const ins = await sb.from("attachments").insert({ room_id: id, file_name: f.name, storage_path: up.error ? null : path, extracted_text: f.text, uploaded_by: me });
       if (up.error || ins.error) filesFailed = true;
     }
-    // One link per role (with its limit), or one link for everyone when there are no roles.
-    const invites = roles.length ? roles.map(r => ({ room_id: id, created_by: me, role_id: r.id, max_uses: r.max })) : [{ room_id: id, created_by: me }];
-    const { error: invErr } = await sb.from("invites").insert(invites);
+    // One link per person, or one link for everyone when nobody was added.
+    const keep = new Set(roles.map(r => r.id));
+    const invites = people.length
+      ? people.map(p => ({ room_id: id, created_by: me, role_id: keep.has(p.roleId) ? p.roleId : null, person_name: p.name, person_contact: p.contact || null, max_uses: 1 }))
+      : [{ room_id: id, created_by: me }];
+    const { data: made, error: invErr } = await sb.from("invites").insert(invites).select("token,person_name,person_contact,role_id");
     if (invErr) throw invErr;
+    // The address book remembers everyone, for the next room.
+    if (people.length) {
+      const now = new Date().toISOString();
+      const rows = people.map(p => ({ owner_id: me, name: p.name, contact: p.contact || "", role_title: roles.find(r => r.id === p.roleId)?.title || null, used_at: now }));
+      sb.from("contacts").upsert(rows, { onConflict: "owner_id,name,contact" }).then(({ error }) => { if (error) console.warn("contacts:", error.message); });
+    }
     try { localStorage.removeItem(DRAFT_KEY); } catch {}
-    Rooms.goToRoom(`/room.html?room=${id}&new=1${filesFailed ? "&files=failed" : ""}`);
+    const to = `/room.html?room=${id}&new=1${filesFailed ? "&files=failed" : ""}`;
+    if (people.length) vSend(to, made || [], roles); else Rooms.goToRoom(to);
   } catch (err) {
     console.error(err);
     fail(t(Rooms.errKey(err, ["room_needs_2_to_6_options", "room_needs_2_to_8_criteria"])));
@@ -607,30 +755,65 @@ async function create() {
   }
 }
 
+/* ---------- Send the invites: one tap per person ---------- */
+// Until the product sends messages itself, each person's link goes out from the owner's own WhatsApp or email.
+function vSend(to, invites, roles) {
+  const wrap = el("div", "stack-sm"); wrap.style.gap = "16px";
+  wrap.append(el("h1", "step-title", t("send_title")), el("p", "small", t("send_hint")));
+  const q = d.question.trim(), me = d.name.trim();
+  invites.forEach(inv => {
+    const link = `${location.origin}/room.html?join=${encodeURIComponent(inv.token)}`;
+    const msg = t("invite_msg_person", { person: inv.person_name.split(" ")[0], name: me || t("someone"), question: q, link });
+    const L = Rooms.personLinks(inv.person_contact || "", msg, t("invite_subject", { question: q }));
+    const row = el("div", "block invite-row");
+    const top = el("div", "role-top");
+    const who = el("span", "choice-t", inv.person_name);
+    const role = roles.find(r => r.id === inv.role_id);
+    if (role) who.append(el("span", "tag title", role.title));
+    const sent = el("span", "tag", t("sent")); sent.hidden = true;
+    top.append(who, sent);
+    const share = el("div", "share");
+    const mark = () => { sent.hidden = false; };
+    const wa = el("a", "btn" + (L.phone || !L.mail ? "" : " ghost"), t("whatsapp")); wa.href = L.whatsapp; wa.target = "_blank"; wa.rel = "noopener"; wa.onclick = mark;
+    const em = el("a", "btn" + (L.mail ? "" : " ghost"), t("email_btn")); em.href = L.email; em.onclick = mark;
+    const cp = el("button", "btn ghost", t("copy")); cp.type = "button";
+    cp.onclick = async () => { await Rooms.copyText(link); cp.textContent = t("copied"); mark(); setTimeout(() => { cp.textContent = t("copy"); }, 1600); };
+    share.append(...(L.mail && !L.phone ? [em, wa] : [wa, em]), cp);
+    row.append(top, el("p", "small", inv.person_contact || t("no_contact")), share);
+    wrap.append(row);
+  });
+  const go = el("button", "btn", t("go_to_room")); go.type = "button"; go.onclick = () => Rooms.goToRoom(to);
+  wrap.append(el("p", "small", t("send_later")), go);
+  $("wiz").replaceChildren(wrap);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 /* ---------- Start ---------- */
-const STEPS = { you: stepYou, question: stepQuestion, options: stepOptions, criteria: stepCriteria, model: stepModel, people: stepPeople, context: stepContext };
-function render() { $("wiz").replaceChildren(STEPS[ids[d.at]]()); }
+const STEPS = { you: stepYou, question: stepQuestion, options: stepOptions, model: stepModel, people: stepPeople, context: stepContext };
+function render() { briefDraw = null; $("wiz").replaceChildren(STEPS[ids[d.at]]()); }
 Rooms.langToggle(() => { document.title = t("new_room") + " · " + t("product"); render(); });
 
 async function start() {
   try { const saved = JSON.parse(localStorage.getItem(DRAFT_KEY)); if (saved && saved.question !== undefined) d = { ...d, ...saved }; } catch {}
+  // The organisation from the last room, so a returning owner only confirms it.
+  if (!d.orgType) { try { const o = JSON.parse(localStorage.getItem(ORG_KEY)); if (o?.orgType) { d.orgType = o.orgType; d.orgLabel = o.orgLabel || ""; } } catch {} }
   await Rooms.loadLang(Rooms.firstLang(demo === "ar" ? "ar" : null));
   document.title = t("new_room") + " · " + t("product");
-  let known = false;
   if (!demo) {
     if (!(await Rooms.connect())) { $("wiz").replaceChildren(el("p", "text", t("not_setup"))); return; }
     if (Rooms.user) {
       const p = await Rooms.profile();
       if (p?.name) d.name = d.name || p.name;
       if (p?.email) d.email = d.email || p.email;
-      known = !!(p?.name && p?.email);   // asked once: people we know skip straight to the question
+      known = !!(p?.name && p?.email);
     }
   }
-  ids = [...(known ? [] : ["you"]), "question", "options", "criteria", "model", "people", "context"];
-  d.at = Math.max(0, ids.indexOf(d.atId)); // resume on the same step by name, even if "you" was skipped this time
+  // The first screen shows for every new room: returning owners just confirm it.
+  ids = ["you", "question", "options", "model", "people", "context"];
+  d.at = Math.max(0, ids.indexOf(d.atId));
   $("demoNote").hidden = !demo;
   render();
-  Rooms.helper({ page: "setup", draft: () => ({ question: d.question, options: d.options, criteria: (d.crits || []).filter(c => c.on).map(c => c.label), type: d.type === "custom" ? d.typeLabel : d.type }) });
+  Rooms.helper({ page: "setup", draft: () => ({ question: d.question, options: d.options, criteria: (d.crits || []).filter(c => c.on !== false).map(c => c.label), type: d.type === "custom" ? d.typeLabel : d.type }) });
 }
 start();
 })();

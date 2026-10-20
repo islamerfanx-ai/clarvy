@@ -262,6 +262,31 @@ html.embed main{margin-inline-start:0;padding-top:68px}
 details.howto .block{margin-top:16px}
 ol.steps-list{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:1.5}
 
+/* ---------- Release 1: setup redesign, people, comments, attention ---------- */
+.org-pick{background:var(--yellow);padding:16px 18px;gap:10px}
+.org-pick .small{margin:0}
+.qline{background:var(--yellow);padding:14px 16px}
+.qline .body{margin:0;font-size:17px;line-height:1.4}
+.why-band{background:var(--yellow);padding:14px 16px}
+.why-band .body{margin:0}
+.add-person{gap:12px;padding:16px;box-shadow:0 0 0 1px var(--line)}
+.person-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.person-grid > :last-child{grid-column:1/-1}
+@media (max-width:480px){.person-grid{grid-template-columns:1fr}}
+.add-person .btn{width:auto;align-self:flex-start;padding:12px 18px}
+ul.people{margin:6px 0 4px}
+.role-card > .choice-t{font-weight:500}
+.rate-note{margin-top:2px}
+.rate-note summary{font-size:13px}
+.rate-note input{margin-top:8px}
+.msg p.text.hi{font-size:26px;line-height:1.2;margin:4px 0 10px;color:#fff}
+.msg.attention{background:var(--yellow);box-shadow:none}
+.msg.attention .lbl{margin:0 0 4px}
+.msg.attention .body{margin:0}
+.roster li.person-row{flex-wrap:wrap;row-gap:6px}
+.person-share{display:flex;gap:16px;width:100%;grid-template-columns:none}
+.invite-row .share .btn{padding:12px 14px}
+
 /* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
 .top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
 .wm{font-weight:500;letter-spacing:-.02em}
@@ -395,3 +420,4 @@ ul.live-done li.in{animation:thinkIn .45s ease both}
 @keyframes thinkIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes barRun{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
 @media (prefers-reduced-motion:reduce){.spark,.spark rect,.live-bar i.now::after,.live-sub::after,ul.live-done li.in,.live-label,.live-label.in{animation:none}.live-label{-webkit-text-fill-color:currentColor;background:none}.live-bar i.now{background:var(--accent);opacity:.5}}
+

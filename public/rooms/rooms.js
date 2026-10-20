@@ -229,6 +229,16 @@ function shareLinks(msg, subject) {
     email: `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`
   };
 }
+// One person's links: WhatsApp straight to their number, or email straight to their address.
+const phoneDigits = c => { const x = String(c || "").replace(/[\s().-]/g, ""); return /^\+?\d{7,15}$/.test(x) ? x.replace(/^\+/, "") : null; };
+function personLinks(contact, msg, subject) {
+  const ph = phoneDigits(contact), em = validEmail(contact) ? String(contact).trim() : "";
+  return {
+    whatsapp: `https://wa.me/${ph || ""}?text=${encodeURIComponent(msg)}`,
+    email: `mailto:${encodeURIComponent(em).replace(/%40/g, "@")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`,
+    phone: !!ph, mail: !!em
+  };
+}
 // Add links: a URL box with "Add link", and the list so far (each removable). Calls onChange(list).
 const validUrl = u => { try { const x = new URL(String(u).trim()); return /^https?:$/.test(x.protocol) && x.hostname.includes("."); } catch { return false; } };
 function linksEditor(list, max, onChange) {
@@ -434,7 +444,7 @@ window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, signedConfidence, helper, errKey, apportion, chip, choice, shareLinks, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, signedConfidence, helper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();
