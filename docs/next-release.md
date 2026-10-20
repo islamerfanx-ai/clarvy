@@ -54,6 +54,23 @@ How we ship: build a whole release, show it once in the demo with screenshots, t
 
 Database: `outcomes` per review, `review_ratings`, `whatif_scenarios`, `log_review`, `reopen_room`, exact aggregates stored at Decide.
 
+## Release 2: validation against the code (2026-10-21)
+
+Checked each feature against the database and server, with probes on a test copy of the schema.
+
+| # | Check | Result |
+| --- | --- | --- |
+| V0 | Can a signed-in person change a room's status directly? | **Yes, and it's live.** The owner's "edit room" permission covers `status` and the `decide_*` columns. A trial account can create a room straight in "deciding", or flip any of its rooms to "deciding", and the worker runs a full analysis: no quorum, no daily limit of 5, real AI cost. An owner can also move a decided room back to open, or mark any room "reviewed". Fix: a guard so only the server and the database's own functions change status and the decide columns. Needed now, before release 2. |
+| V1 | 2.1 Reactions: room in the pipeline? | Yes. One more step between facts and the Judge, about 10 to 15 s; the worker allows 8 minutes per run. The thinking-stage list needs the new name. Rooms with no organisation type (made before release 1) get a general panel. |
+| V2 | 2.2 Said vs do: data there? | Yes, plain code. Overlaps with the existing "most of the room leaned to X" line (gut picks vs the call). Two similar lines would confuse; better to show both comparisons in one place. Gut pick is optional, so count only those who picked. |
+| V3 | 2.3 Value line: data there? | Yes (room created, decided, answers, options). The room page needs to load the room's start date. |
+| V4 | 2.4 The numbers | Validated 2026-10-19 on 500 rooms; exact totals must be saved at Decide. Option scores are already visible to members, so editing them in the panel reveals nothing new. |
+| V5 | 2.5 What-if re-run: can it reuse Decide? | **Not as is.** The worker only picks up rooms in "deciding", and a decided room isn't; and every screen reads the newest analysis as the call, so a what-if saved there would replace the real call. Needs its own table and its own job claim. "Credit returned if it fails" needs a refund in the daily counter, which doesn't exist yet. |
+| V6 | 2.6 Reopen | Inputs reopen for editing automatically once the room is open. Sign-offs allow one per person per room, so old ones must move to history first; same for open objections. A new Decide becomes the newest analysis, so the old call stays as history without extra work. |
+| V7 | 2.7 Review | Today the owner can log an outcome on a room that isn't decided (no status check), and only one review per room fits. Both are in the planned database change. |
+| V8 | 2.8 Track record per organisation | **Not meaningful yet.** Each owner has their own workspace, so "organisation" equals "owner" today. Per-owner works; per-organisation needs shared workspaces first. |
+| V9 | Privacy, all features | Nothing new is exposed: reactions read shared fields only, sliders use group totals, review ratings are private with the spread from 3 raters. |
+
 ## Later (after launch)
 Decision styles (majority vote, everyone agrees) · Slack sharing · Stated → Simulated → Outcome stories on the landing page (not yet decided; needs real reviewed rooms) · automatic reminders, email first, then WhatsApp · WhatsApp number (Kapso) · bot check (Turnstile) · Google and Microsoft sign-in · native Arabic review · contact email and operator name on privacy and terms.
 
