@@ -286,6 +286,7 @@ ul.people{margin:6px 0 4px}
 .roster li.person-row{flex-wrap:wrap;row-gap:6px}
 .person-share{display:flex;gap:16px;width:100%;grid-template-columns:none}
 .invite-row .share .btn{padding:12px 14px}
+.invite-row .choice-t .tag{margin-inline-start:8px}
 
 /* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
 .top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
