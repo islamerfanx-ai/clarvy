@@ -104,7 +104,7 @@ function stepYou() {
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
     if (!demo) {
       try { await Rooms.trialSignIn(d.name.trim(), d.email.trim()); }
-      catch (err) { console.error(err); return fail(t(err.message === "busy" ? "busy" : "err_generic")); }
+      catch (err) { console.error(err); return fail(t(["busy", "captcha"].includes(err.message) ? err.message : /captcha/i.test(err.message) ? "captcha" : "err_generic")); }
     }
     next();
   });

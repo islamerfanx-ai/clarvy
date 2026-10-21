@@ -41,6 +41,7 @@ async function connect() {
   const cfg = await fetch("/api/config").then(r => r.ok ? r.json() : {}).catch(() => ({}));
   if (!cfg.supabase) return false;
   emailCodes = !!cfg.emailCodes;
+  turnstileKey = cfg.turnstile || "";
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
   sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
   user = (await sb.auth.getSession()).data.session?.user || null;
@@ -59,6 +60,25 @@ async function setName(name) { await sb.from("profiles").update({ name }).eq("id
 const validEmail = e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || "").trim());
 // Open trial: everyone gives a name and an email (not verified) and gets their own private account
 // (Supabase anonymous sign-in). The email is stored on their profile so we can reach them.
+// Bot check (Cloudflare Turnstile): a fresh token for each sign-up. The widget stays hidden unless
+// Cloudflare needs the person to tick a box; then it shows at the bottom of the screen.
+let turnstileKey = "";
+async function captchaToken() {
+  if (!turnstileKey) return undefined;
+  // If the script can't load (a blocker), go on without a token: Supabase decides whether that's allowed.
+  try { await loadScript("https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"); } catch { return undefined; }
+  let box = document.getElementById("dr-captcha");
+  if (!box) { box = el("div"); box.id = "dr-captcha"; document.body.append(box); }
+  box.replaceChildren();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(Object.assign(new Error("captcha"), { code: "captcha" })), 60000);
+    window.turnstile.render(box, {
+      sitekey: turnstileKey, appearance: "interaction-only", language: lang === "ar" ? "ar" : "en",
+      callback: token => { clearTimeout(timer); box.replaceChildren(); resolve(token); },
+      "error-callback": () => { clearTimeout(timer); reject(Object.assign(new Error("captcha"), { code: "captcha" })); }
+    });
+  });
+}
 async function trialSignIn(name, email) {
   if (!user) {
     // When many people join at once (a whole office on one network), sign-in can be briefly rate limited:
@@ -66,7 +86,7 @@ async function trialSignIn(name, email) {
     let data, error;
     for (const wait of [0, 1500, 4000, 9000]) {
       if (wait) await new Promise(r => setTimeout(r, wait));
-      ({ data, error } = await sb.auth.signInAnonymously());
+      ({ data, error } = await sb.auth.signInAnonymously({ options: { captchaToken: await captchaToken() } }));
       if (!error || error.status !== 429) break;
     }
     if (error) throw error.status === 429 ? Object.assign(new Error("busy"), { code: "busy" }) : error;
@@ -110,7 +130,7 @@ function emailCode(box, { onDone }) {
     eBtn.disabled = true;
     const res = isGuest()
       ? await sb.auth.updateUser({ email }, { emailRedirectTo: location.href })
-      : await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href } });
+      : await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href, captchaToken: await captchaToken() } });
     mode = isGuest() ? "email_change" : "email";
     eBtn.disabled = false;
     if (res.error) return say(t(/rate|seconds/i.test(res.error.message) ? "email_wait" : "err_generic"));

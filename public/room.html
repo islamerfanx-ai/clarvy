@@ -397,7 +397,7 @@ async function vJoin() {
       inputStep = 0;
       await refresh();
     } catch (err) {
-      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "invite_used", "busy"])));
+      say(st, t(/captcha/i.test(err?.message || "") ? "captcha" : Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "invite_used", "busy"])));
       go.disabled = false;
     }
   };
