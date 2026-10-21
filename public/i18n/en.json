@@ -873,5 +873,6 @@
   "review_hint": "We'll remind the room on this date to check how the call turned out.",
   "review_after_plan": "Once the plan is drafted, you'll set when to check how it went.",
   "decide_by_on": "Decide by {date}",
-  "captcha": "We couldn't confirm you're a person. Please try again."
+  "captcha": "We couldn't confirm you're a person. Please try again.",
+  "captcha_tick": "One quick check: tick the box to continue."
 }

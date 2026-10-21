@@ -74,7 +74,9 @@ async function captchaToken() {
     const timer = setTimeout(() => reject(Object.assign(new Error("captcha"), { code: "captcha" })), 60000);
     window.turnstile.render(box, {
       sitekey: turnstileKey, appearance: "interaction-only", language: lang === "ar" ? "ar" : "en",
-      callback: token => { clearTimeout(timer); box.replaceChildren(); resolve(token); },
+      // Shown only when Cloudflare needs a tick: say so, since the box sits away from the button pressed.
+      "before-interactive-callback": () => { box.classList.add("ask"); box.prepend(el("p", "captcha-note", t("captcha_tick"))); },
+      callback: token => { clearTimeout(timer); box.classList.remove("ask"); box.replaceChildren(); resolve(token); },
       "error-callback": () => { clearTimeout(timer); reject(Object.assign(new Error("captcha"), { code: "captcha" })); }
     });
   });
