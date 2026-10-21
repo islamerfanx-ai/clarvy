@@ -103,8 +103,16 @@ function stepYou() {
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
     if (!demo) {
+      // One sign-up per press: the button waits while the bot check and sign-in run.
+      const nb = document.querySelector("#wiz .actions .btn:not(.ghost)");
+      if (nb?.disabled) return;
+      if (nb) { nb.disabled = true; nb.textContent = t("loading"); }
       try { await Rooms.trialSignIn(d.name.trim(), d.email.trim()); }
-      catch (err) { console.error(err); return fail(t(["busy", "captcha"].includes(err.message) ? err.message : /captcha/i.test(err.message) ? "captcha" : "err_generic")); }
+      catch (err) {
+        console.error(err);
+        if (nb) { nb.disabled = false; nb.textContent = t("next"); }
+        return fail(t(["busy", "captcha"].includes(err.message) ? err.message : /captcha/i.test(err.message) ? "captcha" : "err_generic"));
+      }
     }
     next();
   });

@@ -81,8 +81,10 @@ async function captchaToken() {
     });
   });
 }
+let signingIn = null;   // a sign-up in progress, so a second call waits for it instead of making another account
 async function trialSignIn(name, email) {
-  if (!user) {
+  if (!user && signingIn) await signingIn.catch(() => {});
+  if (!user) signingIn = (async () => {
     // When many people join at once (a whole office on one network), sign-in can be briefly rate limited:
     // wait and try again a few times before telling the person.
     let data, error;
@@ -93,7 +95,8 @@ async function trialSignIn(name, email) {
     }
     if (error) throw error.status === 429 ? Object.assign(new Error("busy"), { code: "busy" }) : error;
     user = data.user;
-  }
+  })();
+  if (signingIn) { try { await signingIn; } finally { signingIn = null; } }
   const patch = { name };
   if (email) patch.email = String(email).trim();
   const { error } = await sb.from("profiles").update(patch).eq("id", user.id);
