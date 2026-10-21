@@ -323,5 +323,16 @@ check("Your rooms lists decide-by and invites", as_user(G, f"select decide_by, i
 check("members don't see invite counts", as_user(E, f"select invited is null from my_rooms() where id='{R6}'"), "True")
 check("Your rooms names the final call", as_user(C, f"select final_label from my_rooms() where id='{R5}'"), "Open now")
 
+# ---------- Room status is managed (20261026000000_room_guard.sql) ----------
+R10 = str(uuid.uuid4())
+check("can't open a room already deciding", as_user(G, f"insert into rooms (id,workspace_id,type,question,options,criteria,owner_id,status,decide_requested_at) values ('{R10}','{G}','business','Q?','{opts}','{crit}','{G}','deciding',now())", anonymous=True), "room_status_is_managed")
+check("owner can't start a run by hand", as_user(G, f"update rooms set status='deciding', decide_requested_at=now(), decide_attempts=0 where id='{R6}'", anonymous=True), "room_status_is_managed")
+check("owner can't reopen a decided room by hand", as_user(G, f"update rooms set status='open' where id='{R5}'", anonymous=True), "room_status_is_managed")
+check("owner can't mark a room reviewed by hand", as_user(G, f"update rooms set status='reviewed' where id='{R6}'", anonymous=True), "room_status_is_managed")
+check("owner can't change the decide columns by hand", as_user(G, f"update rooms set decide_error='x', decide_attempts=0 where id='{R6}'", anonymous=True), "room_status_is_managed")
+check("owner still edits review date and report", as_user(G, f"update rooms set review_date='2027-01-15', report_mode='team', links='[]' where id='{R5}'", anonymous=True), "UPDATE 1")
+check("server still moves status", server(f"update rooms set status='deciding', decide_requested_at=now() where id='{R6}'"), "UPDATE 1")
+check("server still claims the job", server("select id from claim_decide_job()"), R6)
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
