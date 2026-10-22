@@ -8,7 +8,7 @@ MIGRATIONS = sorted(sys.argv[1:])
 STUB = """
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema storage;
-create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}', is_anonymous boolean default false);
+create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}', is_anonymous boolean default false, created_at timestamptz default now(), last_sign_in_at timestamptz);
 create function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 create function auth.jwt() returns jsonb language sql stable as
@@ -359,6 +359,14 @@ check("country must be a two-letter code", as_user(B, "update profiles set count
 check("can't edit someone else's profile", as_user(C, f"update profiles set organisation='X' where id='{B}'"), "UPDATE 0")
 check("email change at sign-in reaches the profile", (server(f"update auth.users set email='b2@x.test' where id='{B}'") + server(f"select email from profiles where id='{B}'")), "b2@x.test")
 check("Google's full name is used for new accounts", (server("insert into auth.users (id,email,raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000aa','g@x.test','{\"full_name\":\"Kenji Watanabe\"}')") + server("select name from profiles where id='00000000-0000-0000-0000-0000000000aa'")), "Kenji Watanabe")
+
+# ---------- Admin page (20261029000000_admin.sql) ----------
+check("people can't open the admin overview", as_user(B, "select admin_overview()"), "permission denied")
+check("people can't read the operator list", as_user(B, "select count(*) from operators"), "\n0\n")
+check("people can't add themselves as operator", as_user(B, f"insert into operators (user_id) values ('{B}')"), "row-level security")
+check("people can't read AI costs", as_user(B, "select count(*) from ai_usage"), "\n0\n")
+check("server records an AI call", server(f"insert into ai_usage (kind,room_id,user_id,model,tokens_in,tokens_out,searches,cost) values ('analyst','{R5}','{G}','gpt-5.5',20000,6000,3,0.29)"), "INSERT 0 1")
+check("server builds the overview", server("select admin_overview()->>'accounts', admin_overview()->'cost_by_kind'->>'analyst'"), "0.29")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
