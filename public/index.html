@@ -331,7 +331,7 @@ flow();
   await Rooms.loadLang(Rooms.firstLang());
   meta(); drawModels(); drawFaq();
   // Show "My rooms" only to people who already have rooms in this browser.
-  if (await Rooms.connect()) document.querySelector('.nav a.navlink[href="/dashboard.html"]').hidden = !Rooms.user;
+  if (await Rooms.connect()) document.querySelector('.nav a.navlink[href="/dashboard.html"]').hidden = !Rooms.user || !!document.getElementById("acctMenu");
 })();
 })();
 </script>

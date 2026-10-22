@@ -170,13 +170,17 @@ function profileForm(box, { profile = {}, intro = "", onDone, saveLabel } = {}) 
   box.replaceChildren(f);
   setTimeout(() => (name.value ? org.value ? title : org : name).focus(), 50);
 }
-function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !hasAccount(); accountMenu(); }
+function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !hasAccount() || !!$("acctMenu"); accountMenu(); }
 // The account avatar, top right on every page: initials in a circle, with a small menu.
 let menuFor = null;
 async function accountMenu() {
   const bar = document.querySelector(".top .top-acts") || document.querySelector(".top .nav");
   const old = $("acctMenu");
-  if (!bar || !sb || !hasAccount()) { if (old) old.remove(); menuFor = null; return; }
+  if (!bar || !sb || !hasAccount()) {
+    if (old) old.remove(); menuFor = null;
+    document.querySelectorAll('[data-acct-hidden="1"]').forEach(x => { x.hidden = false; delete x.dataset.acctHidden; });
+    return;
+  }
   if (old && menuFor === user.id) return;
   if (old) old.remove();
   menuFor = user.id;
@@ -194,7 +198,12 @@ async function accountMenu() {
   btn.onclick = e => { e.stopPropagation(); open(menu.hidden); };
   document.addEventListener("click", e => { if (!wrap.contains(e.target)) open(false); });
   document.addEventListener("keydown", e => { if (e.key === "Escape") open(false); });
-  wrap.append(btn, menu);
+  // "Your rooms" as a round icon beside the avatar; the text links it replaces are hidden.
+  const rooms = el("a", "acct-btn acct-rooms"); rooms.href = "/dashboard.html"; rooms.target = "_top";
+  rooms.setAttribute("aria-label", t("my_rooms")); rooms.title = t("my_rooms");
+  rooms.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 21V4.5A1.5 1.5 0 0 1 5.5 3h9A1.5 1.5 0 0 1 16 4.5V21"/><path d="M16 7h2.5A1.5 1.5 0 0 1 20 8.5V21M2 21h20"/><circle cx="12.5" cy="12.5" r=".9" fill="currentColor"/></svg>';
+  document.querySelectorAll('.top a.navlink[href="/dashboard.html"]').forEach(x => { x.hidden = true; x.dataset.acctHidden = "1"; });
+  wrap.append(rooms, btn, menu);
   bar.append(wrap);
   // Initials, name and organisation once the profile loads; the organisation link if there is one.
   try {
