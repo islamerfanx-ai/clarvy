@@ -170,7 +170,42 @@ function profileForm(box, { profile = {}, intro = "", onDone, saveLabel } = {}) 
   box.replaceChildren(f);
   setTimeout(() => (name.value ? org.value ? title : org : name).focus(), 50);
 }
-function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !hasAccount(); }
+function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !hasAccount(); accountMenu(); }
+// The account avatar, top right on every page: initials in a circle, with a small menu.
+let menuFor = null;
+async function accountMenu() {
+  const bar = document.querySelector(".top .top-acts") || document.querySelector(".top .nav");
+  const old = $("acctMenu");
+  if (!bar || !sb || !hasAccount()) { if (old) old.remove(); menuFor = null; return; }
+  if (old && menuFor === user.id) return;
+  if (old) old.remove();
+  menuFor = user.id;
+  const wrap = el("div", "acct"); wrap.id = "acctMenu";
+  const btn = el("button", "acct-btn"); btn.type = "button"; btn.setAttribute("aria-haspopup", "menu"); btn.setAttribute("aria-expanded", "false");
+  btn.setAttribute("aria-label", t("acct_menu"));
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
+  const menu = el("div", "acct-pop"); menu.setAttribute("role", "menu"); menu.hidden = true;
+  const head = el("div", "acct-head");
+  const item = (label, href, onClick) => { const x = el(href ? "a" : "button", "acct-item", label); x.setAttribute("role", "menuitem"); if (href) { x.href = href; x.target = "_top"; } else { x.type = "button"; x.onclick = onClick; } return x; };
+  menu.append(head, item(t("pf_link"), "/profile.html"), item(t("my_rooms"), "/dashboard.html"));
+  const out = item(t("si_sign_out"), null, async () => { await signOut(); (window.top || window).location.href = "/"; });
+  menu.append(out);
+  const open = on => { menu.hidden = !on; btn.setAttribute("aria-expanded", String(on)); };
+  btn.onclick = e => { e.stopPropagation(); open(menu.hidden); };
+  document.addEventListener("click", e => { if (!wrap.contains(e.target)) open(false); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape") open(false); });
+  wrap.append(btn, menu);
+  bar.append(wrap);
+  // Initials, name and organisation once the profile loads; the organisation link if there is one.
+  try {
+    const { data: p } = await sb.from("profiles").select("name,email,organisation").eq("id", user.id).maybeSingle();
+    const name = (p?.name || "").trim();
+    if (name) { btn.textContent = name.split(/\s+/).slice(0, 2).map(w => w[0]).join("").toUpperCase(); btn.classList.add("has-name"); }
+    head.append(el("b", null, name || p?.email || ""), el("span", null, [p?.organisation, p?.email].filter(Boolean).join(" · ")));
+    const { data: os } = await sb.rpc("my_orgs");
+    if (os?.length) menu.insertBefore(item(os.length === 1 ? os[0].name : t("og_link"), "/org.html"), out);
+  } catch {}
+}
 
 /* ---------- Email sign-in: a 6-digit code typed here, or the link in the email ---------- */
 // Builds the email -> code steps inside `box`. A guest who adds an email keeps their rooms

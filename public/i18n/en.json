@@ -1110,5 +1110,6 @@
   "og_memory_lbl": "Use our past decisions in new analyses",
   "og_memory_never": "It reads calls, reasons and reviews only. Never anyone's private answers, and never rooms marked strictly confidential. It mentions lessons in general terms, without details from other rooms.",
   "og_memory_on": "Organisation memory is on.",
-  "og_memory_off": "Organisation memory is off."
+  "og_memory_off": "Organisation memory is off.",
+  "acct_menu": "Your account"
 }
