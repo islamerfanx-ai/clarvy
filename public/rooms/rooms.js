@@ -228,7 +228,7 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
   const eIn = el("input", "line"); Object.assign(eIn, { id: "ecEmail", type: "email", autocomplete: "email", required: true, inputMode: "email", value: preset });
   const eBtn = el("button", "btn", t(emailCodes ? "email_send" : "email_send_link")); eBtn.type = "submit";
   const cLbl = el("label", "lbl", t("code_lbl")); cLbl.htmlFor = "ecCode";
-  const cIn = el("input", "line code"); Object.assign(cIn, { id: "ecCode", inputMode: "numeric", autocomplete: "one-time-code", maxLength: 6, pattern: "[0-9]*" });
+  const cIn = el("input", "line code"); Object.assign(cIn, { id: "ecCode", inputMode: "numeric", autocomplete: "one-time-code", maxLength: 10, pattern: "[0-9]*" });
   const cHint = el("p", "small");
   const cBtn = el("button", "btn", t("code_verify")); cBtn.type = "submit";
   const again = el("div", "row-acts");
@@ -276,7 +276,7 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
   codeStep.addEventListener("submit", async e => {
     e.preventDefault();
     const token = cIn.value.replace(/\D/g, "");
-    if (token.length !== 6) return say(t("code_wrong"));
+    if (token.length < 6 || token.length > 10) return say(t("code_wrong"));   // Supabase sends 6 or 8 digits, depending on the project
     cBtn.disabled = true;
     const { data, error } = await sb.auth.verifyOtp({ email, token, type: mode });
     cBtn.disabled = false;
