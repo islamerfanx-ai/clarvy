@@ -178,6 +178,15 @@ async function render() {
     jc.append(tog, box, el("p", "small", ws.email_domain ? t(ws.domain_verified ? "og_domain_on" : "og_domain_wait", { domain: ws.email_domain }) : t("og_domain_none")));
     cards.push(jc);
 
+    // Organisation memory (opt-in): the analysis learns from the organisation's past decisions.
+    const { data: mem } = await sb.from("workspaces").select("memory_on").eq("id", o.id).maybeSingle();
+    const mc = card("you", el("p", "text sm", t("og_memory")), el("p", "small", t("og_memory_hint")));
+    const ml = el("label", "check"); const mcb = el("input"); mcb.type = "checkbox"; mcb.checked = !!mem?.memory_on;
+    const mst = el("p", "status");
+    mcb.onchange = async () => { const { error } = await sb.from("workspaces").update({ memory_on: mcb.checked }).eq("id", o.id); say(mst, t(error ? "err_generic" : mcb.checked ? "og_memory_on" : "og_memory_off"), error ? "err" : "ok"); };
+    ml.append(mcb, el("span", null, t("og_memory_lbl")));
+    mc.append(ml, el("p", "small", t("og_memory_never")), mst); cards.push(mc);
+
     // Name and logo
     const nc = card("you", el("p", "text sm", t("og_settings")));
     const nIn = el("input", "line"); Object.assign(nIn, { maxLength: 120, value: ws.name }); nIn.setAttribute("aria-label", t("og_name"));

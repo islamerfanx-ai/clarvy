@@ -882,6 +882,7 @@ function vVerdict() {
   const ownerName = S.roster.find(p => p.role === "owner")?.name;
   const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || Rooms.typeName(r)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
+  if (v.memory_used?.n) top.append(el("p", "small", t("v_memory", { n: v.memory_used.n, org: v.memory_used.org || "" })));
   cards.push(top);
   if (settled) cards.push(...reviewCards());
   const flip = flipLine();

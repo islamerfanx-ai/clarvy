@@ -603,7 +603,7 @@
   "gov_approver": "Only the approver, by withdrawing it",
   "gov_authority": "A higher authority: {role}",
   "strict_lbl": "Strictly confidential",
-  "strict_hint": "The analysis summarises what people in each role said instead of quoting their figures.",
+  "strict_hint": "The analysis summarises what people in each role said instead of quoting their figures, and the room stays out of your organisation's memory.",
   "obj_open_note": "Objections stay open while the call is drafted. It can't be settled until they're withdrawn or overridden.",
   "obj_target_lbl": "What do you object to?",
   "obj_target_all": "The whole decision",
@@ -1103,5 +1103,12 @@
   "ad_org_create": "Create organisation",
   "ad_org_need": "A name and the first admin's email are needed.",
   "ad_org_made_emailed": "Created. The admin has an invite email.",
-  "ad_org_made_joined": "Created. The admin already had an account and is in."
+  "ad_org_made_joined": "Created. The admin already had an account and is in.",
+  "v_memory": "Drew on {n} past decisions from {org}.",
+  "og_memory": "Organisation memory",
+  "og_memory_hint": "When a room decides, the analysis looks at your organisation's earlier decisions, their reasons and how they turned out, and learns from them. Nothing is used to train any AI model.",
+  "og_memory_lbl": "Use our past decisions in new analyses",
+  "og_memory_never": "It reads calls, reasons and reviews only. Never anyone's private answers, and never rooms marked strictly confidential. It mentions lessons in general terms, without details from other rooms.",
+  "og_memory_on": "Organisation memory is on.",
+  "og_memory_off": "Organisation memory is off."
 }
