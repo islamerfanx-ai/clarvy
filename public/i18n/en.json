@@ -1111,5 +1111,8 @@
   "og_memory_never": "It reads calls, reasons and reviews only. Never anyone's private answers, and never rooms marked strictly confidential. It mentions lessons in general terms, without details from other rooms.",
   "og_memory_on": "Organisation memory is on.",
   "og_memory_off": "Organisation memory is off.",
-  "acct_menu": "Your account"
+  "acct_menu": "Your account",
+  "email_wait_secs": "A code was just sent to this address. You can ask for a new one in {n} seconds, or type the code you already have.",
+  "email_wait_hour": "Too many emails were sent in the last hour. Use a code you already have, or try again later.",
+  "code_have": "I already have a code"
 }

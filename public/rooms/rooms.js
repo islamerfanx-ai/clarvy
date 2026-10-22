@@ -236,7 +236,11 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
   const change = el("button", "linkbtn", t("email_change")); change.type = "button";
   again.append(resend, change);
   const status = el("p", "status"); status.setAttribute("role", "status");
-  emailStep.append(eLbl, eIn, eBtn);
+  // Already have a code from the last hour? Go straight to typing it.
+  const have = el("button", "linkbtn", t("code_have")); have.type = "button"; have.hidden = true;
+  have.onclick = () => { email = eIn.value.trim(); if (!validEmail(email)) { eIn.focus(); return; } emailStep.hidden = true; codeStep.hidden = false;
+    cHint.textContent = t("code_hint", { email }); say(""); cIn.value = ""; cIn.focus(); };
+  emailStep.append(eLbl, eIn, eBtn, have);
   codeStep.append(cLbl, cIn, cHint, cBtn, again);
   box.append(emailStep, codeStep, status);
   let mode = "email", email = "";
@@ -250,7 +254,19 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
     catch (err) { res = { error: err }; }
     mode = "email";
     eBtn.disabled = false;
-    if (res.error) return say(t(/captcha/i.test(res.error.message || "") ? "captcha" : /rate|seconds/i.test(res.error.message || "") ? "email_wait" : "err_generic"));
+    if (res.error) {
+      const msg = res.error.message || "";
+      const secs = Number((msg.match(/(\d+)\s*seconds?/i) || [])[1]);
+      if (secs > 0) {
+        // Supabase sends one code per address per minute: show the exact wait, and offer the code already sent.
+        let left = secs; have.hidden = false; eBtn.disabled = true;
+        const tick = () => { if (left <= 0) { clearInterval(timer); eBtn.disabled = false; return say(""); } say(t("email_wait_secs", { n: left }), "err"); left--; };
+        const timer = setInterval(tick, 1000); tick();
+        return;
+      }
+      if (/rate|too many/i.test(msg)) { have.hidden = false; return say(t("email_wait_hour")); }
+      return say(t(/captcha/i.test(msg) ? "captcha" : "err_generic"));
+    }
     emailStep.hidden = true; codeStep.hidden = false;
     cLbl.hidden = cIn.hidden = cBtn.hidden = !emailCodes;
     cHint.textContent = t(emailCodes ? "code_hint" : "link_hint", { email });
