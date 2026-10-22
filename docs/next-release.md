@@ -73,6 +73,8 @@ Checked each feature against the database and server, with probes on a test copy
 
 **Decided 2026-10-21 after validation:** V0 fixed and live the same day (migration 20261026000000_room_guard: only the server and `decide_verdict` change status and the decide columns; 188/188 tests; checked on the live database). Said vs do and "the room leaned elsewhere" become one combined block on the verdict. A failed what-if re-run still uses its Decide credit (no refund). Track record is per owner for now; per organisation waits for shared workspaces.
 
+**Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
+
 ## Later (after launch)
 Decision styles (majority vote, everyone agrees) · Slack sharing · Stated → Simulated → Outcome stories on the landing page (not yet decided; needs real reviewed rooms) · automatic reminders, email first, then WhatsApp · WhatsApp number (Kapso) · bot check (Turnstile) · Google and Microsoft sign-in · native Arabic review · contact email and operator name on privacy and terms.
 
