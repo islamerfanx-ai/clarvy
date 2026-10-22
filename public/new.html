@@ -148,6 +148,73 @@ function applyCheck(r) {
   }
   save();
 }
+/* ---------- Say your question (voice) ---------- */
+// Tap, speak, tap again: the server writes out what it heard, and the owner confirms it, edits it or
+// records again. "Listen" reads it back with the device's own voice. Up to 60 seconds; nothing is stored.
+const canRecord = () => !!(navigator.mediaDevices?.getUserMedia && window.MediaRecorder);
+function voiceBox(ta) {
+  const box = el("div", "voice");
+  const mic = el("button", "btn soft voice-btn"); mic.type = "button";
+  const micIcon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+  const status = el("p", "small"); status.setAttribute("role", "status");
+  const heard = el("div", "block voice-heard"); heard.hidden = true;
+  let rec = null, chunks = [], timer = null, started = 0, stream = null;
+  const idle = () => { mic.innerHTML = micIcon; mic.append(el("span", null, t("voice_btn"))); mic.disabled = false; mic.classList.remove("rec"); };
+  const stopAll = () => { clearInterval(timer); stream?.getTracks().forEach(tr => tr.stop()); stream = null; };
+  const listen = text => {
+    if (!window.speechSynthesis) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text); u.lang = Rooms.lang === "ar" ? "ar-SA" : "en-GB";
+    speechSynthesis.speak(u);
+  };
+  const show = text => {
+    if (!text) { status.textContent = t("voice_empty"); return; }
+    const q = el("p", "body", text); q.dir = Rooms.lang === "ar" ? "rtl" : "ltr";
+    const yes = el("button", "btn", t("voice_yes")); yes.type = "button";
+    yes.onclick = () => { d.question = text; d.qOrig = ""; ta.value = text; save(); heard.hidden = true; status.textContent = t("voice_used"); };
+    const edit = el("button", "btn ghost", t("voice_edit")); edit.type = "button";
+    edit.onclick = () => { d.question = text; d.qOrig = ""; ta.value = text; save(); heard.hidden = true; status.textContent = ""; ta.focus(); };
+    const again = el("button", "linkbtn", t("voice_again")); again.type = "button"; again.onclick = () => { heard.hidden = true; start(); };
+    const row = el("div", "share"); row.append(yes, edit);
+    const extra = el("div", "voice-extra"); extra.append(again);
+    if (window.speechSynthesis) { const l = el("button", "linkbtn", t("voice_listen")); l.type = "button"; l.onclick = () => listen(text); extra.prepend(l); }
+    heard.replaceChildren(el("span", "lbl", t("voice_heard")), q, el("p", "small", t("voice_right")), row, extra);
+    heard.hidden = false; status.textContent = "";
+  };
+  const send = async blob => {
+    mic.disabled = true; status.textContent = t("voice_writing");
+    try {
+      if (demo) { await new Promise(r => setTimeout(r, 900)); return show(t("question_ph")); }
+      const b64 = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1] || ""); fr.onerror = rej; fr.readAsDataURL(blob); });
+      const r = await Rooms.post("/api/rooms/voice", { audio: b64, mime: blob.type || "audio/webm", lang: Rooms.lang });
+      show(r.text);
+    } catch (e) { status.textContent = t(e.message === "quota" ? "err_quota" : "voice_fail"); }
+    finally { idle(); }
+  };
+  const start = async () => {
+    status.textContent = "";
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch { status.textContent = t("voice_denied"); return; }
+    const type = ["audio/webm;codecs=opus", "audio/mp4", "audio/webm", "audio/ogg"].find(x => MediaRecorder.isTypeSupported?.(x)) || "";
+    chunks = [];
+    rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = () => { stopAll(); send(new Blob(chunks, { type: (rec.mimeType || type || "audio/webm").split(";")[0] })); };
+    rec.start();
+    started = Date.now(); mic.classList.add("rec");
+    const tick = () => {
+      const sec = Math.floor((Date.now() - started) / 1000);
+      mic.innerHTML = ""; mic.append(el("span", "voice-dot"), el("span", null, t("voice_stop") + " · 0:" + String(sec).padStart(2, "0")));
+      if (sec >= 60 && rec.state === "recording") rec.stop();
+    };
+    tick(); timer = setInterval(tick, 500);
+  };
+  mic.onclick = () => { if (rec && rec.state === "recording") rec.stop(); else start(); };
+  idle();
+  box.append(mic, status, heard);
+  return box;
+}
+
 function stepQuestion() {
   const ta = el("textarea"); Object.assign(ta, { id: "question", rows: 3, maxLength: 300, placeholder: t("question_ph"), value: d.question });
   ta.setAttribute("aria-label", t("nr_q_title"));
@@ -195,7 +262,7 @@ function stepQuestion() {
     finally { check.disabled = false; check.textContent = t("q_check"); }
   };
   if (!d.question.trim()) setTimeout(() => ta.focus(), 50);
-  const f = form([...head(t("nr_q_title"), t("nr_q_hint")), ta, starters, checkF, checked, typeField, customF, actions()], async () => {
+  const f = form([...head(t("nr_q_title"), t("nr_q_hint")), ta, ...(canRecord() ? [voiceBox(ta)] : []), starters, checkF, checked, typeField, customF, actions()], async () => {
     if (!d.question.trim()) return fail(t("need_question"));
     if (d.type === "custom" && !d.typeLabel.trim()) { customIn.focus(); return fail(t("need_custom")); }
     const nb = f.querySelector(".actions .btn:not(.ghost)"); nb.disabled = true; nb.textContent = t("q_preparing");

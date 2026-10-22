@@ -311,6 +311,19 @@ ul.people{margin:6px 0 4px}
 
 .rate-chips{display:flex;flex-wrap:wrap;gap:6px}
 
+/* Say your question */
+.voice{display:flex;flex-direction:column;gap:8px}
+.voice .voice-btn{width:auto;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;padding:10px 16px}
+.voice .voice-btn.rec{background:var(--yellow);color:var(--fg)}
+.voice-dot{width:10px;height:10px;border-radius:50%;background:#C0392B;animation:voicePulse 1s ease-in-out infinite}
+@keyframes voicePulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.voice-dot{animation:none}}
+.voice-heard{background:var(--yellow);padding:14px 16px}
+.voice-heard .body{margin:0;font-size:17px}
+.voice-heard .share{grid-template-columns:1fr 1fr}
+.voice-extra{display:flex;gap:18px}
+.voice p.small{margin:0}
+
 /* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
 .top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
 .wm{font-weight:500;letter-spacing:-.02em}

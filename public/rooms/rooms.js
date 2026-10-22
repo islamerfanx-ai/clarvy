@@ -380,6 +380,7 @@ function openNewRoom(href = "/new.html") {
   const panel = el("div", "dr-pop-panel");
   const close = el("button", "dr-pop-close", "×"); close.type = "button"; close.setAttribute("aria-label", t("close") || "Close");
   const frame = el("iframe"); frame.src = url.pathname + url.search; frame.title = t("new_room");
+  frame.allow = "microphone";   // "Say your question" records inside the pop-up
   panel.append(close, frame); pop.append(panel); document.body.append(pop);
   document.body.classList.add("dr-pop-open");
   const shut = () => { pop.remove(); document.body.classList.remove("dr-pop-open"); removeEventListener("keydown", onKey); };
