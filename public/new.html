@@ -79,11 +79,10 @@ function field(id, label, input, hint) {
 }
 
 /* ---------- First: you and your organisation (shown for every new room) ---------- */
+// Signed out: sign in (Google, Microsoft or an email code). Signed in without a complete profile: the short
+// profile. Then confirm who you are and pick the kind of organisation for this room.
+let me = null;   // the signed-in owner's profile
 function stepYou() {
-  const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "name", maxLength: 80, value: d.name });
-  nameIn.oninput = () => { d.name = nameIn.value; save(); };
-  const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, value: d.email, placeholder: t("email_ph") });
-  emailIn.oninput = () => { d.email = emailIn.value; save(); };
   const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
   const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
   orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); };
@@ -94,60 +93,50 @@ function stepYou() {
   };
   drawOrgs();
   const orgField = el("div", "field org-pick"); orgField.append(el("span", "lbl", t("org_lbl")), el("p", "small", t("org_why")), orgs, orgF);
-  setTimeout(() => { if (!d.name) nameIn.focus(); else if (!d.email) emailIn.focus(); }, 50);
-  return form([...head(t(known ? "nr_you_title_back" : "nr_you_title"), t(known ? "nr_you_hint_back" : "nr_you_hint")),
-    field("ownerName", t("your_name"), nameIn), field("ownerEmail", t("email_lbl"), emailIn, t("email_why")), orgField, actions(), Rooms.agreeNote()], async () => {
-    if (!d.name.trim()) { nameIn.focus(); return fail(t("need_name")); }
-    if (!Rooms.validEmail(d.email)) { emailIn.focus(); return fail(t("need_email")); }
+
+  // Demo: no accounts, just a name and an email.
+  if (demo) {
+    const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "name", maxLength: 80, value: d.name });
+    nameIn.oninput = () => { d.name = nameIn.value; save(); };
+    const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", maxLength: 120, value: d.email, placeholder: t("email_ph") });
+    emailIn.oninput = () => { d.email = emailIn.value; save(); };
+    return form([...head(t("nr_you_title"), t("nr_you_hint")), field("ownerName", t("your_name"), nameIn), field("ownerEmail", t("email_lbl"), emailIn), orgField, actions()], () => {
+      if (!d.name.trim()) return fail(t("need_name"));
+      if (!d.orgType) return fail(t("need_org"));
+      next();
+    });
+  }
+  const acct = el("div", "stack-sm");
+  const ready = Rooms.hasAccount() && me?.completed_at;
+  if (!Rooms.hasAccount()) {
+    // Not signed in: sign in first; the profile and the organisation follow.
+    Rooms.signInBox(acct, { onDone: async () => { me = await Rooms.myProfile(); render(); } });
+    const box = el("div", "stack-sm"); box.style.gap = "16px";
+    box.append(...head(t("si_title"), t("si_hint")), acct, Rooms.agreeNote());
+    return box;
+  }
+  if (!ready) {
+    Rooms.profileForm(acct, { profile: me || {}, intro: t("pf_intro"), onDone: async () => { me = await Rooms.myProfile(); render(); } });
+    const box = el("div", "stack-sm"); box.style.gap = "16px";
+    box.append(...head(t("pf_title_head"), t("pf_hint")), acct);
+    return box;
+  }
+  d.name = me.name; d.email = me.email || ""; save();
+  const who = el("div", "block signed-in");
+  who.append(el("span", "lbl", t("si_signed_in")), el("p", "body", [me.name, me.job_title, me.organisation].filter(Boolean).join(" · ")), el("p", "small", me.email || ""));
+  const links = el("div", "voice-extra");
+  const edit = el("a", "linkbtn", t("pf_edit")); edit.href = "/profile.html"; edit.target = "_top";
+  const out = el("button", "linkbtn", t("si_not_you")); out.type = "button";
+  out.onclick = async () => { await Rooms.signOut(); me = null; render(); };
+  links.append(edit, out); who.append(links);
+  return form([...head(t("nr_you_title_back"), t("nr_you_hint_back")), who, orgField, actions()], () => {
     if (!d.orgType) return fail(t("need_org"));
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
-    if (!demo) {
-      // One sign-up per press: the button waits while the bot check and sign-in run.
-      const nb = document.querySelector("#wiz .actions .btn:not(.ghost)");
-      if (nb?.disabled) return;
-      if (nb) { nb.disabled = true; nb.textContent = t("loading"); }
-      try { await Rooms.trialSignIn(d.name.trim(), d.email.trim()); }
-      catch (err) {
-        console.error(err);
-        if (nb) { nb.disabled = false; nb.textContent = t("next"); }
-        return fail(t(["busy", "captcha"].includes(err.message) ? err.message : /captcha/i.test(err.message) ? "captcha" : "err_generic"));
-      }
-    }
     next();
   });
 }
 
-/* ---------- The question and its category ---------- */
-// Pressing Next checks the question once: grammar fixed (with Undo on the next page), three rephrasings,
-// and a first draft of the options and what to weigh. The world brief starts at the same moment.
-async function checkQuestion() {
-  const q = d.question.trim();
-  if (d.qRes && (d.qKeys || []).includes(q)) return d.qRes;
-  const r = demo ? demoCheck(q) : await Rooms.post("/api/rooms/question", { question: q, type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, draft: true, lang: Rooms.lang });
-  d.qRes = r; d.qKeys = [q, String(r.corrected || "").trim()]; save();
-  return r;
-}
-function demoCheck(q) {
-  const ar = Rooms.lang === "ar";
-  return {
-    corrected: q.replace(/\s+/g, " ").replace(/^./, c => c.toUpperCase()).replace(/[?؟.]?$/, ar ? "؟" : "?"), changed: true, issues: [t("q_demo_issue")],
-    options: [{ text: q, why: t("q_demo_why") }],
-    alternatives: ar ? ["نبدأ الآن", "تجربة لستة أشهر أولًا", "شراكة مع جهة محلية", "ننتظر حتى العام المقبل"] : ["Go ahead now", "Run a 6-month pilot first", "Partner with a local firm", "Wait until next year"],
-    criteria: template(d.type).map(c => c.label)
-  };
-}
-function applyCheck(r) {
-  if (!r) return;
-  if (r.changed && r.corrected && r.corrected.trim() !== d.question.trim()) { d.qOrig = d.question; d.question = r.corrected.trim(); }
-  // Fill the next page, unless the owner already wrote their own options or list.
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  if ((r.alternatives || []).length >= 2 && (d.options.every(o => !o.trim()) || same(d.options, d.optsDraft))) { d.options = r.alternatives.slice(0, 6); d.optsDraft = [...d.options]; }
-  if ((r.criteria || []).length >= 2 && (!d.crits || same(d.crits, d.critsDraft) || same(d.crits, template(d.type)))) {
-    d.crits = r.criteria.slice(0, 8).map(label => ({ label, on: true })); d.critsDraft = structuredClone(d.crits);
-  }
-  save();
-}
 /* ---------- Say your question (voice) ---------- */
 // Tap, speak, tap again: the server writes out what it heard, and the owner confirms it, edits it or
 // records again. "Listen" reads it back with the device's own voice. Up to 60 seconds; nothing is stored.
@@ -776,7 +765,7 @@ async function create() {
       if (!people.length) return Rooms.goToRoom(to);
       return vSend(to, people.map((p, i) => ({ token: "demo-" + (i + 1), person_name: p.name, person_contact: p.contact, role_id: p.roleId })), roles);
     }
-    if (!Rooms.user) await Rooms.trialSignIn(d.name.trim(), d.email.trim());
+    if (!Rooms.hasAccount()) throw new Error("sign_in_first");
     const sb = Rooms.sb, me = Rooms.user.id;
     let { data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).order("created_at").limit(1).maybeSingle();
     if (!ws) {
@@ -876,12 +865,8 @@ async function start() {
   document.title = t("new_room") + " · " + t("product");
   if (!demo) {
     if (!(await Rooms.connect())) { $("wiz").replaceChildren(el("p", "text", t("not_setup"))); return; }
-    if (Rooms.user) {
-      const p = await Rooms.profile();
-      if (p?.name) d.name = d.name || p.name;
-      if (p?.email) d.email = d.email || p.email;
-      known = !!(p?.name && p?.email);
-    }
+    me = await Rooms.myProfile();
+    known = !!me?.completed_at;
   }
   // The first screen shows for every new room: returning owners just confirm it.
   ids = ["you", "question", "options", "model", "people", "context"];

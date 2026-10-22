@@ -69,7 +69,7 @@ main{--content:none}
 <main>
   <header class="top">
     <a class="wm" href="/">Decision Rooms</a>
-    <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
+    <div class="top-acts"><a class="navlink" id="myRoomsLink" href="/profile.html" data-t="pf_link" hidden>Your profile</a><button class="lang" type="button" id="langBtn"></button></div>
   </header>
   <div id="view" aria-live="polite"><article class="msg"><p class="text thinking">One moment</p></article></div>
   <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
@@ -280,11 +280,13 @@ function drawResults() {
 }
 
 // No account in this browser yet (trial accounts live in the browser that made them).
+// Not signed in: sign in or sign up (Google, Microsoft or an email code), then the short profile.
 function noRooms() {
   const c = el("article", "msg you");
-  const go = el("a", "btn", t("mr_open_new")); go.href = demo ? "/new.html?demo=1" : "/new.html";
-  c.append(el("p", "text sm", t("db_trial_note")), el("p", "small", t("db_none_yet")), go);
+  const box = el("div", "stack-sm");
+  c.append(el("p", "text sm", t("si_title")), el("p", "small", t("si_hint")), box, Rooms.agreeNote());
   view.replaceChildren(el("h1", "db-title", t("db_title")), c);
+  Rooms.ensureAccount(box, { onDone: () => { Rooms.showMyRooms(); load(); } });
 }
 
 async function load() {
@@ -301,13 +303,16 @@ async function load() {
   render();
 }
 
-Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.user) noRooms(); });
+Rooms.langToggle(() => { if (rooms) render(); else if (Rooms.sb && !Rooms.hasAccount()) noRooms(); });
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());
   $("demoNote").hidden = !demo;
   if (demo) return load();
   if (!(await Rooms.connect())) { const c = el("article", "msg"); c.append(el("p", "text", t("not_setup"))); return view.replaceChildren(c); }
-  if (!Rooms.user) return noRooms();
+  if (!Rooms.hasAccount()) return noRooms();
+  // Signed in but the profile isn't finished: finish it first.
+  const me = await Rooms.myProfile();
+  if (!me?.completed_at) return noRooms();
   load();
 })();
 })();

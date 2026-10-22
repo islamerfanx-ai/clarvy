@@ -36,11 +36,12 @@ const typeName = r => r?.type === "custom" && r.type_label ? r.type_label : t("t
 const fmtDate = d => new Date(d + (String(d).length === 10 ? "T00:00:00" : "")).toLocaleDateString(lang === "ar" ? "ar-u-nu-latn" : "en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /* ---------- Supabase ---------- */
-let sb = null, user = null, emailCodes = false;
+let sb = null, user = null, emailCodes = false, providers = [];
 async function connect() {
   const cfg = await fetch("/api/config").then(r => r.ok ? r.json() : {}).catch(() => ({}));
   if (!cfg.supabase) return false;
   emailCodes = !!cfg.emailCodes;
+  providers = Array.isArray(cfg.providers) ? cfg.providers : [];
   turnstileKey = cfg.turnstile || "";
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
   sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
@@ -81,40 +82,106 @@ async function captchaToken() {
     });
   });
 }
-let signingIn = null;   // a sign-up in progress, so a second call waits for it instead of making another account
-async function trialSignIn(name, email) {
-  if (!user && signingIn) await signingIn.catch(() => {});
-  if (!user) signingIn = (async () => {
-    // When many people join at once (a whole office on one network), sign-in can be briefly rate limited:
-    // wait and try again a few times before telling the person.
-    let data, error;
-    for (const wait of [0, 1500, 4000, 9000]) {
-      if (wait) await new Promise(r => setTimeout(r, wait));
-      ({ data, error } = await sb.auth.signInAnonymously({ options: { captchaToken: await captchaToken() } }));
-      if (!error || error.status !== 429) break;
-    }
-    if (error) throw error.status === 429 ? Object.assign(new Error("busy"), { code: "busy" }) : error;
-    user = data.user;
-  })();
-  if (signingIn) { try { await signingIn; } finally { signingIn = null; } }
-  const patch = { name };
-  if (email) patch.email = String(email).trim();
+// Accounts (2026-10-22): everyone signs in with Google, Microsoft or a 6-digit email code, then fills in a
+// short profile. Old guest sessions (anonymous trial accounts) start fresh: they are signed out first.
+async function dropGuest() { if (user?.is_anonymous) { await sb.auth.signOut(); user = null; } }
+async function signOut() { await sb.auth.signOut(); user = null; showMyRooms(); }
+const PROFILE_FIELDS = "name,email,organisation,job_title,country,phone,sector,org_size,photo_url,news_opt_in,completed_at,language";
+async function myProfile() {
+  if (!hasAccount()) return null;
+  const { data } = await sb.from("profiles").select(PROFILE_FIELDS).eq("id", user.id).maybeSingle();
+  return data;
+}
+async function saveProfile(patch) {
   const { error } = await sb.from("profiles").update(patch).eq("id", user.id);
   if (error) throw error;
-  showMyRooms();
 }
-function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !user; }
+// Countries as ISO codes, named in the page's language.
+const COUNTRIES = "AE SA QA KW BH OM EG JO LB IQ SY PS YE MA DZ TN LY SD MR SO DJ KM TR IR PK IN BD LK NP AF CN JP KR SG MY ID TH VN PH HK TW AU NZ GB IE FR DE NL BE LU CH AT IT ES PT GR CY MT SE NO DK FI IS PL CZ SK HU RO BG HR SI RS BA ME MK AL UA RU KZ UZ AZ GE AM US CA MX BR AR CL CO PE VE ZA NG KE ET GH TZ UG RW SN CI CM ZM ZW AO MZ BW NA".split(" ");
+function countrySelect(value) {
+  const sel = el("select", "line role-select"); sel.style.width = "100%";
+  let names; try { names = new Intl.DisplayNames([lang === "ar" ? "ar" : "en"], { type: "region" }); } catch { names = { of: c => c }; }
+  const opts = COUNTRIES.map(c => [c, names.of(c) || c]).sort((a, b) => a[1].localeCompare(b[1], lang));
+  const o0 = el("option", null, t("pf_country_pick")); o0.value = ""; sel.append(o0);
+  opts.forEach(([c, n]) => { const o = el("option", null, n); o.value = c; if (c === value) o.selected = true; sel.append(o); });
+  return sel;
+}
+// Sign in or sign up: Google and Microsoft buttons (when switched on), or an email and a 6-digit code.
+function signInBox(box, { email = "", onDone } = {}) {
+  box.replaceChildren();
+  const wrap = el("div", "stack-sm signin");
+  if (providers.length) {
+    const row = el("div", "signin-providers");
+    [["google", "Google"], ["azure", "Microsoft"]].filter(([p]) => providers.includes(p)).forEach(([p, label]) => {
+      const b = el("button", "btn ghost", t("si_with", { provider: label })); b.type = "button";
+      b.onclick = async () => {
+        b.disabled = true;
+        await dropGuest();
+        // Google and Microsoft won't sign in inside a frame (the setup pop-up), so go through the main window.
+        const framed = window.top !== window;
+        const back = framed ? window.top.location.href : location.href;
+        const { data, error } = await sb.auth.signInWithOAuth({ provider: p, options: { redirectTo: back, skipBrowserRedirect: framed, scopes: p === "azure" ? "email" : undefined } });
+        if (error) { b.disabled = false; console.error(error); return; }
+        if (framed && data?.url) window.top.location.href = data.url;
+      };
+      row.append(b);
+    });
+    wrap.append(row, el("p", "small signin-or", t("si_or")));
+  }
+  const codeBox = el("div");
+  wrap.append(codeBox);
+  box.append(wrap);
+  emailCode(codeBox, { email, onDone });
+}
+// Signed in with a complete profile? If not, show what's missing in `box` and call onDone when ready.
+async function ensureAccount(box, { email = "", name = "", intro = null, onDone } = {}) {
+  const profileStep = async () => {
+    const p = await myProfile();
+    if (p?.completed_at && p.name && p.organisation && p.job_title && p.country) return onDone(p);
+    profileForm(box, { profile: { ...p, name: p?.name || name }, intro: t("pf_intro"), onDone });
+  };
+  if (hasAccount()) return profileStep();
+  signInBox(box, { email, onDone: profileStep });
+  if (intro) box.prepend(intro);
+}
+// The required profile: full name, organisation, job title, country (the email is already verified).
+function profileForm(box, { profile = {}, intro = "", onDone, saveLabel } = {}) {
+  const f = el("form", "stack-sm profile-form"); f.noValidate = true;
+  const field = (id, label, input) => { const w = el("div", "field"); const l = el("label", "lbl", label); l.htmlFor = id; input.id = id; w.append(l, input); return w; };
+  const mk = (val, max, ph, ac) => { const i = el("input", "line"); Object.assign(i, { value: val || "", maxLength: max, placeholder: ph || "", autocomplete: ac || "off" }); return i; };
+  const name = mk(profile.name, 80, "", "name"), org = mk(profile.organisation, 120, t("pf_org_ph"), "organization"), title = mk(profile.job_title, 80, t("pf_title_ph"), "organization-title");
+  const country = countrySelect(profile.country);
+  const st = el("p", "status err"); st.setAttribute("role", "status");
+  const go = el("button", "btn", saveLabel || t("pf_continue")); go.type = "submit";
+  if (intro) f.append(el("p", "small", intro));
+  if (profile.email) f.append(el("p", "small", t("pf_signed_as", { email: profile.email })));
+  f.append(field("pfName", t("pf_name"), name), field("pfOrg", t("pf_org"), org), field("pfTitle", t("pf_title"), title), field("pfCountry", t("pf_country"), country), go, st);
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const patch = { name: name.value.trim(), organisation: org.value.trim(), job_title: title.value.trim(), country: country.value || null };
+    if (!patch.name) { name.focus(); st.textContent = t("need_name"); return; }
+    if (!patch.organisation) { org.focus(); st.textContent = t("pf_need_org"); return; }
+    if (!patch.job_title) { title.focus(); st.textContent = t("pf_need_title"); return; }
+    if (!patch.country) { country.focus(); st.textContent = t("pf_need_country"); return; }
+    go.disabled = true;
+    try { await saveProfile(patch); onDone && onDone({ ...profile, ...patch }); }
+    catch (err) { console.error(err); st.textContent = t("err_generic"); go.disabled = false; }
+  };
+  box.replaceChildren(f);
+  setTimeout(() => (name.value ? org.value ? title : org : name).focus(), 50);
+}
+function showMyRooms() { const a = $("myRoomsLink"); if (a) a.hidden = !hasAccount(); }
 
 /* ---------- Email sign-in: a 6-digit code typed here, or the link in the email ---------- */
 // Builds the email -> code steps inside `box`. A guest who adds an email keeps their rooms
 // (their anonymous account is upgraded); anyone else signs in or signs up. Without codes
 // (EMAIL_CODES off), the page waits for the link to be tapped, in any tab of this browser.
-function emailCode(box, { onDone }) {
+function emailCode(box, { onDone, email: preset = "" } = {}) {
   box.replaceChildren();
   const emailStep = el("form", "stack-sm"), codeStep = el("form", "stack-sm");
   codeStep.hidden = true;
   const eLbl = el("label", "lbl", t("email_lbl")); eLbl.htmlFor = "ecEmail";
-  const eIn = el("input", "line"); Object.assign(eIn, { id: "ecEmail", type: "email", autocomplete: "email", required: true, inputMode: "email" });
+  const eIn = el("input", "line"); Object.assign(eIn, { id: "ecEmail", type: "email", autocomplete: "email", required: true, inputMode: "email", value: preset });
   const eBtn = el("button", "btn", t(emailCodes ? "email_send" : "email_send_link")); eBtn.type = "submit";
   const cLbl = el("label", "lbl", t("code_lbl")); cLbl.htmlFor = "ecCode";
   const cIn = el("input", "line code"); Object.assign(cIn, { id: "ecCode", inputMode: "numeric", autocomplete: "one-time-code", maxLength: 6, pattern: "[0-9]*" });
@@ -133,12 +200,13 @@ function emailCode(box, { onDone }) {
   async function send() {
     say("");
     eBtn.disabled = true;
-    const res = isGuest()
-      ? await sb.auth.updateUser({ email }, { emailRedirectTo: location.href })
-      : await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href, captchaToken: await captchaToken() } });
-    mode = isGuest() ? "email_change" : "email";
+    await dropGuest();   // old guest accounts start fresh
+    let res;
+    try { res = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href, captchaToken: await captchaToken() } }); }
+    catch (err) { res = { error: err }; }
+    mode = "email";
     eBtn.disabled = false;
-    if (res.error) return say(t(/rate|seconds/i.test(res.error.message) ? "email_wait" : "err_generic"));
+    if (res.error) return say(t(/captcha/i.test(res.error.message || "") ? "captcha" : /rate|seconds/i.test(res.error.message || "") ? "email_wait" : "err_generic"));
     emailStep.hidden = true; codeStep.hidden = false;
     cLbl.hidden = cIn.hidden = cBtn.hidden = !emailCodes;
     cHint.textContent = t(emailCodes ? "code_hint" : "link_hint", { email });
@@ -173,7 +241,7 @@ function emailCode(box, { onDone }) {
     showMyRooms();
     onDone && onDone(email);
   });
-  setTimeout(() => eIn.focus(), 50);
+  setTimeout(() => (preset ? eBtn : eIn).focus(), 50);
 }
 
 /* ---------- Server calls ---------- */
@@ -468,7 +536,7 @@ function helper(opts = {}) {
 
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
-  connect, profile, setName, trialSignIn, validEmail, isGuest, hasAccount, emailCode, showMyRooms,
+  connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   post, decideNow, signedConfidence, helper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor

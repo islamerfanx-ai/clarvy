@@ -8,7 +8,7 @@ MIGRATIONS = sorted(sys.argv[1:])
 STUB = """
 create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
 create schema auth; create schema storage;
-create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}');
+create table auth.users (id uuid primary key, email text, phone text, raw_user_meta_data jsonb default '{}', is_anonymous boolean default false);
 create function auth.uid() returns uuid language sql stable as
   $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 create function auth.jwt() returns jsonb language sql stable as
@@ -350,6 +350,15 @@ check("small room: average only, no spread or notes", as_user(C, f"select s->>'a
 check("outsiders see no summary", as_user(E, f"select review_summary('{R5}')"), "[]")
 check("an open room has no review", as_user(G, f"select log_review('{R6}','x',3)", anonymous=True), "no_review_open")
 check("report carries the review", as_user(C, f"select report_for_member('{R5}')"), "Opened on time")
+
+# ---------- Accounts and profiles (20261028000000_accounts.sql) ----------
+check("member fills in the profile", as_user(B, "update profiles set organisation='Tejarra', job_title='CFO', country='AE' where id=(select auth.uid())"), "UPDATE 1")
+check("profile is complete once the required fields are in", as_user(B, "select completed_at is not null from profiles where id=(select auth.uid())"), "True")
+check("a verified email can't be changed from the profile", (as_user(B, "update profiles set email='fake@x.test' where id=(select auth.uid())") + as_user(B, "select email from profiles where id=(select auth.uid())")), "B@x.test")
+check("country must be a two-letter code", as_user(B, "update profiles set country='United Arab Emirates' where id=(select auth.uid())"), "check constraint")
+check("can't edit someone else's profile", as_user(C, f"update profiles set organisation='X' where id='{B}'"), "UPDATE 0")
+check("email change at sign-in reaches the profile", (server(f"update auth.users set email='b2@x.test' where id='{B}'") + server(f"select email from profiles where id='{B}'")), "b2@x.test")
+check("Google's full name is used for new accounts", (server("insert into auth.users (id,email,raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000aa','g@x.test','{\"full_name\":\"Kenji Watanabe\"}')") + server("select name from profiles where id='00000000-0000-0000-0000-0000000000aa'")), "Kenji Watanabe")
 
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

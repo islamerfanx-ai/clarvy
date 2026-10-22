@@ -324,6 +324,11 @@ ul.people{margin:6px 0 4px}
 .voice-extra{display:flex;gap:18px}
 .voice p.small{margin:0}
 
+.signin-providers{display:flex;flex-direction:column;gap:8px}
+.signin-or{text-align:center;margin:4px 0}
+.signed-in{background:var(--yellow);padding:14px 16px}
+.signed-in .body{margin:0}
+
 /* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
 .top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
 .wm{font-weight:500;letter-spacing:-.02em}

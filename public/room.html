@@ -122,7 +122,7 @@ const live = {
     Object.assign(S.room, patch);
   },
   async join(name, email, consent) {
-    await Rooms.trialSignIn(name, email);
+    if (!Rooms.hasAccount()) throw new Error("sign_in_first");
     const { data, error } = await Rooms.sb.rpc("join_room", { invite_token: joinToken, consent });
     if (error) throw error;
     return data;
@@ -383,7 +383,7 @@ function questionCard() {
 async function vJoin() {
   const p = await store.preview();
   if (!p) return notice(t("invite_not_found"));
-  if (p.room_id && Rooms.user && !demo) {
+  if (p.room_id && Rooms.hasAccount() && !demo) {
     // Already in this room? Go straight there, even from a personal link that is now used.
     const { data } = await Rooms.sb.from("memberships").select("role").eq("room_id", p.room_id).eq("user_id", Rooms.user.id).maybeSingle();
     if (data) { roomId = p.room_id; history.replaceState(null, "", "?room=" + roomId); return refresh(); }
@@ -398,45 +398,52 @@ async function vJoin() {
     const as = el("p", "body", t("join_as", { role: p.role_title })); as.style.marginTop = "10px";
     top.append(as);
   }
+  // Not signed in, or the profile isn't finished: sign in with one code (the email from the invite is
+  // filled in), then the short profile. Then one tap to join.
+  const box = el("div", "stack-sm");
+  if (!demo) {
+    const me = Rooms.hasAccount() ? await Rooms.myProfile() : null;
+    if (!me?.completed_at) {
+      const invEmail = Rooms.validEmail(p.person_contact) ? p.person_contact.trim() : "";
+      show(top, card("you", el("p", "text sm", t(invEmail ? "join_si_title_known" : "join_si_title")), el("p", "small", t("join_si_hint")), box));
+      Rooms.ensureAccount(box, { email: invEmail, name: p.person_name || "", onDone: () => vJoin() });
+      return;
+    }
+  }
   const f = el("form", "stack-sm"); f.noValidate = true;
-  const prof = Rooms.user && !demo ? await Rooms.profile() : null;
-  const field = (id, label, input) => { const l = el("label", "lbl", label); l.htmlFor = id; input.id = id; f.append(l, input); };
-  // A personal link fills in what the owner already knows; the person can still change it.
-  const invEmail = Rooms.validEmail(p.person_contact) ? p.person_contact.trim() : "";
-  const nameIn = el("input", "line"); Object.assign(nameIn, { autocomplete: "given-name", maxLength: 60, placeholder: t("name_ph"), value: prof?.name || p.person_name || "" });
-  const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", autocomplete: "email", inputMode: "email", maxLength: 120, placeholder: t("email_ph"), value: prof?.email || invEmail });
-  field("jName", t("name_lbl"), nameIn);
-  field("jEmail", t("email_lbl"), emailIn);
-  f.append(el("p", "small", t("email_why")));
+  const me = demo ? { name: p.person_name || "Lina", email: p.person_contact || "lina@example.com" } : await Rooms.myProfile();
+  f.append(el("p", "body", t("join_as_me", { name: me.name, email: me.email || "" })));
   const consent = el("input"); consent.type = "checkbox";
   if (p.named_views) { const c = el("label", "check"); c.append(consent, el("span", null, t("join_consent"))); f.append(c); }
   if (p.role === "observer") f.append(el("p", "small", t("join_observer")));
-  const go = el("button", "btn", t(first && nameIn.value && emailIn.value ? "join_start_ready" : "join_start")); go.type = "submit";
+  const go = el("button", "btn", t("join_start_ready")); go.type = "submit";
   const st = el("p", "status"); st.setAttribute("role", "status");
-  f.append(go, Rooms.agreeNote(), st);
+  f.append(go, st);
   f.onsubmit = async e => {
     e.preventDefault();
-    const name = nameIn.value.trim(), email = emailIn.value.trim();
-    if (!name) { nameIn.focus(); return say(st, t("need_name")); }
-    if (!Rooms.validEmail(email)) { emailIn.focus(); return say(st, t("need_email")); }
     go.disabled = true; say(st, t("joining"), "");
     try {
-      roomId = await store.join(name, email, consent.checked);
+      roomId = await store.join(me.name, me.email, consent.checked);
       if (!demo) history.replaceState(null, "", "?room=" + roomId);
       Rooms.showMyRooms();
       inputStep = 0;
       await refresh();
     } catch (err) {
-      say(st, t(/captcha/i.test(err?.message || "") ? "captcha" : Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "invite_used", "busy"])));
+      say(st, t(Rooms.errKey(err, ["invite_expired", "invite_not_found", "role_full", "invite_used", "busy"])));
       go.disabled = false;
     }
   };
   show(top, card("you", f));
-  if (!nameIn.value) nameIn.focus(); else if (!emailIn.value) emailIn.focus(); else go.focus();
+  go.focus();
 }
 
 /* ---------- No session in this browser (trial accounts live in the browser that joined) ---------- */
-function vSignIn() { notice(t("other_device")); }
+// Signed out (another device, or signed out here): sign in and come back to the room.
+function vSignIn() {
+  const box = el("div", "stack-sm");
+  show(card("you", el("p", "text sm", t("si_title")), el("p", "small", t("si_room_hint")), box));
+  Rooms.ensureAccount(box, { onDone: () => refresh() });
+}
 
 /* ---------- My answers, one step at a time ---------- */
 function startInput() {
@@ -1510,7 +1517,7 @@ async function refresh() {
 Rooms.langToggle(() => {
   if (S) render();
   else if (joinToken || demo === "join") vJoin();
-  else if (Rooms.sb && !Rooms.user) vSignIn();
+  else if (Rooms.sb && !Rooms.hasAccount()) vSignIn();
 });
 
 async function start() {
@@ -1527,7 +1534,8 @@ async function start() {
     if (p?.language && !Rooms.savedLang() && p.language !== Rooms.lang) await Rooms.loadLang(p.language);
   }
   if (joinToken && !roomId) return vJoin();
-  if (!Rooms.user) return vSignIn();
+  // Old guest sessions start fresh: anyone without a real account signs in first.
+  if (!Rooms.hasAccount()) return vSignIn();
   refresh();
 }
 start();

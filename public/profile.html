@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Your profile · Decision Rooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts">
+      <a class="navlink" id="myRoomsLink" href="/dashboard.html" data-t="my_rooms" hidden>Your rooms</a>
+      <button class="lang" type="button" id="langBtn"></button>
+    </div>
+  </header>
+  <article class="msg you" id="view" aria-live="polite"><p class="text thinking" data-t="loading">One moment</p></article>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+// Your profile: the required details (name, organisation, job title, country), the optional ones
+// (phone, sector, organisation size, language, product news), and sign out. The email comes from sign-in.
+const { $, el, t } = Rooms;
+const view = $("view");
+const SECTORS = ["government", "multilateral", "ngo", "finance", "energy", "tech", "health", "education", "retail", "industry", "services", "sport", "other"];
+const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"];
+
+function select(id, options, value, blank) {
+  const s = el("select", "line role-select"); s.id = id; s.style.width = "100%";
+  const o0 = el("option", null, blank); o0.value = ""; s.append(o0);
+  options.forEach(([v, label]) => { const o = el("option", null, label); o.value = v; if (v === value) o.selected = true; s.append(o); });
+  return s;
+}
+function field(id, label, input, hint) {
+  const f = el("div", "field"); const l = el("label", "lbl", label); l.htmlFor = id; input.id = id;
+  f.append(l); if (hint) f.append(el("p", "small", hint)); f.append(input); return f;
+}
+
+async function render() {
+  document.title = t("pf_page_title") + " · " + t("product");
+  const p = await Rooms.myProfile();
+  if (!p?.completed_at) {
+    // Finish the required part first.
+    const box = el("div", "stack-sm");
+    view.replaceChildren(el("p", "text sm", t("pf_page_title")), box);
+    return Rooms.ensureAccount(box, { onDone: () => render() });
+  }
+  const f = el("form", "stack-sm"); f.noValidate = true; f.style.gap = "16px";
+  const mk = (val, max, ph, ac) => { const i = el("input", "line"); Object.assign(i, { value: val || "", maxLength: max, placeholder: ph || "", autocomplete: ac || "off" }); return i; };
+  const name = mk(p.name, 80, "", "name"), org = mk(p.organisation, 120, t("pf_org_ph"), "organization"), title = mk(p.job_title, 80, t("pf_title_ph"), "organization-title");
+  const country = Rooms.countrySelect(p.country);
+  const phone = mk(p.phone, 20, "+971 50 123 4567", "tel"); phone.type = "tel"; phone.inputMode = "tel";
+  const sector = select("pfSector", SECTORS.map(x => [x, t("sector_" + x)]), p.sector, t("pf_pick"));
+  const size = select("pfSize", SIZES.map(x => [x, x]), p.org_size, t("pf_pick"));
+  const language = select("pfLang", [["en", "English"], ["ar", "العربية"]], p.language, t("pf_pick"));
+  const news = el("label", "check"); const nc = el("input"); nc.type = "checkbox"; nc.checked = !!p.news_opt_in;
+  news.append(nc, el("span", null, t("pf_news")));
+  const st = el("p", "status"); st.setAttribute("role", "status");
+  const save = el("button", "btn", t("pf_save")); save.type = "submit";
+  f.append(
+    el("h1", "step-title", t("pf_page_title")),
+    el("p", "small", t("pf_signed_as", { email: p.email || "" })),
+    field("pfName", t("pf_name"), name), field("pfOrg", t("pf_org"), org), field("pfTitle", t("pf_title"), title), field("pfCountry", t("pf_country"), country),
+    el("p", "lbl", t("pf_optional")),
+    field("pfPhone", t("pf_phone"), phone, t("pf_phone_hint")), field("pfSector", t("pf_sector"), sector), field("pfSize", t("pf_size"), size), field("pfLang", t("pf_language"), language),
+    news, el("p", "small", t("pf_private")), save, st);
+  f.onsubmit = async e => {
+    e.preventDefault();
+    const patch = {
+      name: name.value.trim(), organisation: org.value.trim(), job_title: title.value.trim(), country: country.value || null,
+      phone: phone.value.trim() || null, sector: sector.value || null, org_size: size.value || null, news_opt_in: nc.checked
+    };
+    if (language.value) patch.language = language.value;
+    if (!patch.name || !patch.organisation || !patch.job_title || !patch.country) { st.className = "status err"; st.textContent = t("pf_need_required"); return; }
+    if (patch.phone && !Rooms.phoneDigits(patch.phone)) { phone.focus(); st.className = "status err"; st.textContent = t("need_contact"); return; }
+    save.disabled = true;
+    try { await Rooms.saveProfile(patch); st.className = "status ok"; st.textContent = t("pf_saved"); }
+    catch (err) { console.error(err); st.className = "status err"; st.textContent = t("err_generic"); }
+    finally { save.disabled = false; }
+  };
+  const out = el("button", "linkbtn", t("si_sign_out")); out.type = "button";
+  out.onclick = async () => { await Rooms.signOut(); location.href = "/"; };
+  view.replaceChildren(f, out);
+}
+
+Rooms.langToggle(() => { if (Rooms.sb) render(); });
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }
+  Rooms.showMyRooms();
+  render();
+})();
+})();
+</script>
+</body>
+</html>
