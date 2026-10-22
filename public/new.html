@@ -82,6 +82,7 @@ function field(id, label, input, hint) {
 // Signed out: sign in (Google, Microsoft or an email code). Signed in without a complete profile: the short
 // profile. Then confirm who you are and pick the kind of organisation for this room.
 let me = null;   // the signed-in owner's profile
+let myOrgs = [];  // organisations the owner belongs to (a room can open inside one)
 function stepYou() {
   const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
   const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
@@ -129,7 +130,19 @@ function stepYou() {
   const out = el("button", "linkbtn", t("si_not_you")); out.type = "button";
   out.onclick = async () => { await Rooms.signOut(); me = null; render(); };
   links.append(edit, out); who.append(links);
-  return form([...head(t("nr_you_title_back"), t("nr_you_hint_back")), who, orgField, actions()], () => {
+  // Inside an organisation? Choose where this room lives: the organisation (its admins see it in their list,
+  // never the answers) or just you.
+  const nodes = [who];
+  if (myOrgs.length) {
+    if (d.wsId === undefined) { d.wsId = myOrgs[0].id; if (!d.orgType && myOrgs[0].org_type) d.orgType = myOrgs[0].org_type; save(); }
+    const where = el("div", "chips"); where.setAttribute("role", "group");
+    const drawWhere = () => where.replaceChildren(...[...myOrgs.map(o => [o.id, o.name, o.org_type]), [null, t("nr_ws_me"), null]].map(([id, label, type]) =>
+      chip(label, (d.wsId || null) === id, () => { d.wsId = id; if (type) { d.orgType = type; drawOrgs(); } save(); drawWhere(); })));
+    drawWhere();
+    const wf = el("div", "field"); wf.append(el("span", "lbl", t("nr_ws_lbl")), el("p", "small", t("nr_ws_hint")), where);
+    nodes.push(wf);
+  }
+  return form([...head(t("nr_you_title_back"), t("nr_you_hint_back")), ...nodes, orgField, actions()], () => {
     if (!d.orgType) return fail(t("need_org"));
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
@@ -445,6 +458,14 @@ async function savedContacts() {
     return (contactsCache = data || []);
   } catch { return (contactsCache = []); }
 }
+// Colleagues from the organisation this room lives in: pick people, or a whole department at once.
+let dirCache = {};
+async function orgDirectory(wid) {
+  if (!wid || demo) return [];
+  if (dirCache[wid]) return dirCache[wid];
+  const { data } = await Rooms.sb.rpc("org_directory", { wid });
+  return (dirCache[wid] = (data || []).filter(p => p.user_id !== Rooms.user?.id));
+}
 function stepPeople() {
   if (!Array.isArray(d.people)) d.people = [];
   if (!Array.isArray(d.roles)) d.roles = [];
@@ -579,14 +600,29 @@ function stepPeople() {
     } catch { d.sugFor = ""; }
     save(); drawSugg();
   };
-  const drawAll = () => { drawSugg(); drawList(); drawGov(); drawBook(); };
+  const orgBox = el("div", "field");
+  const drawOrgDir = async () => {
+    const dir = await orgDirectory(d.wsId);
+    const fresh = dir.filter(p => !d.people.some(x => x.contact && x.contact.toLowerCase() === String(p.email || "").toLowerCase()));
+    orgBox.hidden = !dir.length;
+    if (!dir.length) return;
+    const ch = el("div", "chips");
+    const depts = [...new Set(dir.map(p => p.department).filter(Boolean))];
+    depts.forEach(dn => {
+      const inDept = fresh.filter(p => p.department === dn);
+      if (inDept.length > 1) ch.append(chip(t("nr_add_dept", { dept: dn, n: inDept.length }), false, () => { inDept.forEach(p => addPerson(p.name, p.job_title || "", p.email || "")); }));
+    });
+    fresh.slice(0, 24).forEach(p => ch.append(chip("+ " + p.name + (p.job_title ? " · " + p.job_title : ""), false, () => addPerson(p.name, p.job_title || "", p.email || ""))));
+    orgBox.replaceChildren(el("span", "lbl", t("nr_from_org", { org: myOrgs.find(o => o.id === d.wsId)?.name || "" })), ch);
+  };
+  const drawAll = () => { drawSugg(); drawList(); drawGov(); drawBook(); drawOrgDir(); };
   drawAll();
   setTimeout(() => { suggestNow(); draftSoon(); }, 0);
   const addF = el("div", "block add-person");
   const grid = el("div", "person-grid");
   grid.append(field("pName", t("person_name"), nameIn), field("pRole", t("person_role"), roleIn), field("pContact", t("person_contact"), contactIn));
   addF.append(grid, sugg, dl, addBtn);
-  return form([...head(t("nr_people_title"), t("nr_people_hint2")), book, addF, list, none, byF, gov, actions()], () => {
+  return form([...head(t("nr_people_title"), t("nr_people_hint2")), orgBox, book, addF, list, none, byF, gov, actions()], () => {
     if (d.rapid && d.overrideRule === "authority" && !d.roles.some(r => r.id === d.overrideRoleId)) { d.overrideRule = "owner"; d.overrideRoleId = null; save(); }
     if (nameIn.value.trim()) { if (!addPerson(nameIn.value, roleIn.value, contactIn.value)) return; nameIn.value = ""; contactIn.value = ""; }
     next();
@@ -767,7 +803,8 @@ async function create() {
     }
     if (!Rooms.hasAccount()) throw new Error("sign_in_first");
     const sb = Rooms.sb, me = Rooms.user.id;
-    let { data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).order("created_at").limit(1).maybeSingle();
+    let ws = d.wsId && myOrgs.some(o => o.id === d.wsId) ? { id: d.wsId } : null;
+    if (!ws) ({ data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).eq("kind", "personal").order("created_at").limit(1).maybeSingle());
     if (!ws) {
       ws = { id: crypto.randomUUID() };
       const { error } = await sb.from("workspaces").insert({ id: ws.id, name: (d.name.trim() || "My") + " workspace", owner_id: me });
@@ -867,6 +904,12 @@ async function start() {
     if (!(await Rooms.connect())) { $("wiz").replaceChildren(el("p", "text", t("not_setup"))); return; }
     me = await Rooms.myProfile();
     known = !!me?.completed_at;
+    if (known) {
+      await Rooms.sb.rpc("claim_org_invites").then(() => {}, () => {});
+      const { data: os } = await Rooms.sb.rpc("my_orgs");
+      myOrgs = os || [];
+      if (d.wsId && !myOrgs.some(o => o.id === d.wsId)) d.wsId = undefined;
+    }
   }
   // The first screen shows for every new room: returning owners just confirm it.
   ids = ["you", "question", "options", "model", "people", "context"];

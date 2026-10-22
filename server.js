@@ -4,11 +4,11 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ask, search, config } from "./lib/core.js";
-import { brief, criteria, decide, faq, helper, question, roles, startDecideWorker, triage, voice, admin } from "./lib/rooms.js";
+import { brief, criteria, decide, faq, helper, question, roles, startDecideWorker, triage, voice, admin, adminOrgs, orgInvite } from "./lib/rooms.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "public");
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
-const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config, "/api/rooms/decide": decide, "/api/rooms/triage": triage, "/api/rooms/criteria": criteria, "/api/rooms/roles": roles, "/api/rooms/question": question, "/api/rooms/voice": voice, "/api/rooms/brief": brief, "/api/rooms/helper": helper, "/api/faq": faq, "/api/admin/overview": admin };
+const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config, "/api/rooms/decide": decide, "/api/rooms/triage": triage, "/api/rooms/criteria": criteria, "/api/rooms/roles": roles, "/api/rooms/question": question, "/api/rooms/voice": voice, "/api/rooms/brief": brief, "/api/rooms/helper": helper, "/api/faq": faq, "/api/admin/overview": admin, "/api/admin/orgs": adminOrgs, "/api/org/invite": orgInvite };
 const MAX_BODY = 8 * 1024 * 1024;
 
 http.createServer(async (req, res) => {

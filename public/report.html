@@ -15,6 +15,8 @@
 main{--content:880px}
 .rep-head{display:flex;flex-direction:column;gap:12px;padding:8px 0 20px}
 .rep-kicker{font-size:var(--t-ui);color:var(--dim)}
+.rep-org{display:flex;align-items:center;gap:10px;font-size:15px}
+.rep-org img{height:36px;max-width:140px;object-fit:contain}
 .rep-head h1{margin:0;font-size:var(--t-h3);line-height:1.08;font-weight:400;letter-spacing:-.02em}
 .rep-sub{font-size:var(--t-ui);color:var(--dim)}
 .sharebar{display:flex;gap:8px;flex-wrap:wrap;padding:6px 0 18px}
@@ -99,6 +101,13 @@ function render() {
   if (a?.decided_at) sub.push(t("rep_decided", { date: Rooms.fmtDate(String(a.decided_at).slice(0, 10)) }));
   sub.push(t("rep_people", { n: R.answered, total: R.members }));
   if (r.review_date) sub.push(t("review_on", { date: Rooms.fmtDate(r.review_date) }));
+  // An organisation's report carries its name and logo.
+  if (R.org) {
+    const orgRow = el("div", "rep-org");
+    if (R.org.logo_url) { const img = el("img"); img.src = R.org.logo_url; img.alt = ""; orgRow.append(img); }
+    orgRow.append(el("span", null, R.org.name));
+    head.append(orgRow);
+  }
   head.append(kicker, h1, el("div", "rep-sub", sub.join(" · ")));
   out.push(head);
   out.push(shareBar());

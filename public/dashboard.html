@@ -292,6 +292,13 @@ function noRooms() {
 async function load() {
   if (demo) { rooms = DEMO; myName = "Islam"; return render(); }
   const sb = Rooms.sb;
+  // Join any organisation that invited this email (or matches its domain), then link to it.
+  await sb.rpc("claim_org_invites").then(() => {}, () => {});
+  sb.rpc("my_orgs").then(({ data: os }) => {
+    if (!os?.length || $("orgLink")) return;
+    const a = el("a", "navlink", os.length === 1 ? os[0].name : t("og_link")); a.id = "orgLink"; a.href = "/org.html";
+    document.querySelector(".top-acts").prepend(a);
+  }, () => {});
   const [{ data, error }, p] = await Promise.all([sb.rpc("my_rooms"), Rooms.profile()]);
   if (error) { const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); return view.replaceChildren(c); }
   myName = p?.name || "";

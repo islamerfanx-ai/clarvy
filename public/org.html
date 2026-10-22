@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Organisation · Decision Rooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* The organisation page: everyone sees the people; admins also manage people, departments, the join link
+   and see the organisation's rooms (status and call, never answers). */
+main{--content:880px}
+.og-head{display:flex;align-items:center;gap:14px;margin:6px 0 18px}
+.og-head img{width:48px;height:48px;object-fit:contain;background:#fff}
+.og-head h1{margin:0}
+.og-list{list-style:none;margin:0;padding:0}
+.og-list li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;padding:10px 0;border-top:1px solid var(--line);font-size:15px}
+.og-list li:first-child{border-top:0}
+.og-list .who{flex:1;min-width:200px}
+.og-list .who .small{display:block}
+.og-list select{width:auto;min-width:130px}
+.og-switch{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+textarea.og-paste{min-height:110px;font-family:var(--read)}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" style="display:flex;flex-direction:column;gap:8px" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const view = $("view");
+const params = new URLSearchParams(location.search);
+const joinTok = params.get("join");
+let orgs = [], current = null;
+
+function card(cls, ...kids) { const c = el("article", "msg " + cls); c.append(...kids.filter(Boolean)); return c; }
+function btn(label, cls, onClick) { const b = el("button", "btn " + (cls || ""), label); b.type = "button"; b.onclick = onClick; return b; }
+const say = (node, msg, kind = "err") => { node.textContent = msg; node.className = "status " + kind; };
+
+/* ---------- Join with the private link ---------- */
+async function vJoin() {
+  const { data } = await Rooms.sb.rpc("org_preview", { token: joinTok });
+  const p = data && data[0];
+  if (!p) return view.replaceChildren(card("", el("p", "text", t("og_link_unknown"))));
+  if (!p.usable) return view.replaceChildren(card("", el("p", "text", t("og_link_closed"))));
+  const box = el("div", "stack-sm");
+  const top = card("active", el("p", "text", t("og_join_title", { name: p.name })), el("p", "small", t("og_join_hint")));
+  view.replaceChildren(top, card("you", box));
+  Rooms.ensureAccount(box, { onDone: async () => {
+    const { data: wid, error } = await Rooms.sb.rpc("join_org", { token: joinTok });
+    if (error) return say(box.appendChild(el("p", "status")), t("err_generic"));
+    history.replaceState(null, "", "/org.html?id=" + wid);
+    load(wid);
+  } });
+}
+
+/* ---------- The page ---------- */
+async function load(pick) {
+  await Rooms.sb.rpc("claim_org_invites");
+  const { data } = await Rooms.sb.rpc("my_orgs");
+  orgs = data || [];
+  if (!orgs.length) return view.replaceChildren(card("you", el("p", "text sm", t("og_none_title")), el("p", "small", t("og_none_hint"))));
+  current = orgs.find(o => o.id === (pick || params.get("id"))) || orgs[0];
+  render();
+}
+async function render() {
+  const o = current, admin = ["owner", "admin"].includes(o.role);
+  document.title = o.name + " · " + t("product");
+  const sb = Rooms.sb;
+  const [{ data: people }, { data: depts }, { data: ws }] = await Promise.all([
+    sb.rpc("org_directory", { wid: o.id }), sb.from("departments").select("id,name").eq("workspace_id", o.id).order("name"),
+    sb.from("workspaces").select("id,name,logo_url,email_domain,domain_verified,join_open,join_token").eq("id", o.id).maybeSingle()]);
+  const head = el("div", "og-head");
+  if (o.logo_url) { const img = el("img"); img.src = o.logo_url; img.alt = ""; head.append(img); }
+  head.append(el("h1", "db-title", o.name));
+  const cards = [];
+  if (orgs.length > 1) {
+    const sw = el("div", "og-switch");
+    orgs.forEach(x => sw.append(Rooms.chip(x.name, x.id === o.id, () => { current = x; history.replaceState(null, "", "/org.html?id=" + x.id); render(); })));
+    cards.push(sw);
+  }
+  cards.push(head);
+  const deptName = id => (depts || []).find(d => d.id === id)?.name;
+
+  // People: everyone sees the directory; admins can change departments, roles, or remove someone.
+  const pc = card("you", el("p", "text sm", t("og_people", { n: (people || []).length })), el("p", "small", t(admin ? "og_people_admin_hint" : "og_people_hint")));
+  const ul = el("ul", "og-list");
+  (people || []).forEach(p => {
+    const li = el("li");
+    const who = el("span", "who"); who.append(el("span", null, p.name || "·"), el("span", "small", [p.job_title, p.department, p.email].filter(Boolean).join(" · ")));
+    li.append(who);
+    if (admin && p.role !== "owner" && p.user_id !== Rooms.user.id) {
+      const dsel = el("select", "line role-select"); dsel.setAttribute("aria-label", t("og_dept"));
+      [["", t("og_no_dept")], ...(depts || []).map(d => [d.id, d.name])].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; if ((p.department_id || "") === v) op.selected = true; dsel.append(op); });
+      dsel.onchange = async () => { await sb.from("workspace_members").update({ department_id: dsel.value || null }).eq("workspace_id", o.id).eq("user_id", p.user_id); };
+      const rsel = el("select", "line role-select"); rsel.setAttribute("aria-label", t("og_role"));
+      [["member", t("og_member")], ["admin", t("og_admin")]].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; if (p.role === v) op.selected = true; rsel.append(op); });
+      rsel.onchange = async () => { await sb.from("workspace_members").update({ role: rsel.value }).eq("workspace_id", o.id).eq("user_id", p.user_id); };
+      const rm = el("button", "linkbtn", t("remove")); rm.type = "button";
+      rm.onclick = async () => { rm.disabled = true; await sb.from("workspace_members").delete().eq("workspace_id", o.id).eq("user_id", p.user_id); render(); };
+      li.append(dsel, rsel, rm);
+    } else li.append(el("span", "tag", t(p.role === "member" ? "og_member" : "og_admin")));
+    ul.append(li);
+  });
+  pc.append(ul);
+  cards.push(pc);
+
+  if (admin) {
+    // Add people: one per line, "Name, email, job title".
+    const ac = card("you", el("p", "text sm", t("og_add_title")), el("p", "small", t("og_add_hint")));
+    const ta = el("textarea", "og-paste"); ta.placeholder = t("og_add_ph"); ta.setAttribute("aria-label", t("og_add_title"));
+    const dsel = el("select", "line role-select"); dsel.style.width = "100%"; dsel.setAttribute("aria-label", t("og_dept"));
+    [["", t("og_no_dept")], ...(depts || []).map(d => [d.id, d.name])].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; dsel.append(op); });
+    const rsel = el("select", "line role-select"); rsel.style.width = "100%"; rsel.setAttribute("aria-label", t("og_role"));
+    [["member", t("og_member")], ["admin", t("og_admin")]].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; rsel.append(op); });
+    const st = el("p", "status"); st.setAttribute("role", "status");
+    const go = btn(t("og_add_btn"), "", async () => {
+      const ppl = ta.value.split(/\n+/).map(l => l.split(/[,;\t]/).map(x => x.trim())).filter(x => x.some(Boolean)).map(parts => {
+        const email = parts.find(x => Rooms.validEmail(x)) || "";
+        const rest = parts.filter(x => x !== email);
+        return { email, name: rest[0] || "", job_title: rest[1] || "", department_id: dsel.value || null, role: rsel.value };
+      });
+      if (!ppl.length || ppl.some(p => !p.email)) return say(st, t("og_add_bad"));
+      go.disabled = true; say(st, t("og_adding"), "");
+      try {
+        const r = await Rooms.post("/api/org/invite", { workspace_id: o.id, people: ppl });
+        say(st, t("og_added", { joined: r.joined, emailed: r.emailed }) + (r.failed?.length ? " " + t("og_add_failed", { list: r.failed.join(", ") }) : ""), r.failed?.length ? "err" : "ok");
+        ta.value = ""; render();
+      } catch (e) { say(st, t(e.message === "quota" ? "err_quota" : "err_generic")); }
+      finally { go.disabled = false; }
+    });
+    const row = el("div", "add-row"); row.append(dsel, rsel);
+    ac.append(ta, row, go, st);
+    cards.push(ac);
+
+    // Waiting for sign-in
+    const { data: inv } = await sb.from("org_invites").select("id,email,name,accepted_at").eq("workspace_id", o.id).is("accepted_at", null).order("created_at");
+    if ((inv || []).length) {
+      const ic = card("you", el("p", "text sm", t("og_pending", { n: inv.length })), el("p", "small", t("og_pending_hint")));
+      const l2 = el("ul", "og-list");
+      inv.forEach(x => { const li = el("li"); const w2 = el("span", "who"); w2.append(el("span", null, x.name || x.email), el("span", "small", x.email));
+        const c2 = el("button", "linkbtn", t("og_cancel")); c2.type = "button"; c2.onclick = async () => { await sb.from("org_invites").delete().eq("id", x.id); render(); };
+        li.append(w2, c2); l2.append(li); });
+      ic.append(l2); cards.push(ic);
+    }
+
+    // Departments
+    const dc = card("you", el("p", "text sm", t("og_depts")));
+    const dl = el("ul", "og-list");
+    (depts || []).forEach(d => { const li = el("li"); li.append(el("span", "who", d.name));
+      const rm = el("button", "linkbtn", t("remove")); rm.type = "button"; rm.onclick = async () => { await sb.from("departments").delete().eq("id", d.id); render(); };
+      li.append(rm); dl.append(li); });
+    const dIn = el("input", "line"); Object.assign(dIn, { maxLength: 80, placeholder: t("og_dept_ph") }); dIn.setAttribute("aria-label", t("og_dept_ph"));
+    const dAdd = btn(t("add"), "soft", async () => { if (!dIn.value.trim()) return; await sb.from("departments").insert({ workspace_id: o.id, name: dIn.value.trim() }); render(); });
+    const dRow = el("div", "add-row"); dRow.append(dIn, dAdd);
+    dc.append(dl, dRow); cards.push(dc);
+
+    // Joining: the private link, and the email domain
+    const jc = card("you", el("p", "text sm", t("og_joining")));
+    const link = `${location.origin}/org.html?join=${ws.join_token}`;
+    const tog = el("label", "check"); const tc = el("input"); tc.type = "checkbox"; tc.checked = ws.join_open;
+    tc.onchange = async () => { await sb.from("workspaces").update({ join_open: tc.checked }).eq("id", o.id); };
+    tog.append(tc, el("span", null, t("og_link_on")));
+    const box = el("div", "linkbox"); const inp = el("input", "line"); inp.readOnly = true; inp.value = link; inp.setAttribute("aria-label", t("og_link_on"));
+    const cp = btn(t("copy"), "soft", async () => { await Rooms.copyText(link); cp.textContent = t("copied"); setTimeout(() => { cp.textContent = t("copy"); }, 1600); });
+    box.append(inp, cp);
+    jc.append(tog, box, el("p", "small", ws.email_domain ? t(ws.domain_verified ? "og_domain_on" : "og_domain_wait", { domain: ws.email_domain }) : t("og_domain_none")));
+    cards.push(jc);
+
+    // Name and logo
+    const nc = card("you", el("p", "text sm", t("og_settings")));
+    const nIn = el("input", "line"); Object.assign(nIn, { maxLength: 120, value: ws.name }); nIn.setAttribute("aria-label", t("og_name"));
+    const lIn = el("input", "line"); Object.assign(lIn, { maxLength: 500, value: ws.logo_url || "", placeholder: "https://…/logo.png" }); lIn.setAttribute("aria-label", t("og_logo"));
+    const nst = el("p", "status");
+    const ns = btn(t("pf_save"), "soft", async () => {
+      const logo = lIn.value.trim();
+      if (logo && !/^https:\/\//.test(logo)) return say(nst, t("og_logo_bad"));
+      const { error } = await sb.from("workspaces").update({ name: nIn.value.trim() || ws.name, logo_url: logo || null }).eq("id", o.id);
+      say(nst, t(error ? "err_generic" : "pf_saved"), error ? "err" : "ok");
+    });
+    const f1 = el("div", "field"); f1.append(el("span", "lbl", t("og_name")), nIn);
+    const f2 = el("div", "field"); f2.append(el("span", "lbl", t("og_logo")), el("p", "small", t("og_logo_hint")), lIn);
+    nc.append(f1, f2, ns, nst); cards.push(nc);
+
+    // Rooms (status and the call only)
+    const { data: rooms } = await sb.rpc("org_rooms", { wid: o.id });
+    const rc = card("you", el("p", "text sm", t("og_rooms", { n: (rooms || []).length })), el("p", "small", t("og_rooms_hint")));
+    const rl = el("ul", "og-list");
+    (rooms || []).forEach(r => { const li = el("li"); const w2 = el("span", "who");
+      w2.append(el("span", null, r.question), el("span", "small", [r.owner_name, Rooms.fmtDate(String(r.created_at).slice(0, 10)), t("og_answered", { n: r.answered, total: r.members }), r.final_label ? t("og_call", { label: r.final_label }) : t("st_" + (r.status === "open" ? "input" : r.status === "deciding" ? "deciding" : r.status))].filter(Boolean).join(" · ")));
+      li.append(w2); rl.append(li); });
+    if (!(rooms || []).length) rl.append(el("li", "small", t("og_no_rooms")));
+    rc.append(rl); cards.push(rc);
+  }
+  view.replaceChildren(...cards);
+}
+
+Rooms.langToggle(() => { if (current) render(); });
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }
+  if (joinTok) return vJoin();
+  if (!Rooms.hasAccount() || !(await Rooms.myProfile())?.completed_at) {
+    const box = el("div", "stack-sm");
+    view.replaceChildren(card("you", el("p", "text sm", t("si_title")), box));
+    return Rooms.ensureAccount(box, { onDone: () => load() });
+  }
+  load();
+})();
+})();
+</script>
+</body>
+</html>

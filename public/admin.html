@@ -106,11 +106,52 @@ function render() {
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
   drawTable();
-  view.replaceChildren(el("h1", "db-title", t("ad_title")), stats, two, el("h2", "sec-h", t("ad_people", { n: (d.people || []).length })), tools, wrap,
+  view.replaceChildren(el("h1", "db-title", t("ad_title")), stats, two, orgsBox(), el("h2", "sec-h", t("ad_people", { n: (d.people || []).length })), tools, wrap,
     el("p", "small", t("ad_note")));
 }
+/* ---------- Organisations (custom plan): create, see, verify the email domain ---------- */
+let orgs = [];
+function orgsBox() {
+  const box = el("div", "ad-box"); box.style.marginBottom = "28px";
+  box.append(el("h2", null, t("ad_orgs", { n: orgs.length })));
+  orgs.forEach(o => {
+    const r = el("div", "ad-kind"); r.style.flexWrap = "wrap"; r.style.gap = "6px 14px";
+    const left = el("span"); left.append(el("b", null, o.name), el("span", "small", "  " + [t("ad_org_members", { n: o.members }), t("ad_org_rooms", { n: o.rooms }), o.pending ? t("ad_org_pending", { n: o.pending }) : null, (o.admins || []).join(", ")].filter(Boolean).join(" · ")));
+    const right = el("span");
+    if (o.email_domain) {
+      const v = el("label", "check"); const c = el("input"); c.type = "checkbox"; c.checked = o.domain_verified;
+      c.onchange = async () => { c.disabled = true; try { await Rooms.post("/api/admin/orgs", { action: "verify", id: o.id, verified: c.checked }); } finally { c.disabled = false; } };
+      v.append(c, el("span", "small", t("ad_org_domain", { domain: o.email_domain })));
+      right.append(v);
+    }
+    r.append(left, right); box.append(r);
+  });
+  // Create one
+  const det = el("details", "more"); det.append(el("summary", null, t("ad_org_new")));
+  const mk = (ph, max) => { const i = el("input", "line"); Object.assign(i, { placeholder: ph, maxLength: max }); i.setAttribute("aria-label", ph); return i; };
+  const name = mk(t("ad_org_name"), 120), admEmail = mk(t("ad_org_admin_email"), 160), admName = mk(t("ad_org_admin_name"), 80), domain = mk(t("ad_org_domain_ph"), 120), logo = mk("https://…/logo.png", 500);
+  admEmail.type = "email";
+  const type = el("select", "line role-select"); type.style.width = "100%"; type.setAttribute("aria-label", t("org_lbl"));
+  ["corporation", "government", "international", "club", "custom"].forEach(x => { const op = el("option", null, t("org_" + x)); op.value = x; type.append(op); });
+  const st = el("p", "status");
+  const go = el("button", "btn", t("ad_org_create")); go.type = "button";
+  go.onclick = async () => {
+    if (!name.value.trim() || !Rooms.validEmail(admEmail.value)) { st.className = "status err"; st.textContent = t("ad_org_need"); return; }
+    go.disabled = true;
+    try {
+      const r = await Rooms.post("/api/admin/orgs", { action: "create", name: name.value.trim(), org_type: type.value, admin_email: admEmail.value.trim(), admin_name: admName.value.trim(), email_domain: domain.value.trim(), logo_url: logo.value.trim() });
+      st.className = "status ok"; st.textContent = t(r.emailed ? "ad_org_made_emailed" : "ad_org_made_joined");
+      await loadOrgs(); render();
+    } catch { st.className = "status err"; st.textContent = t("err_generic"); go.disabled = false; }
+  };
+  const grid = el("div", "stack-sm"); grid.style.marginTop = "10px";
+  grid.append(name, type, admName, admEmail, domain, logo, go, st);
+  det.append(grid); box.append(det);
+  return box;
+}
+async function loadOrgs() { try { orgs = (await Rooms.post("/api/admin/orgs", { action: "list" })).orgs || []; } catch { orgs = []; } }
 async function load() {
-  try { data = await Rooms.post("/api/admin/overview", {}); render(); }
+  try { data = await Rooms.post("/api/admin/overview", {}); await loadOrgs(); render(); }
   catch (e) { const c = el("article", "msg"); c.append(el("p", "text", t(e.message === "not_operator" ? "ad_not_operator" : "err_generic"))); view.replaceChildren(c); }
 }
 Rooms.langToggle(() => { if (data) render(); });
