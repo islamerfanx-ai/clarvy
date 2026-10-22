@@ -293,6 +293,24 @@ ul.people{margin:6px 0 4px}
 #dr-captcha.ask{background:var(--yellow);padding:12px 12px 8px;box-shadow:0 6px 24px rgba(0,0,0,.18)}
 #dr-captcha .captcha-note{margin:0 0 8px;font-size:14px;text-align:center}
 
+/* The numbers (what if) */
+.wi-bars{display:flex;flex-direction:column;gap:10px;margin:6px 0}
+.wi-row .wi-bar{height:8px;background:var(--accent-soft);margin-top:4px}
+.wi-row .wi-bar i{display:block;height:100%;background:rgba(7,59,58,.45)}
+.wi-row.lead .wi-bar i{background:var(--accent)}
+.wi-row.lead .rate-name{font-weight:600}
+.wi-n{font-variant-numeric:tabular-nums;font-size:14px;color:var(--dim)}
+.wi-said{margin:4px 0 0}
+.wi-sliders{display:flex;flex-direction:column;gap:12px}
+.wi-slider input[type=range]{width:100%;accent-color:var(--accent);margin-top:4px}
+.wi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.wi-cell{display:flex;flex-direction:column;gap:4px}
+.wi-cell input{width:100%}
+.wi-cell.edited input{border-color:var(--accent);background:var(--yellow)}
+.wi-table{display:flex;flex-direction:column;gap:14px;margin-top:10px}
+
+.rate-chips{display:flex;flex-wrap:wrap;gap:6px}
+
 /* ================= Theme: warm off-white, yellow highlights, deep teal pill actions, regular weight ================= */
 .top{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:1px solid var(--line);padding-block:14px;margin-bottom:12px}
 .wm{font-weight:500;letter-spacing:-.02em}

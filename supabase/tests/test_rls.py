@@ -334,5 +334,22 @@ check("owner still edits review date and report", as_user(G, f"update rooms set 
 check("server still moves status", server(f"update rooms set status='deciding', decide_requested_at=now() where id='{R6}'"), "UPDATE 1")
 check("server still claims the job", server("select id from claim_decide_job()"), R6)
 
+# ---------- Review (20261027000000_review.sql) ----------
+check("outcomes can't be written directly", as_user(G, f"insert into outcomes (room_id,what_happened,rating,logged_by) values ('{R5}','x',4,'{G}')", anonymous=True), "row-level security")
+check("a settled room has review 1 open", as_user(C, f"select review_state('{R5}')->>'round'"), "\n1\n")
+check("member rates privately", as_user(B, f"insert into review_ratings (room_id,user_id,review_no,rating,note) values ('{R5}','{B}',1,4,'Costs came in on budget')"), "INSERT 0 1")
+check("can't rate a review that isn't open", as_user(C, f"insert into review_ratings (room_id,user_id,review_no,rating) values ('{R5}','{C}',2,2)"), "row-level security")
+check("others can't read a rating", as_user(C, f"select count(*) from review_ratings where room_id='{R5}'"), "\n0\n")
+check("owner can't read a rating either", as_user(G, f"select count(*) from review_ratings where room_id='{R5}'", anonymous=True), "\n0\n")
+check("only the owner logs the review", as_user(B, f"select log_review('{R5}','Fine',4)"), "only_owner_reviews")
+check("next review must be in the future", as_user(G, f"select log_review('{R5}','Fine',4,'',date '2020-01-01')", anonymous=True), "next_review_in_future")
+check("owner logs review 1", as_user(G, f"select log_review('{R5}','Opened on time, costs on budget',4,'Lock rent early')", anonymous=True), "\n1\n")
+check("room is reviewed", server(f"select status from rooms where id='{R5}'"), "reviewed")
+check("an early review leaves nothing open", as_user(C, f"select review_state('{R5}')->>'round' is null"), "True")
+check("small room: average only, no spread or notes", as_user(C, f"select s->>'avg', s->>'min', jsonb_array_length(s->'notes') from jsonb_array_elements(review_summary('{R5}')) s"), "4.0 | None | 0")
+check("outsiders see no summary", as_user(E, f"select review_summary('{R5}')"), "[]")
+check("an open room has no review", as_user(G, f"select log_review('{R6}','x',3)", anonymous=True), "no_review_open")
+check("report carries the review", as_user(C, f"select report_for_member('{R5}')"), "Opened on time")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

@@ -91,6 +91,74 @@ export function roomMath({ options, criteria, scores, outcomes, inputs }) {
     capConfidence: split,          // a split room's call is at most Medium confidence
     // Anonymous and shuffled, so a row can't be matched to a person by order.
     memberScores: shuffle(members.map(m => ({ winner: m.winner, scores: m.per }))).map((m, i) => ({ member: i + 1, ...m })),
-    concerns: shuffle(members.map(m => m.concern).filter(Boolean))
+    concerns: shuffle(members.map(m => m.concern).filter(Boolean)),
+    // Group totals for "The numbers" panel: enough to rebuild the group score exactly, nothing per person.
+    // In rooms of 1 or 2 the average weight is rounded, as in the map, so nobody can work out another's answer.
+    whatif: {
+      n, exact: n >= 3, gut: gutTally, risk: riskMix,
+      weights: Object.fromEntries(criteria.map(c => {
+        const avg = mean(members.map(m => Number(m.weights[c.id]) || 0));
+        return [c.id, n >= 3 ? Math.round(avg * 1000) / 1000 : Math.round(avg)];
+      }))
+    }
   };
+}
+
+/* ======================= The numbers (what if) ======================= */
+// The group score is linear in the weights and depends on risk only through each appetite's share, so it
+// can be rebuilt from group totals alone: average weights, the risk mix and the gut-pick tally.
+// agg: {n, weights: {cid: 0-100}, risk: {safe, balanced, bold}, gut: {oid: count}}
+// opts: {ignoreGut, riskShift: -1 more cautious | 0 | 1 bolder}
+export function shiftRisk(risk, shift) {
+  const r = { safe: risk.safe || 0, balanced: risk.balanced || 0, bold: risk.bold || 0 };
+  if (shift < 0) return { safe: r.safe + r.balanced, balanced: r.bold, bold: 0 };
+  if (shift > 0) return { safe: 0, balanced: r.safe, bold: r.balanced + r.bold };
+  return r;
+}
+export function groupFromAggregates({ options, criteria, scores, outcomes, agg }, { ignoreGut = false, riskShift = 0 } = {}) {
+  const oids = options.map(o => o.id), cids = criteria.map(c => c.id);
+  const sc = (o, c) => num(scores?.[o]?.[c], 0, 10, 5);
+  const outs = o => ["best", "likely", "worst"].map(k => ({ value: num(outcomes?.[o]?.[k]?.value, 0, 10, 5), odds: num(outcomes?.[o]?.[k]?.odds, 0, 100, 33) }));
+  const n = Math.max(1, Number(agg.n) || 1);
+  const wsum = cids.reduce((s, c) => s + (Number(agg.weights?.[c]) || 0), 0) || 1;
+  const risk = shiftRisk(agg.risk || {}, riskShift);
+  const rsum = Object.values(risk).reduce((a, b) => a + b, 0) || 1;
+  const group = {};
+  for (const o of oids) {
+    const fit = cids.reduce((s, c) => s + (Number(agg.weights?.[c]) || 0) / wsum * sc(o, c), 0);
+    const cert = Object.entries(risk).reduce((s, [k, cnt]) => s + cnt / rsum * certainty(outs(o), RISK_POWER[k] ?? 1), 0);
+    const gut = ignoreGut ? 0 : 3 * (Number(agg.gut?.[o]) || 0) / n;
+    group[o] = Math.round((0.45 * fit + 0.25 * cert + gut) * 100) / 100;
+  }
+  const ranked = [...oids].sort((x, y) => group[y] - group[x]);
+  return { group, ranked, top: ranked[0], close: ranked.length > 1 && group[ranked[0]] - group[ranked[1]] < 0.2 };
+}
+// Set one criterion's share of the weight to `to` (0-100) and spread the rest over the others in proportion.
+export function setWeight(weights, cids, cid, to) {
+  const rest = cids.filter(c => c !== cid), restSum = rest.reduce((s, c) => s + (Number(weights[c]) || 0), 0);
+  const out = { [cid]: to };
+  rest.forEach(c => { out[c] = restSum > 0 ? (Number(weights[c]) || 0) / restSum * (100 - to) : (100 - to) / rest.length; });
+  return out;
+}
+// What would flip it: the smallest change to one criterion's weight that puts another option first.
+export function flipPoint(room, opts = {}) {
+  const cids = room.criteria.map(c => c.id);
+  const base = groupFromAggregates(room, opts);
+  const wsum = cids.reduce((s, c) => s + (Number(room.agg.weights?.[c]) || 0), 0) || 1;
+  const now = Object.fromEntries(cids.map(c => [c, (Number(room.agg.weights?.[c]) || 0) / wsum * 100]));
+  let found = null;
+  for (const cid of cids) {
+    for (let step = 1; step <= 100; step++) {
+      for (const dir of [1, -1]) {
+        const to = Math.round(now[cid]) + dir * step;
+        if (to < 0 || to > 100) continue;
+        const r = groupFromAggregates({ ...room, agg: { ...room.agg, weights: setWeight(now, cids, cid, to) } }, opts);
+        if (r.top !== base.top) {
+          if (!found || step < found.step) found = { step, criterion: cid, from: Math.round(now[cid]), to, top: r.top };
+          step = 101; break;
+        }
+      }
+    }
+  }
+  return found;   // null: no single weight change flips it
 }

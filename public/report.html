@@ -59,6 +59,7 @@ const DEMO = {
     options: [{ id: "o1", label: "Open in Jeddah this year" }, { id: "o2", label: "Wait until next spring" }, { id: "o3", label: "Grow Riyadh instead" }],
     links: [{ url: "https://www.example.org/jeddah-retail-report" }], status: "decided", review_date: "2026-12-01", created_at: "2026-10-12", override_rule: "owner" },
   owner_name: "Islam", members: 3, answered: 3, signoffs: { agree: 2, disagree_commit: 1 },
+  reviews: [{ review_no: 1, logged_at: "2026-12-02", what_happened: "We waited, locked the rent-free lease for March and opened on time; first-quarter sales were 15% above plan.", rating: 4, lessons: "Lock the site early; the pop-up proved demand before the big spend.", plan_total: 2, plan_done: 2, plan_blocked: 0, raters: 3, avg: 4.3, min: 4, max: 5 }],
   objections: [{ by_role: "Director", reason: "Legal hasn't cleared the lease terms yet.", option_id: null, status: "withdrawn", override_reason: null, created_at: "2026-10-14", resolved_at: "2026-10-16" }],
   plan: [{ kind: "action", title: "Ask the landlord to hold the rent-free offer for a March start", owner: "Sara", due_date: "2026-10-24", status: "doing" },
     { kind: "check", title: "Monthly revenue in Riyadh falls below 1M for two months in a row", owner: null, due_date: "2026-11-16", status: "todo" },
@@ -229,6 +230,18 @@ function render() {
     });
     c.append(ul); out.push(c);
   }
+  // Outcome: each review the owner logged, with the room's ratings (spread only from 3 raters).
+  (R.reviews || []).forEach(x => {
+    const c = card("", el("h3", null, t("rv_outcome_title", { n: x.review_no, date: Rooms.fmtDate(String(x.logged_at).slice(0, 10)) })));
+    const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", x.what_happened)), el("span", "tag", t("rv_owner_rating", { n: x.rating })));
+    c.append(top);
+    const ul = el("ul", "dots");
+    if (x.raters > 0) ul.append(el("li", null, x.min != null ? t("rv_team_spread", { avg: x.avg, n: x.raters, min: x.min, max: x.max }) : t("rv_team_avg", { avg: x.avg, n: x.raters })));
+    if (x.plan_total) ul.append(el("li", null, t("rv_plan_line", { done: x.plan_done, total: x.plan_total, blocked: x.plan_blocked })));
+    if (ul.childElementCount) c.append(ul);
+    if (x.lessons) c.append(el("p", "lbl", t("rv_lessons_lbl")), contentLang(el("p", "body", x.lessons)));
+    out.push(c);
+  });
   if (r.rapid) {
     const c = card("", el("h3", null, t("rep_record")));
     c.append(el("p", "small", t("rep_rule_" + (r.override_rule || "owner"), { role: r.override_role || "" })));

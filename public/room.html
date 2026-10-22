@@ -36,6 +36,7 @@ const demo = params.get("demo");
 const RISKS = ["safe", "balanced", "bold"];
 const SCALE = [1, 2, 3, 4, 5];
 let MODELS = {};   // rooms/models.js, loaded at start (framework names for the verdict)
+let MATH = null;   // rooms/math.js, for "The numbers" panel
 
 /* ======================= Data: live (Supabase) ======================= */
 const live = {
@@ -74,6 +75,14 @@ const live = {
       ]);
       out.signoff = so.data;
       out.counts = Object.fromEntries((counts.data || []).map(c => [c.stance, Number(c.n)]));
+      // Review: where it stands, the logged reviews, and my own private rating for the open one.
+      const [rs, sum] = await Promise.all([sb.rpc("review_state", { rid: roomId }), sb.rpc("review_summary", { rid: roomId })]);
+      out.review = rs.data || null;
+      out.reviews = sum.data || [];
+      if (out.review?.round) {
+        const { data: mine2 } = await sb.from("review_ratings").select("rating,note").eq("room_id", roomId).eq("user_id", me).eq("review_no", out.review.round).maybeSingle();
+        out.myRating = mine2 || null;
+      }
     }
     return out;
   },
@@ -161,6 +170,14 @@ const live = {
     if (error) throw error;
     S.room.links = links;
   },
+  async logReview(what, rating, lessons, next) {
+    const { error } = await Rooms.sb.rpc("log_review", { rid: roomId, what_happened: what, rating, lessons, next_review: next || null });
+    if (error) throw error;
+  },
+  async rate(round, rating, note) {
+    const { error } = await Rooms.sb.from("review_ratings").upsert({ room_id: roomId, user_id: Rooms.user.id, review_no: round, rating, note }, { onConflict: "room_id,user_id,review_no" });
+    if (error) throw error;
+  },
   async stopReport(token) { const { error } = await Rooms.sb.from("report_shares").update({ revoked: true }).eq("token", token); if (error) throw error; },
   async withdraw(oid) { const { error } = await Rooms.sb.rpc("withdraw_objection", { oid }); if (error) throw error; },
   async overrule(oid, why) { const { error } = await Rooms.sb.rpc("override_objection", { oid, why }); if (error) throw error; }
@@ -219,7 +236,9 @@ function demoStore(kind) {
       const counts = signoff ? { agree: 1, [signoff.stance]: (signoff.stance === "agree" ? 2 : 1) } : { agree: 1 };
       const invites = !owner ? null : withPeople ? people : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
       room.report_mode = "both";
-      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined };
+      if (room.status === "decided" && params.get("review") === "1" && !this.reviews.length && !this.review) this.review = { round: 1, due: true, review_date: room.review_date, raters: 2 };
+      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, signoff, counts, objections: room.rapid ? objections : undefined,
+        review: this.review, reviews: this.reviews, myRating: this.myRating };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
     async setRapidRole(uid, r) { if (uid === "sara") roles.Sara = r; if (uid === "omar") roles.Omar = r; },
@@ -251,7 +270,17 @@ function demoStore(kind) {
       Object.assign(analysis, { owner_decision: decision, override_reason: reason, final_option: decision === "accepted" ? analysis.verdict.call : option });
       room.status = "decided";
     },
-    async signOff(stance, note) { signoff = { stance, note }; }
+    async signOff(stance, note) { signoff = { stance, note }; },
+    // Review, in this browser: ?review=1 makes the review due as soon as the call is settled.
+    review: null, reviews: [], myRating: null,
+    async logReview(what, rating, lessons, next) {
+      this.reviews.push({ review_no: this.reviews.length + 1, logged_at: new Date().toISOString(), what_happened: what, rating, lessons,
+        plan_total: this.plan.filter(x => x.kind !== "review").length, plan_done: this.plan.filter(x => x.status === "done").length, plan_blocked: this.plan.filter(x => x.status === "blocked").length,
+        raters: this.myRating ? 4 : 3, avg: this.myRating ? 3.8 : 3.7, min: 3, max: 5, notes: ["Cash held up better than we feared.", "The pop-up proved demand."] });
+      room.status = "reviewed"; this.myRating = null;
+      this.review = next ? { round: this.reviews.length + 1, due: false, review_date: next, raters: 0 } : null;
+    },
+    async rate(round, rating, note) { this.myRating = { rating, note }; }
   };
 }
 // The demo runs the real group math (rooms/math.js) on made-up scores, with a canned write-up.
@@ -286,6 +315,7 @@ async function demoAnalysis(room, inputs) {
       weights: m.weightSpread, winners: m.winners, gut: m.gut, risk: m.riskMix, members: m.members, dissent: m.dissent,
       themes: ar ? [] : [{ theme: "Cash runway", kind: "facts", count: 2 }, { theme: "Moving before competitors", kind: "values", count: 1 }]
     },
+    outcomes: { scores, outcomes, whatif: m.whatif, group: m.group },
     owner_decision: null, override_reason: null, final_option: null
   };
 }
@@ -846,6 +876,9 @@ function vVerdict() {
   const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || Rooms.typeName(r)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
   cards.push(top);
+  if (settled) cards.push(...reviewCards());
+  const flip = flipLine();
+  if (flip) cards.push(card("outline", el("h3", null, t("wi_flip_title")), contentLang(el("p", "body", flip))));
   // Say it plainly when most of the room leaned to another option than the call.
   if (v.room_vs_call || v.leaned) cards.push(card("outline", el("h3", null, t("v_room_elsewhere")),
     contentLang(el("p", "body", v.room_vs_call || t("v_leaned", { label: v.leaned.label, n: v.leaned.count, total: v.leaned.members })))));
@@ -940,6 +973,8 @@ function vVerdict() {
   if (why.childElementCount) cards.push(why);
 
   cards.push(mapCard(map, v.call));
+  const nums = numbersCard(v);
+  if (nums) cards.push(nums);
 
   const facts = a.frame?.facts || [];
   if (facts.length) {
@@ -959,12 +994,184 @@ function vVerdict() {
   }
   if (settled && S.role !== "observer") cards.push(signOffCard());
   if (settled || (S.plan || []).length) cards.push(planCard());
+  (S.reviews || []).slice().reverse().forEach(x => cards.push(outcomeCard(x)));
   const mode = r.report_mode || "both";
   if (S.mine && mode !== "team") cards.push(personalCard());
   if (S.role === "owner" || mode !== "personal") cards.push(reportCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
 }
+/* ---------- Review: how did the call turn out? ---------- */
+// On the review date the owner logs what happened and members rate privately (1-5). The owner can log early.
+const RATE_KEYS = [1, 2, 3, 4, 5];
+function rateChips(current, onPick) {
+  const box = el("div", "rate-chips");
+  const draw = v => box.replaceChildren(...RATE_KEYS.map(n => { const b = Rooms.chip(n + " · " + t("rv_r" + n), v === n, () => { onPick(n); draw(n); }); return b; }));
+  draw(current);
+  return box;
+}
+function reviewCards() {
+  const rv = S.review, owner = S.role === "owner", out = [];
+  if (!rv?.round) return out;
+  if (rv.due) out.push(card("attention", el("p", "lbl", t("rv_due_title")), el("p", "body", t(owner ? "rv_due_owner" : "rv_due_member", { date: Rooms.fmtDate(rv.review_date) }))));
+  if (owner) {
+    const c = card("you", el("p", "text sm", t("rv_log_title")), el("p", "small", t("rv_log_hint")));
+    const st = el("p", "status err");
+    let rating = null;
+    const what = el("textarea"); Object.assign(what, { rows: 3, maxLength: 2000, placeholder: t("rv_what_ph") }); what.id = "rvWhat";
+    const lessons = el("textarea"); Object.assign(lessons, { rows: 2, maxLength: 2000, placeholder: t("rv_lessons_ph") }); lessons.id = "rvLessons";
+    const plan = (S.plan || []).filter(x => x.kind !== "review");
+    const field2 = (id, label, input, hint) => { const f = el("div", "field"); const l = el("label", "lbl", label); l.htmlFor = id; f.append(l); if (hint) f.append(el("p", "small", hint)); f.append(input); return f; };
+    const rf = el("div", "field"); rf.append(el("span", "lbl", t("rv_rating_lbl")), rateChips(null, n => { rating = n; }));
+    const facts = el("ul", "dots");
+    if (plan.length) facts.append(el("li", null, t("rv_plan_line", { done: plan.filter(x => x.status === "done").length, total: plan.length, blocked: plan.filter(x => x.status === "blocked").length })));
+    (S.analysis?.verdict?.tripwires || []).forEach(w => facts.append(contentLang(el("li", null, t("rv_tripwire", { signal: w.signal })))));
+    const again = el("select", "line role-select"); again.id = "rvAgain"; again.style.width = "100%";
+    [["", "rv_again_no"], ["3", "rv_again_3"], ["6", "rv_again_6"]].forEach(([v2, k]) => { const o = el("option", null, t(k)); o.value = v2; again.append(o); });
+    const save = btn(t("rv_save"), "", async () => {
+      if (!what.value.trim()) { what.focus(); return say(st, t("rv_need_what")); }
+      if (!rating) return say(st, t("rv_need_rating"));
+      const next = again.value ? (() => { const x = new Date(); x.setMonth(x.getMonth() + Number(again.value)); return x.toISOString().slice(0, 10); })() : null;
+      save.disabled = true;
+      try { await store.logReview(what.value.trim(), rating, lessons.value.trim(), next); await refresh(); }
+      catch (e) { save.disabled = false; say(st, t("err_generic")); }
+    });
+    const body = [field2("rvWhat", t("rv_what_lbl"), what), rf, ...(facts.childElementCount ? [(() => { const f = el("div", "field"); f.append(el("span", "lbl", t("rv_context_lbl")), facts); return f; })()] : []),
+      field2("rvLessons", t("rv_lessons_lbl"), lessons), field2("rvAgain", t("rv_again_lbl"), again), el("p", "small", t("rv_raters", { n: rv.raters || 0 })), save, st];
+    if (rv.due) c.append(...body);
+    else { const d = el("details", "more"); d.append(el("summary", null, t("rv_log_early")), ...body); c.append(d); }
+    out.push(c);
+  } else if (rv.due && S.role !== "observer") {
+    const c = card("you", el("p", "text sm", t("rv_rate_title")), el("p", "small", t("rv_rate_hint")));
+    const st = el("p", "status");
+    let rating = S.myRating?.rating || null;
+    const note = el("input", "line"); Object.assign(note, { maxLength: 500, placeholder: t("rv_note_ph"), value: S.myRating?.note || "" });
+    note.setAttribute("aria-label", t("rv_note_ph"));
+    const save = btn(t(S.myRating ? "rv_rate_update" : "rv_rate_save"), "", async () => {
+      if (!rating) return say(st, t("rv_need_rating"));
+      save.disabled = true;
+      try { await store.rate(rv.round, rating, note.value.trim()); await refresh(); }
+      catch { save.disabled = false; say(st, t("err_generic")); }
+    });
+    c.append(rateChips(rating, n => { rating = n; }), note, save, st);
+    if (S.myRating) c.append(el("p", "small", t("rv_rated")));
+    out.push(c);
+  }
+  return out;
+}
+// A logged review: what happened, the owner's rating, and the room's ratings (spread and notes only from 3).
+function outcomeCard(x) {
+  const c = card("outline", el("h3", null, t("rv_outcome_title", { n: x.review_no, date: Rooms.fmtDate(String(x.logged_at).slice(0, 10)) })));
+  const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", x.what_happened)), el("span", "tag", t("rv_owner_rating", { n: x.rating })));
+  c.append(top);
+  const ul = el("ul", "dots");
+  if (x.raters > 0) ul.append(el("li", null, x.min != null ? t("rv_team_spread", { avg: x.avg, n: x.raters, min: x.min, max: x.max }) : t("rv_team_avg", { avg: x.avg, n: x.raters })));
+  if (x.plan_total) ul.append(el("li", null, t("rv_plan_line", { done: x.plan_done, total: x.plan_total, blocked: x.plan_blocked })));
+  if (ul.childElementCount) c.append(ul);
+  if (x.lessons) c.append(el("p", "lbl", t("rv_lessons_lbl")), contentLang(el("p", "body", x.lessons)));
+  if ((x.notes || []).length) { const n2 = contentLang(el("ul", "dots")); x.notes.forEach(s2 => n2.append(el("li", null, s2))); c.append(el("p", "lbl", t("rv_notes_lbl")), n2); }
+  return c;
+}
+
+/* ---------- The numbers (what if) ---------- */
+// Anyone in the room moves the weights, the risk mix or the Analyst's scores and sees the ranking change,
+// rebuilt in the browser from group totals only (rooms/math.js). It never changes the call.
+function numbersRoom() {
+  const a = S.analysis, o = a?.outcomes || {}, map = a?.disagreement_map || {};
+  if (!MATH || !o.scores || !Object.keys(o.scores).length) return null;
+  // Rooms decided before release 2 have no saved totals: use the rounded ones from the map.
+  const agg = o.whatif || (map.weights ? { n: map.members || 1, exact: false, gut: map.gut || {}, risk: map.risk || {},
+    weights: Object.fromEntries(map.weights.map(w => [w.id, w.avg])) } : null);
+  if (!agg) return null;
+  return { options: S.room.options, criteria: S.room.criteria, scores: o.scores, outcomes: o.outcomes || {}, agg };
+}
+const critLabel = id => S.room.criteria.find(c => c.id === id)?.label || id;
+function flipLine() {
+  const room = numbersRoom(); if (!room) return null;
+  const f = MATH.flipPoint(room);
+  return f ? t("wi_flip", { crit: critLabel(f.criterion), from: f.from, to: f.to, option: optLabel(f.top) }) : t("wi_no_flip");
+}
+function numbersCard(v) {
+  const base = numbersRoom(); if (!base) return null;
+  const cids = base.criteria.map(c => c.id);
+  const wsum = cids.reduce((s, c) => s + (Number(base.agg.weights[c]) || 0), 0) || 1;
+  const start = () => ({ weights: Object.fromEntries(cids.map(c => [c, (Number(base.agg.weights[c]) || 0) / wsum * 100])), riskShift: 0, ignoreGut: false, scores: structuredClone(base.scores) });
+  let st = start();
+  const room = () => ({ ...base, scores: st.scores, agg: { ...base.agg, weights: st.weights } });
+  const opts = () => ({ ignoreGut: st.ignoreGut, riskShift: st.riskShift });
+  const was = MATH.groupFromAggregates(base);
+
+  const c = card("you", el("h3", null, t("wi_title")), el("p", "small", t("wi_hint")));
+  const bars = el("div", "wi-bars");
+  const said = el("p", "body wi-said");
+  const flipP = el("p", "small");
+  const drawResult = () => {
+    const r = MATH.groupFromAggregates(room(), opts());
+    const max = Math.max(...Object.values(r.group), 1);
+    bars.replaceChildren(...r.ranked.map(id => {
+      const row = el("div", "wi-row" + (id === r.top ? " lead" : ""));
+      const top = el("div", "range-top"); top.append(contentLang(el("span", "rate-name", optLabel(id))), el("span", "wi-n", r.group[id].toFixed(1)));
+      const bar = el("div", "wi-bar"); const fill = el("i"); fill.style.width = (r.group[id] / max * 100) + "%"; bar.append(fill);
+      row.append(top, bar); return row;
+    }));
+    said.textContent = r.top !== was.top ? t("wi_now_first", { option: optLabel(r.top) }) : t("wi_still_first", { option: optLabel(r.top) }) + (r.close ? " " + t("wi_close") : "");
+    const f = MATH.flipPoint(room(), opts());
+    flipP.textContent = f ? t("wi_flip", { crit: critLabel(f.criterion), from: f.from, to: f.to, option: optLabel(f.top) }) : t("wi_no_flip");
+  };
+  // Weights: one slider each; moving one spreads the rest over the others.
+  const sliders = el("div", "wi-sliders");
+  const inputs = {};
+  const drawSliders = () => cids.forEach(id => { inputs[id].range.value = Math.round(st.weights[id]); inputs[id].out.textContent = Math.round(st.weights[id]) + "%"; });
+  cids.forEach(id => {
+    const row = el("label", "wi-slider");
+    const top = el("div", "range-top"); const out = el("span", "wi-n");
+    top.append(contentLang(el("span", "rate-name", critLabel(id))), out);
+    const range = el("input"); Object.assign(range, { type: "range", min: 0, max: 100, step: 1 });
+    range.setAttribute("aria-label", critLabel(id));
+    range.oninput = () => { st.weights = MATH.setWeight(st.weights, cids, id, Number(range.value)); drawSliders(); drawResult(); };
+    row.append(top, range); sliders.append(row);
+    inputs[id] = { range, out };
+  });
+  // Risk mix and gut picks
+  const risk = el("div", "chips");
+  const drawRisk = () => risk.replaceChildren(...[[-1, "wi_cautious"], [0, "wi_as_answered"], [1, "wi_bolder"]].map(([v2, k]) => Rooms.chip(t(k), st.riskShift === v2, () => { st.riskShift = v2; drawRisk(); drawResult(); })));
+  const gut = el("label", "check"); const gc = el("input"); gc.type = "checkbox";
+  gc.onchange = () => { st.ignoreGut = gc.checked; drawResult(); };
+  gut.append(gc, el("span", null, t("wi_ignore_gut")));
+  // The Analyst's scores, editable; edited cells show the original.
+  const sc = el("details", "more");
+  sc.append(el("summary", null, t("wi_scores")));
+  const table = el("div", "wi-table");
+  const drawTable = () => {
+    table.replaceChildren();
+    base.options.forEach(o => {
+      const blk = el("div", "block");
+      blk.append(contentLang(el("span", "rate-name", o.label)));
+      const grid = el("div", "wi-grid");
+      cids.forEach(cid => {
+        const orig = Number(base.scores[o.id]?.[cid] ?? 5), cur = Number(st.scores[o.id]?.[cid] ?? orig);
+        const f = el("label", "wi-cell" + (cur !== orig ? " edited" : ""));
+        const n = el("input", "line"); Object.assign(n, { type: "number", min: 0, max: 10, step: 1, value: cur });
+        n.setAttribute("aria-label", o.label + " · " + critLabel(cid));
+        n.onchange = () => { const x = Math.max(0, Math.min(10, Math.round(Number(n.value) || 0))); st.scores[o.id] = { ...st.scores[o.id], [cid]: x }; drawTable(); drawResult(); };
+        f.append(el("span", "small", critLabel(cid)), n);
+        if (cur !== orig) f.append(el("span", "small", t("wi_was", { n: orig })));
+        grid.append(f);
+      });
+      blk.append(grid); table.append(blk);
+    });
+  };
+  sc.append(table);
+  const reset = el("button", "linkbtn", t("wi_reset")); reset.type = "button";
+  reset.onclick = () => { st = start(); gc.checked = false; drawSliders(); drawRisk(); drawTable(); drawResult(); };
+  drawSliders(); drawRisk(); drawTable(); drawResult();
+  c.append(bars, said, flipP,
+    (() => { const f = el("div", "field"); f.append(el("span", "lbl", t("wi_weights")), sliders); return f; })(),
+    (() => { const f = el("div", "field"); f.append(el("span", "lbl", t("wi_risk")), risk, gut); return f; })(),
+    sc, reset, el("p", "small", t(base.agg.exact === false ? "wi_note_rounded" : "wi_note")));
+  return c;
+}
+
 // What the room's thinking model adds: tripwires for every model, then the model's own cards.
 function modelCards(v) {
   const out = [];
@@ -1309,6 +1516,7 @@ Rooms.langToggle(() => {
 async function start() {
   await Rooms.loadLang(Rooms.firstLang(demo === "ar" ? "ar" : null));
   try { MODELS = (await import("/rooms/models.js")).MODELS; } catch {}
+  try { MATH = await import("/rooms/math.js"); } catch {}
   notice(t("loading"), true);
   $("demoNote").hidden = !demo;
   if (demo) return demo === "join" ? vJoin() : refresh();
