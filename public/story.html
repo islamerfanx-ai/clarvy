@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Decision Rooms · Every group has one decision it can't make</title>
+<meta name="description" content="Bring your group into one room. Everyone gets a voice, the homework gets done, and you leave with one clear call.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* Story landing: the Decision Rooms pitch told as a screenplay. Same look as the home page. */
+main{--content:none;gap:0}
+.top .navchip{margin-inline-start:auto}
+.top .navchip + .lang{margin-inline-start:0}
+section{padding:72px 0 24px}
+/* Screenplay slug lines: the mono face, small caps feel */
+.slug{display:block;font-family:var(--mono);font-stretch:75%;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:0 0 16px}
+[dir=rtl] .slug{font-family:var(--read);font-stretch:normal;letter-spacing:0;font-size:13px}
+.act{display:inline-block;font-size:var(--t-ui);background:rgba(0,0,0,.05);border-radius:2px;padding:4px 8px;margin:0 0 24px}
+.band .act{background:rgba(0,0,0,.07)}
+/* Hero */
+.hero{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 120px);padding-top:24px}
+.hero h1{margin:0;font-size:var(--t-display);line-height:1.1;font-weight:400;letter-spacing:-.02em;max-width:16ch}
+.hero p.lead{margin:28px 0 0;font-size:var(--t-h4);line-height:1.25;letter-spacing:-.02em;max-width:30ch;color:var(--dim)}
+.hero .ctas{display:flex;gap:10px;flex-wrap:wrap;margin-top:32px}
+.hero .ctas .btn{width:auto}
+.hero .star{margin:16px 0 0;font-size:var(--t-ui);color:var(--dim)}
+.sec-h{text-wrap:balance;margin:0 0 24px;font-size:var(--t-display);line-height:1.1;font-weight:400;letter-spacing:-.02em;max-width:18ch}
+.sec-b{margin:0 0 32px;font-size:var(--t-h5);line-height:1.45;letter-spacing:-.01em;color:var(--dim);max-width:52ch}
+.band{padding-block:72px 64px;margin-block:48px 24px}
+.punch{margin:32px 0 0;font-size:var(--t-h3);line-height:1.12;font-weight:400;letter-spacing:-.02em;max-width:22ch}
+/* Rooms: four flat white cards */
+.rooms{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.room{background:#fff;padding:22px;display:flex;flex-direction:column;gap:10px}
+.room .kind{font-size:12px;color:var(--dim)}
+.room h3{margin:0;font-family:var(--read);font-size:var(--t-h4);font-weight:400;letter-spacing:-.02em;color:var(--fg);text-transform:none;line-height:1.15}
+.room p{margin:0;font-size:15px;line-height:1.5}
+.room.fun{background:var(--accent);color:#fff}
+.room.fun h3{color:#fff}.room.fun .kind{color:rgba(255,255,255,.7)}
+/* Act III: numbered rows with hairlines, like the home page */
+.numrows{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.numrows li{display:grid;grid-template-columns:72px minmax(0,1fr) minmax(0,.9fr);gap:8px 24px;align-items:baseline;padding:22px 0;border-bottom:1px solid var(--line)}
+.numrows .idx{font-size:var(--t-ui);color:var(--dim);font-variant-numeric:tabular-nums}
+.numrows h3{margin:0;font-family:var(--read);font-size:var(--t-h3);line-height:1.08;font-weight:400;letter-spacing:-.02em;color:var(--fg);text-transform:none}
+.numrows p{margin:0;font-size:var(--t-ui);line-height:1.45;color:var(--dim);max-width:42ch}
+@media (max-width:760px){.numrows li{grid-template-columns:48px minmax(0,1fr)}.numrows p{grid-column:2}}
+.credits{margin:32px 0 0}
+/* Closing */
+.end{padding:96px 0 56px}
+.end h2{margin:0 0 32px;font-size:var(--t-display);line-height:1.1;font-weight:400;letter-spacing:-.02em;max-width:16ch}
+.end .btn{width:auto;display:inline-block}
+.end .sign{margin:24px 0 0;font-size:var(--t-h5);color:var(--dim)}
+footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:26px 0 40px;border-top:1px solid var(--line);font-size:13px;color:var(--dim)}
+footer a{color:var(--fg)}
+footer .links{display:flex;gap:18px}
+@media (max-width:720px){.nav .navlink.opt,.nav .navchip{display:none}section{padding-top:48px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <nav class="nav">
+      <a class="navlink opt" href="#rooms" data-t="st_a2">Act II · Enter the rooms</a>
+      <a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a>
+      <a class="navchip" href="/dashboard.html" data-t="mr_open_new">Open a room</a>
+      <button class="lang" type="button" id="langBtn"></button>
+    </nav>
+  </header>
+
+  <!-- Cold open -->
+  <section class="hero">
+    <span class="slug" data-t="st_fade">FADE IN.</span>
+    <h1 data-t="st_h1">Every group has one decision it can't make.</h1>
+    <p class="lead" data-t="st_sub">Six people. Five opinions. One very long WhatsApp thread. Tonight, someone finally ends it.</p>
+    <div class="ctas">
+      <a class="btn" href="/dashboard.html" data-t="st_cta">Open a Decision Room</a>
+      <a class="btn ghost" href="/room.html?demo=owner&amp;model=wrap&amp;rapid=1" data-t="lp_demo">See a demo room</a>
+    </div>
+    <p class="star" data-t="st_star">Starring you, your people, and one clear call.</p>
+  </section>
+
+  <!-- Act I -->
+  <section class="band" aria-labelledby="a1H">
+    <span class="act" id="a1H" data-t="st_a1">Act I · The problem</span>
+    <span class="slug" data-t="st_a1_slug">INT. GROUP CHAT, 11:47 PM</span>
+    <p class="sec-b" data-t="st_a1_b"></p>
+    <p class="punch" data-t="st_a1_h"></p>
+  </section>
+
+  <!-- Act II -->
+  <section id="rooms" aria-labelledby="a2H">
+    <span class="act" data-t="st_a2">Act II · Enter the rooms</span>
+    <h2 class="sec-h" id="a2H" data-t="st_a2_h">A door. Light underneath. Everyone walks in.</h2>
+    <p class="sec-b" data-t="st_a2_b"></p>
+    <div class="rooms">
+      <article class="room"><span class="kind" data-t="st_r1_k"></span><h3 data-t="st_r1_t"></h3><p data-t="st_r1_b"></p></article>
+      <article class="room"><span class="kind" data-t="st_r2_k"></span><h3 data-t="st_r2_t"></h3><p data-t="st_r2_b"></p></article>
+      <article class="room"><span class="kind" data-t="st_r3_k"></span><h3 data-t="st_r3_t"></h3><p data-t="st_r3_b"></p></article>
+      <article class="room fun"><span class="kind" data-t="st_r4_k"></span><h3 data-t="st_r4_t"></h3><p data-t="st_r4_b"></p></article>
+    </div>
+  </section>
+
+  <!-- Act III -->
+  <section aria-labelledby="a3H">
+    <span class="act" id="a3H" data-t="st_a3">Act III · How the scene plays out</span>
+    <ol class="numrows">
+      <li><span class="idx">(01)</span><h3 data-t="st_s1_t"></h3><p data-t="st_s1_b"></p></li>
+      <li><span class="idx">(02)</span><h3 data-t="st_s2_t"></h3><p data-t="st_s2_b"></p></li>
+      <li><span class="idx">(03)</span><h3 data-t="st_s3_t"></h3><p data-t="st_s3_b"></p></li>
+      <li><span class="idx">(04)</span><h3 data-t="st_s4_t"></h3><p data-t="st_s4_b"></p></li>
+    </ol>
+    <span class="slug credits" data-t="st_credits">ROLL CREDITS. DECISION MADE.</span>
+  </section>
+
+  <!-- The cast -->
+  <section class="band" aria-labelledby="castH">
+    <h2 class="sec-h" id="castH" data-t="st_cast_t">Shot on location worldwide</h2>
+    <p class="sec-b" data-t="st_cast_b"></p>
+  </section>
+
+  <!-- Final scene -->
+  <section class="end">
+    <span class="slug" data-t="st_end_slug">The room goes quiet. Everyone's looking at you.</span>
+    <h2 data-t="st_end_h">Somebody has to open the door.</h2>
+    <a class="btn" href="/dashboard.html" data-t="st_end_cta">Start your first room, free</a>
+    <p class="sign" data-t="st_sign">Decision Rooms. Your group's last word.</p>
+  </section>
+
+  <footer>
+    <span>© 2026 <span data-t="product">Decision Rooms</span> · <span data-t="lp_rights"></span></span>
+    <span class="links"><a href="/privacy.html" data-t="lp_privacy">Privacy</a><a href="/terms.html" data-t="lp_terms">Terms</a></span>
+  </footer>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { t } = Rooms;
+function meta() {
+  document.title = t("st_title");
+  document.querySelector('meta[name="description"]').content = t("st_desc");
+}
+Rooms.langToggle(meta);
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  meta();
+  // Show "Your rooms" only to people who already have rooms in this browser.
+  if (await Rooms.connect()) document.querySelector('.nav a.navlink[href="/dashboard.html"]').hidden = !Rooms.user;
+})();
+})();
+</script>
+</body>
+</html>
