@@ -56,6 +56,27 @@ main{--content:1120px}
 .gr-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;font-family:var(--mono);background:var(--accent-soft)}
 .gr-pill.bad{background:rgba(198,47,69,.12);color:var(--err)}
 .gr-empty{color:var(--dim);font-size:14px}
+/* Revenue and Ask */
+.rv-table{overflow-x:auto;background:var(--card)}
+.rv-table table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.rv-table th,.rv-table td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:end;white-space:nowrap}
+.rv-table th{font-weight:500;color:var(--dim);font-size:12px}
+.rv-table th:first-child,.rv-table td:first-child{text-align:start}
+.rv-table .neg{color:var(--err)}
+.rv-row{display:flex;justify-content:space-between;align-items:center;gap:8px 14px;flex-wrap:wrap;border-top:1px solid var(--line);padding:8px 0;font-size:14px}
+.rv-row .acts{display:flex;gap:6px}
+.rv-row .acts .btn{width:auto;padding:6px 12px;font-size:13px}
+.rv-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:10px}
+.rv-form .btn{width:auto}
+.ask-log{display:flex;flex-direction:column;gap:12px;margin-bottom:14px}
+.ask-msg{background:var(--card);padding:12px 16px;max-width:820px;white-space:pre-wrap;font-size:15px}
+.ask-msg.me{background:var(--accent-soft);align-self:flex-end}
+.ask-msg .rv-table{margin-top:10px;background:transparent}
+.ask-form{display:flex;gap:8px;position:sticky;bottom:0;background:var(--ink);padding:10px 0}
+.ask-form input{flex:1}
+.ask-form .btn{width:auto;padding:10px 18px}
+.ask-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.ask-chips button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:6px 12px;border-radius:40px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -82,9 +103,9 @@ function csv(rows) {
   return [cols.join(","), ...rows.map(r => cols.map(c => q(r[c])).join(","))].join("\n");
 }
 /* ---------- Growth (2026-10-22): one tab per growth question, from admin_growth() ---------- */
-const TABS = ["overview", "acquisition", "activation", "loop", "rooms", "retention", "quality", "money", "orgs", "health", "people"];
+const TABS = ["overview", "ask", "revenue", "acquisition", "activation", "loop", "rooms", "retention", "quality", "money", "orgs", "health", "people"];
 let tab = (() => { try { const x = localStorage.getItem("dr-admin-tab"); return TABS.includes(x) ? x : "overview"; } catch { return "overview"; } })();
-let growth = null;
+let growth = null, revenue = null;
 const num = n => n == null ? "·" : Number(n).toLocaleString(Rooms.lang === "ar" ? "ar" : "en");
 const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "·";
 function stat(n, l, how, cls) {
@@ -215,6 +236,158 @@ const panels = {
       card(num(h.stuck_open ?? 0), t("gr_h_stuck"), !h.stuck_open, t("gr_h_stuck_how")))];
   }
 };
+/* ---------- Revenue (2026-10-23): recorded by hand on this tab, Stripe later ---------- */
+const usd = n => n == null ? "·" : (n < 0 ? "-$" : "$") + Math.abs(Number(n)).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const pctv = v => v == null ? "·" : v + "%";
+const monthLabel = m => new Date(m + "T00:00:00").toLocaleDateString(Rooms.lang === "ar" ? "ar" : "en", { month: "short", year: "2-digit" });
+function table(cols, rows, minW = 640) {
+  const t = el("table"), h = el("tr"); t.style.minWidth = minW + "px";
+  cols.forEach(c => h.append(el("th", null, c)));
+  const th = el("thead"); th.append(h); t.append(th);
+  const b = el("tbody");
+  rows.forEach(r => { const tr = el("tr"); r.forEach(c => { const td = el("td"); if (c instanceof Node) td.append(c); else td.textContent = c ?? "·"; tr.append(td); }); b.append(tr); });
+  t.append(b);
+  const w = el("div", "rv-table"); w.append(t); return w;
+}
+function monthsChart(months, key) {
+  const w = el("div", "gr-weeks"), max = Math.max(1, ...months.map(x => x[key] || 0));
+  months.forEach((x, i) => {
+    const c = el("div", i === months.length - 1 ? "now" : null), bar = el("i");
+    bar.style.height = (100 * (x[key] || 0) / max) + "%";
+    c.append(el("span", null, x[key] ? Math.round(x[key]).toLocaleString("en") : "0"), bar, el("span", null, monthLabel(x.month)));
+    w.append(c);
+  });
+  return w;
+}
+const plan = k => t("rv_plan_" + k);
+const kind = k => t("rv_kind_" + k);
+const margin = (mrr, cost) => mrr > 0 ? Math.round(100 * (mrr - cost) / mrr) + "%" : "·";
+async function revenueDo(body, st) {
+  try { await Rooms.post("/api/admin/revenue", body); revenue = await Rooms.post("/api/admin/revenue", { action: "summary" }); render(); }
+  catch (e) { if (st) { st.className = "status err"; st.textContent = t(["no_account", "need_customer", "duplicate"].includes(e.message) ? "rv_err_" + e.message : "err_generic"); } }
+}
+// Who pays: an organisation, an account by email, or a name.
+function customerFields() {
+  const who = el("select", "line role-select"); who.setAttribute("aria-label", t("rv_customer"));
+  [["email", t("rv_by_email")], ["name", t("rv_by_name")], ...orgs.map(o => ["org:" + o.id, o.name])].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; who.append(op); });
+  const email = el("input", "line"); Object.assign(email, { type: "email", placeholder: t("rv_email_ph") });
+  const name = el("input", "line"); Object.assign(name, { placeholder: t("rv_name_ph"), maxLength: 160 });
+  const sync = () => { email.hidden = who.value !== "email"; };
+  who.onchange = sync; sync();
+  return { nodes: [who, email, name], value: () => ({ email: who.value === "email" ? email.value.trim() : "", workspace_id: who.value.startsWith("org:") ? who.value.slice(4) : "", customer_name: name.value.trim() }) };
+}
+const field = (type, ph, val) => { const i = el("input", "line"); Object.assign(i, { type, placeholder: ph, value: val || "" }); i.setAttribute("aria-label", ph); return i; };
+const pick = (opts, label) => { const sel = el("select", "line role-select"); sel.setAttribute("aria-label", label); opts.forEach(([v, l]) => { const o = el("option", null, l); o.value = v; sel.append(o); }); return sel; };
+const today = () => new Date().toISOString().slice(0, 10);
+function addSubForm() {
+  const det = el("details", "more"); det.append(el("summary", null, t("rv_add_sub")));
+  const c = customerFields();
+  const p = pick(["small", "team", "organisation", "other"].map(k => [k, plan(k)]), t("rv_plan"));
+  const amount = field("number", t("rv_amount"), ""); amount.min = "0"; amount.step = "0.01";
+  const per = pick([["month", t("rv_per_month")], ["year", t("rv_per_year")]], t("rv_period"));
+  const start = field("date", t("rv_start"), today()), renew = field("date", t("rv_renews"), "");
+  p.onchange = () => { if (!amount.value) amount.value = { small: 39, team: 99 }[p.value] || ""; }; p.onchange();
+  const st = el("p", "status"), go = el("button", "btn", t("rv_save")); go.type = "button";
+  go.onclick = async () => { go.disabled = true; await revenueDo({ action: "add_sub", ...c.value(), plan: p.value, amount: amount.value, period: per.value, started_on: start.value, renews_on: renew.value }, st); go.disabled = false; };
+  const f = el("div", "rv-form"); f.append(...c.nodes, p, amount, per, labelled(t("rv_start"), start), labelled(t("rv_renews"), renew), go);
+  det.append(f, st); return det;
+}
+function addInvoiceForm() {
+  const det = el("details", "more"); det.append(el("summary", null, t("rv_add_invoice")));
+  const c = customerFields();
+  const k = pick(["subscription", "facilitated", "extra_rooms", "setup", "other"].map(x => [x, kind(x)]), t("rv_kind"));
+  const amount = field("number", t("rv_amount"), ""); amount.min = "0"; amount.step = "0.01";
+  const num = field("text", t("rv_number"), ""); num.maxLength = 40;
+  const issued = field("date", t("rv_issued"), today()), due = field("date", t("rv_due"), ""), paid = field("date", t("rv_paid_on"), "");
+  const st = el("p", "status"), go = el("button", "btn", t("rv_save")); go.type = "button";
+  go.onclick = async () => { go.disabled = true; await revenueDo({ action: "add_invoice", ...c.value(), kind: k.value, amount: amount.value, number: num.value, issued_on: issued.value, due_on: due.value, paid_on: paid.value }, st); go.disabled = false; };
+  const f = el("div", "rv-form"); f.append(...c.nodes, k, amount, num, labelled(t("rv_issued"), issued), labelled(t("rv_due"), due), labelled(t("rv_paid_on"), paid), go);
+  det.append(f, st); return det;
+}
+function labelled(text, input) { const w = el("label", "stack-sm"); w.style.gap = "2px"; w.append(el("span", "small", text), input); return w; }
+function rowActs(...btns) { const a = el("span", "acts"); btns.forEach(([label, cls, fn]) => { const b = el("button", "btn " + cls, label); b.type = "button"; b.onclick = async () => { b.disabled = true; await fn(); }; a.append(b); }); return a; }
+panels.revenue = r => {
+  const n = r.now || {}, months = r.months || [];
+  const north = stat(usd(n.mrr), t("rv_mrr"), t("rv_mrr_how"), "north");
+  north.insertBefore(el("span", "d", n.mrr_last_month ? delta(n.mrr, n.mrr_last_month).replace(t("gr_vs_last"), t("rv_vs_last")) : t("rv_first")), north.lastChild);
+  const conv = (n.paying_people || 0) + (n.free_accounts || 0);
+  const stats = grid("ad-stats", north, stat(usd(n.arr), t("rv_arr")), stat(num(n.customers), t("rv_customers"), t("rv_arpa", { v: usd(n.arpa) })),
+    stat(usd(n.cash_month), t("rv_cash_month"), t("rv_cash_12m", { v: usd(n.cash_12m) })),
+    stat(margin(n.mrr, n.ai_30d), t("rv_margin"), t("rv_margin_how", { v: usd(n.ai_30d) })),
+    stat(pctv(n.nrr), t("rv_nrr"), t("rv_nrr_how")), stat(pctv(n.revenue_churn), t("rv_rev_churn"), t("rv_logo_churn", { v: pctv(n.logo_churn) })),
+    stat(usd(n.ltv), t("rv_ltv"), t("rv_ltv_how")), stat(pct(n.paying_people, conv), t("rv_conv"), t("rv_conv_how", { p: num(n.paying_people), f: num(n.free_accounts) })),
+    stat(usd(r.unpaid), t("rv_unpaid"), t("rv_overdue", { v: usd(r.overdue) })));
+  const moves = table([t("rv_month"), t("rv_mrr_short"), t("rv_new"), t("rv_expansion"), t("rv_contraction"), t("rv_churned"), t("rv_net"), t("rv_customers"), t("rv_cash"), t("rv_invoiced"), t("rv_one_off"), t("rv_ai")],
+    [...months].reverse().map(m => { const net = m.new + m.expansion - m.contraction - m.churned; const nn = el("span", net < 0 ? "neg" : null, usd(net));
+      return [monthLabel(m.month), usd(m.mrr), usd(m.new), usd(m.expansion), usd(m.contraction), usd(m.churned), nn, num(m.customers), usd(m.cash), usd(m.invoiced), usd(m.one_off), usd(m.ai_cost)]; }), 960);
+  const plans = box(t("rv_by_plan"), list(r.plans, x => plan(x.plan) + " · " + t("rv_n_customers", { n: x.customers }), x => usd(x.mrr) + "  " + t("rv_margin_short", { v: margin(x.mrr, x.ai_30d) })));
+  const oneOff = box(t("rv_one_off_12m"), list(r.one_off, x => kind(x.kind) + " · " + num(x.n), x => usd(x.amount)));
+  const geo = box(t("gr_countries"), list(r.countries, x => x.k === "?" ? t("rv_unknown") : country(x.k), x => usd(x.mrr)));
+  const sec = box(t("gr_sectors"), list(r.sectors, x => x.k === "?" ? t("rv_unknown") : t("sector_" + x.k), x => usd(x.mrr)));
+  const cust = (r.customers || []).length ? table([t("rv_customer"), t("rv_plan"), t("rv_mrr_short"), t("rv_since"), t("rv_renews"), t("rv_country"), t("rv_paid_total"), t("rv_ai"), t("rv_margin")],
+    r.customers.map(c => [c.name, plan(c.plan), usd(c.mrr), fmt(c.since), fmt(c.renews_on), c.country ? country(c.country) : "·", usd(c.paid_total), usd(c.ai_30d), margin(c.mrr, c.ai_30d)]), 900) : el("p", "gr-empty", t("rv_no_customers"));
+  const open = box(t("rv_open_invoices", { n: (r.open_invoices || []).length }));
+  if (!(r.open_invoices || []).length) open.append(el("p", "gr-empty", t("gr_none")));
+  (r.open_invoices || []).forEach(i => {
+    const row = el("div", "rv-row"), who = el("span");
+    who.append(el("b", null, i.customer), el("span", "small", "  " + [i.number, kind(i.kind), usd(i.amount), t("rv_due_on", { d: fmt(i.due_on) }), i.days_overdue ? t("rv_days_late", { n: i.days_overdue }) : null].filter(Boolean).join(" · ")));
+    if (i.days_overdue) who.querySelector(".small").style.color = "var(--err)";
+    row.append(who, rowActs([t("rv_mark_paid"), "", () => revenueDo({ action: "paid", id: i.id })], [t("rv_void"), "ghost", () => confirm(t("rv_void_sure")) ? revenueDo({ action: "void", id: i.id }) : render()]));
+    open.append(row);
+  });
+  open.append(el("p", "small", t("rv_days_to_pay", { n: r.days_to_pay ?? "·" })));
+  const paid = box(t("rv_paid_recent"), list(r.paid_recent, x => [x.customer, kind(x.kind), fmt(x.paid_on)].join(" · "), x => usd(x.amount)));
+  const ren = box(t("rv_renewals"), list(r.renewals, x => x.customer + " · " + plan(x.plan) + " · " + fmt(x.renews_on), x => usd(x.amount) + (x.period === "year" ? t("rv_slash_year") : t("rv_slash_month"))));
+  const lost = box(t("rv_churned_list"), list(r.churned, x => [x.customer, plan(x.plan), fmt(x.ended_on), x.reason].filter(Boolean).join(" · "), x => usd(x.mrr) + t("rv_slash_month")));
+  const subs = box(t("rv_subs", { n: (r.subscriptions || []).length }));
+  if (!(r.subscriptions || []).length) subs.append(el("p", "gr-empty", t("rv_no_customers")));
+  (r.subscriptions || []).forEach(x => {
+    const row = el("div", "rv-row"), who = el("span");
+    who.append(el("b", null, x.customer), el("span", "small", "  " + [plan(x.plan), usd(x.amount) + (x.period === "year" ? t("rv_slash_year") : t("rv_slash_month")), t("rv_since_d", { d: fmt(x.started_on) }), x.renews_on ? t("rv_renews_d", { d: fmt(x.renews_on) }) : null].filter(Boolean).join(" · ")));
+    row.append(who, rowActs([t("rv_end"), "ghost", () => { const why = prompt(t("rv_end_why")); return why === null ? render() : revenueDo({ action: "end_sub", id: x.id, reason: why }); }]));
+    subs.append(row);
+  });
+  const rec = box(t("rv_record"), el("p", "small", t("rv_record_how")), addSubForm(), addInvoiceForm());
+  return [stats, rec, grid("ad-two", box(t("rv_mrr_months"), monthsChart(months, "mrr")), box(t("rv_cash_months"), monthsChart(months, "cash"))),
+    el("h2", "sec-h", t("rv_moves")), moves, el("p", "small", t("rv_moves_how")),
+    grid("ad-two", plans, oneOff), grid("ad-two", geo, sec),
+    el("h2", "sec-h", t("rv_customers_title")), cust,
+    grid("ad-two", open, paid), grid("ad-two", ren, lost), subs];
+};
+/* ---------- Ask the data (2026-10-23): questions answered from the numbers on this page ---------- */
+let askLog = [], asking = false;
+async function ask(q) {
+  q = String(q || "").trim(); if (!q || asking) return;
+  askLog.push({ role: "user", text: q }); asking = true; render();
+  try {
+    const r = await Rooms.post("/api/admin/ask", { messages: askLog.map(m => ({ role: m.role, text: m.text })), lang: Rooms.lang });
+    askLog.push({ role: "assistant", text: r.reply || t("ask_empty"), table: r.table });
+  } catch { askLog.push({ role: "assistant", text: t("ask_failed") }); }
+  asking = false; render();
+}
+function askPanel() {
+  const log = el("div", "ask-log");
+  if (!askLog.length) {
+    const chips = el("div", "ask-chips");
+    ["ask_ex1", "ask_ex2", "ask_ex3", "ask_ex4", "ask_ex5"].forEach(k => { const b = el("button", null, t(k)); b.type = "button"; b.onclick = () => ask(t(k)); chips.append(b); });
+    log.append(chips);
+  }
+  askLog.forEach(m => {
+    const c = el("div", "ask-msg" + (m.role === "user" ? " me" : ""), m.text);
+    if (m.table?.columns?.length) c.append(table(m.table.columns, m.table.rows, 320));
+    log.append(c);
+  });
+  if (asking) log.append(el("div", "ask-msg thinking", t("ask_thinking")));
+  const f = el("form", "ask-form"), input = el("input", "line"), go = el("button", "btn", t("ask_send"));
+  Object.assign(input, { placeholder: t("ask_ph"), maxLength: 1500, disabled: asking }); input.setAttribute("aria-label", t("ask_ph"));
+  go.type = "submit"; go.disabled = asking;
+  f.onsubmit = e => { e.preventDefault(); ask(input.value); };
+  f.append(input, go);
+  const out = [log, f, el("p", "small", t("ask_note"))];
+  if (askLog.length && !asking) { const clear = el("button", "btn ghost", t("ask_clear")); clear.type = "button"; clear.style.width = "auto"; clear.onclick = () => { askLog = []; render(); }; out.push(clear); }
+  setTimeout(() => { input.focus(); if (askLog.length) f.scrollIntoView({ block: "end" }); }, 30);
+  return out;
+}
 function render() {
   document.title = t("ad_title") + " · " + t("product");
   const bar = el("div", "gr-tabs"); bar.setAttribute("role", "tablist");
@@ -225,6 +398,8 @@ function render() {
   });
   let body;
   if (tab === "people") body = [accessBox(), ...peoplePanel()];
+  else if (tab === "ask") body = [el("p", "gr-q", t("gr_q_ask")), ...askPanel()];
+  else if (tab === "revenue") body = revenue ? [el("p", "gr-q", t("gr_q_revenue")), ...panels.revenue(revenue)] : [el("p", "gr-empty", t("gr_unavailable"))];
   else if (!growth) body = [el("p", "gr-empty", t("gr_unavailable"))];
   else body = [el("p", "gr-q", t("gr_q_" + tab)), ...panels[tab](growth)];
   const head = el("h1", "db-title", t("ad_title"));
@@ -373,7 +548,7 @@ async function noAccess() {
 async function load() {
   try {
     data = await Rooms.post("/api/admin/overview", {});
-    [growth] = await Promise.all([Rooms.post("/api/admin/growth", {}).catch(() => null), loadOrgs(), loadAccess()]);
+    [growth, revenue] = await Promise.all([Rooms.post("/api/admin/growth", {}).catch(() => null), Rooms.post("/api/admin/revenue", { action: "summary" }).catch(() => null), loadOrgs(), loadAccess()]);
     render();
   }
   catch (e) {

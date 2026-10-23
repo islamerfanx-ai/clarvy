@@ -411,5 +411,29 @@ check("people can't read admin requests", as_user(B, "select * from operator_req
 check("people can't approve themselves", as_user(B, f"insert into operator_requests (user_id, status) values ('{B}', 'approved')"), "permission denied")
 check("sign-up source is saved once", (as_user(B, "update profiles set signup_source='room_invite' where id=(select auth.uid())") + as_user(B, "update profiles set signup_source='direct' where id=(select auth.uid())") + as_user(B, "select signup_source from profiles where id=(select auth.uid())")), "room_invite")
 
+# ---------- Revenue (20261101000000_revenue.sql) ----------
+check("people can't read revenue", as_user(B, "select * from revenue_subscriptions"), "permission denied")
+check("people can't add invoices", as_user(B, "insert into revenue_invoices (customer_name, kind, amount) values ('x', 'other', 1)"), "permission denied")
+check("people can't open the revenue numbers", as_user(B, "select admin_revenue()"), "permission denied")
+# A moved from Small to Team at the start of last month; C pays yearly; an offline client left this month.
+server(f"""insert into revenue_subscriptions (user_id, customer_name, plan, amount, started_on, ended_on) values
+  ('{A}', 'A', 'small', 39, date_trunc('month', current_date) - interval '3 months', date_trunc('month', current_date) - interval '1 month'),
+  ('{A}', 'A', 'team', 99, date_trunc('month', current_date) - interval '1 month', null);
+  insert into revenue_subscriptions (user_id, customer_name, plan, amount, period, started_on, renews_on) values
+  ('{C}', 'C', 'organisation', 1200, 'year', date_trunc('month', current_date) - interval '2 months', current_date + 10);
+  insert into revenue_subscriptions (customer_name, plan, amount, started_on, ended_on, end_reason) values
+  ('Offline Co', 'small', 39, date_trunc('month', current_date) - interval '5 months', date_trunc('month', current_date), 'Budget');
+  insert into revenue_invoices (user_id, customer_name, kind, amount, issued_on, due_on) values ('{A}', 'A', 'subscription', 99, current_date - 30, current_date - 16);
+  insert into revenue_invoices (customer_name, kind, amount, issued_on, due_on, paid_on) values ('Gov', 'facilitated', 1500, current_date - 20, current_date - 6, current_date - 3);""")
+check("MRR counts monthly and yearly plans", server("select admin_revenue()->'now'->>'mrr'"), "\n199.00\n")
+check("ARR is 12 times MRR", server("select admin_revenue()->'now'->>'arr'"), "\n2388.00\n")
+check("plan change shows as expansion", server("select (select m->>'expansion' from jsonb_array_elements(admin_revenue()->'months') m where (m->>'month')::date = (date_trunc('month', current_date) - interval '1 month')::date)"), "\n60.00\n")
+check("offline client counts as lost", server("select (admin_revenue()->'months'->11->>'churned')"), "\n39.00\n")
+check("overdue invoice listed", server("select admin_revenue()->>'overdue'"), "\n99.00\n")
+check("renewal within 30 days listed", server("select jsonb_array_length(admin_revenue()->'renewals')"), "\n1\n")
+check("one-off revenue by kind", server("select admin_revenue()->'one_off'->0->>'kind'"), "facilitated")
+check("churned customer listed with reason", server("select admin_revenue()->'churned'->0->>'reason'"), "Budget")
+check("paid and void can't both be true", server("insert into revenue_invoices (customer_name, kind, amount, paid_on, void) values ('x', 'other', 1, current_date, true)"), "violates check")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
