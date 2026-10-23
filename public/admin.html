@@ -31,6 +31,31 @@ main{--content:1120px}
 .ad-table th{font-weight:500;color:var(--dim);font-size:12px}
 .ad-table td.num{font-variant-numeric:tabular-nums;text-align:end}
 .ad-table .no{color:var(--dim)}
+/* Growth: tabs, the north star, funnels, cohorts. */
+.gr-tabs{position:sticky;top:0;z-index:5;background:var(--ink);display:flex;gap:6px;overflow-x:auto;padding:8px 0;margin-bottom:22px;border-bottom:1px solid var(--line)}
+.gr-tabs button{font:inherit;font-size:13px;white-space:nowrap;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:6px 12px;border-radius:40px;cursor:pointer}
+.gr-tabs button[aria-selected=true]{background:var(--accent);color:var(--ink);border-color:var(--accent)}
+.gr-q{color:var(--dim);font-size:14px;margin:-6px 0 16px}
+.ad-stat .how{font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:6px;margin-top:auto}
+.ad-stat .d{font-size:12px;font-family:var(--mono);color:var(--dim)}
+.ad-stat.north{background:var(--accent);color:var(--ink)}
+.ad-stat.north .l,.ad-stat.north .how,.ad-stat.north .d{color:var(--ink);opacity:.8;border-color:rgba(255,255,255,.2)}
+.ad-stat.north .n{font-size:52px}
+.gr-weeks{display:flex;align-items:flex-end;gap:4px;height:120px}
+.gr-weeks div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:3px;height:100%;font-size:10px;font-family:var(--mono);color:var(--dim)}
+.gr-weeks i{display:block;width:100%;background:var(--accent);min-height:2px}
+.gr-weeks div.now i{background:var(--yellow);outline:1px solid var(--accent)}
+.gr-funnel{display:flex;flex-direction:column;gap:8px}
+.gr-frow{display:grid;grid-template-columns:minmax(120px,220px) 1fr 120px;gap:10px;align-items:center;font-size:14px}
+.gr-fbar{height:22px;background:var(--accent-soft)}
+.gr-fbar i{display:block;height:100%;background:var(--accent)}
+.gr-fnum{font-variant-numeric:tabular-nums;text-align:end;font-family:var(--mono);font-size:12px}
+@media (max-width:560px){.gr-frow{grid-template-columns:1fr 100px}.gr-frow .gr-fbar{grid-column:1/-1;grid-row:2}}
+.gr-cohort td,.gr-cohort th{text-align:center}
+.gr-cohort td:first-child,.gr-cohort th:first-child{text-align:start;white-space:nowrap}
+.gr-pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:12px;font-family:var(--mono);background:var(--accent-soft)}
+.gr-pill.bad{background:rgba(198,47,69,.12);color:var(--err)}
+.gr-empty{color:var(--dim);font-size:14px}
 </style>
 </head>
 <body>
@@ -56,10 +81,162 @@ function csv(rows) {
   const q = v => { const s = v == null ? "" : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   return [cols.join(","), ...rows.map(r => cols.map(c => q(r[c])).join(","))].join("\n");
 }
+/* ---------- Growth (2026-10-22): one tab per growth question, from admin_growth() ---------- */
+const TABS = ["overview", "acquisition", "activation", "loop", "rooms", "retention", "quality", "money", "orgs", "health", "people"];
+let tab = (() => { try { const x = localStorage.getItem("dr-admin-tab"); return TABS.includes(x) ? x : "overview"; } catch { return "overview"; } })();
+let growth = null;
+const num = n => n == null ? "·" : Number(n).toLocaleString(Rooms.lang === "ar" ? "ar" : "en");
+const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "·";
+function stat(n, l, how, cls) {
+  const c = el("div", "ad-stat" + (cls ? " " + cls : ""));
+  c.append(el("span", "l", l), el("span", "n", String(n)));
+  if (how) c.append(el("span", "how", how));
+  return c;
+}
+function box(title, ...kids) { const b = el("div", "ad-box"); b.append(el("h2", null, title), ...kids); return b; }
+function grid(cls, ...kids) { const g = el("div", cls); g.append(...kids); return g; }
+function funnel(rows) {
+  const f = el("div", "gr-funnel"), top = Math.max(1, rows[0]?.[1] || 0);
+  rows.forEach(([label, n], i) => {
+    const r = el("div", "gr-frow"), bar = el("div", "gr-fbar"), fill = el("i");
+    fill.style.width = (100 * (n || 0) / top) + "%"; bar.append(fill);
+    r.append(el("span", null, label), bar, el("span", "gr-fnum", num(n) + (i ? "  " + pct(n, rows[0][1]) : "")));
+    f.append(r);
+  });
+  return f;
+}
+function list(items, show = x => x.k, val = x => num(x.n)) {
+  if (!items?.length) return el("p", "gr-empty", t("gr_none"));
+  const w = el("div");
+  items.forEach(x => { const r = el("div", "ad-kind"); r.append(el("span", null, show(x)), el("span", null, val(x))); w.append(r); });
+  return w;
+}
+function weeksChart(weeks, key) {
+  const w = el("div", "gr-weeks"), max = Math.max(1, ...weeks.map(x => x[key] || 0));
+  weeks.forEach((x, i) => {
+    const c = el("div", i === weeks.length - 1 ? "now" : null), bar = el("i");
+    bar.style.height = (100 * (x[key] || 0) / max) + "%"; c.title = fmt(x.week) + ": " + (x[key] || 0);
+    c.append(el("span", null, String(x[key] || 0)), bar, el("span", null, String(x.week).slice(5, 10)));
+    w.append(c);
+  });
+  return w;
+}
+const delta = (now, before) => before ? (now >= before ? "▲ " : "▼ ") + Math.abs(Math.round(100 * (now - before) / before)) + "% " + t("gr_vs_last") : t("gr_first_week");
+let regions; const country = c => { try { regions = regions || new Intl.DisplayNames([Rooms.lang === "ar" ? "ar" : "en"], { type: "region" }); return regions.of(c) || c; } catch { return c; } };
+const source = k => ["room_invite", "org_invite", "org_link", "direct", "unknown"].includes(k) ? t("gr_src_" + k) : k;
+
+const panels = {
+  overview(g) {
+    const w = g.weeks || [], now = w[w.length - 1] || {}, last = w[w.length - 2] || {};
+    const north = stat(num(now.decisions), t("gr_north"), t("gr_north_how"), "north");
+    north.insertBefore(el("span", "d", delta(now.decisions || 0, last.decisions || 0)), north.lastChild);
+    const perDecision = now.decisions ? "$" + (now.ai_cost / now.decisions).toFixed(2) : "·";
+    return [grid("ad-stats", north, stat(num(now.active_owners), t("gr_active"), t("gr_active_how")), stat(num(now.new_accounts), t("gr_new"), t("gr_new_how")), stat(perDecision, t("gr_cost_dec"), t("gr_cost_dec_how"))),
+      grid("ad-two", box(t("gr_dec_weeks"), weeksChart(w, "decisions")), box(t("gr_open_weeks"), weeksChart(w, "opened"))),
+      grid("ad-two", box(t("gr_acc_weeks"), weeksChart(w, "new_accounts")), box(t("gr_owner_weeks"), weeksChart(w, "active_owners")))];
+  },
+  acquisition(g) {
+    const a = g.acquisition || {};
+    return [grid("ad-stats", stat(num(a.accounts), t("gr_acc_84")), stat(pct(a.profiles_done, a.accounts), t("gr_profiles_done"), t("gr_profiles_how", { n: num(a.profiles_done) }))),
+      grid("ad-two", box(t("gr_sources"), list(a.sources, x => source(x.k))), box(t("gr_countries"), list(a.countries, x => country(x.k))), box(t("gr_sectors"), list(a.sectors, x => t("sector_" + x.k)))),
+      el("p", "small", t("gr_visitors_note"))];
+  },
+  activation(g) {
+    const a = g.activation || {};
+    return [box(t("gr_act_title"), funnel([[t("gr_f_signed"), a.signed_up], [t("gr_f_profile"), a.profile], [t("gr_f_opened"), a.opened], [t("gr_f_answered"), a.answered], [t("gr_f_decided"), a.decided]])),
+      grid("ad-stats", stat(a.days_first_room ?? "·", t("gr_days_room")), stat(a.days_first_decision ?? "·", t("gr_days_dec")))];
+  },
+  loop(g) {
+    const l = g.loop || {};
+    return [box(t("gr_loop_title"), funnel([[t("gr_l_invited"), l.invited], [t("gr_l_joined"), l.joined], [t("gr_l_answered"), l.answered], [t("gr_l_signed"), l.signed], [t("gr_l_own"), l.own_room]])),
+      grid("ad-stats", stat(l.per_room ?? "·", t("gr_per_room")), stat(l.viral ?? "·", t("gr_viral"), t("gr_viral_how")))];
+  },
+  rooms(g) {
+    const r = g.rooms || {};
+    return [box(t("gr_rooms_title"), funnel([[t("gr_r_opened"), r.opened], [t("gr_r_invited"), r.invited], [t("gr_r_enough"), r.enough], [t("gr_r_decide"), r.decide], [t("gr_r_settled"), r.settled], [t("gr_r_planned"), r.planned], [t("gr_r_reviewed"), r.reviewed]]))];
+  },
+  retention(g) {
+    const rows = g.cohorts || [];
+    if (!rows.length) return [el("p", "gr-empty", t("gr_none"))];
+    const tb = el("table"), head = el("tr");
+    head.append(el("th", null, t("gr_cohort")), el("th", null, t("gr_owners")));
+    for (let k = 0; k < 9; k++) head.append(el("th", null, t("gr_week_n", { n: k })));
+    const th = el("thead"); th.append(head); tb.append(th);
+    const body = el("tbody");
+    rows.forEach(c => {
+      const tr = el("tr"); tr.append(el("td", null, fmt(c.week)), el("td", null, num(c.owners)));
+      for (let k = 0; k < 9; k++) {
+        const v = (c.pct || [])[k], td = el("td", null, v == null ? "" : v + "%");
+        if (v != null) td.style.background = `color-mix(in srgb, var(--accent) ${Math.round(v * .6)}%, transparent)`;
+        if (v > 75) td.style.color = "var(--ink)";
+        tr.append(td);
+      }
+      body.append(tr);
+    });
+    tb.append(body);
+    const w = el("div", "ad-table gr-cohort"); w.append(tb); tb.style.minWidth = "640px";
+    return [box(t("gr_ret_title"), w, el("p", "small", t("gr_ret_how")))];
+  },
+  quality(g) {
+    const q = g.quality || {}, so = q.signoffs || {}, signed = (so.agree || 0) + (so.disagree_commit || 0) + (so.object || 0);
+    return [grid("ad-stats", stat(pct(q.accepted, (q.accepted || 0) + (q.overridden || 0)), t("gr_accepted"), t("gr_accepted_how", { a: num(q.accepted), o: num(q.overridden) })),
+        stat(pct(q.held_up, q.reviews), t("gr_held"), t("gr_held_how", { n: num(q.reviews) })), stat(q.days_to_decide ?? "·", t("gr_days_decide"))),
+      grid("ad-two", box(t("gr_signoffs"), list(["agree", "disagree_commit", "object"].map(k => ({ k, n: so[k] || 0 })), x => t("gr_so_" + x.k), x => num(x.n) + "  " + pct(x.n, signed))),
+        box(t("gr_calib"), list(q.by_confidence, x => t("gr_conf", { k: x.k }), x => pct(x.held, x.reviews) + "  (" + num(x.reviews) + ")"), el("p", "small", t("gr_calib_how"))))];
+  },
+  money(g) {
+    const m = g.money || {}, perOwner = m.active_owners_30d ? m.cost_30d / m.active_owners_30d : null;
+    return [grid("ad-stats", stat(money(m.cost_month), t("gr_cost_month")), stat(money(m.cost_30d), t("ad_cost30")), stat(m.cost_per_room == null ? "·" : money(m.cost_per_room), t("gr_cost_room")),
+        stat(perOwner == null ? "·" : money(perOwner), t("gr_cost_owner"), perOwner == null ? null : t("gr_margin", { p: Math.round(100 - perOwner / 99 * 100) }))),
+      grid("ad-two", box(t("ad_cost_kind"), list(m.by_kind, x => x.k, x => money(x.cost))),
+        box(t("gr_upgrade"), list(m.upgrade, x => [x.name, x.organisation].filter(Boolean).join(" · "), x => t("gr_upgrade_row", { p: x.max_people, r: x.rooms_30d })), el("p", "small", t("gr_upgrade_how"))))];
+  },
+  orgs(g) {
+    const rows = g.orgs || [];
+    if (!rows.length) return [el("p", "gr-empty", t("gr_no_orgs")), orgsBox()];
+    const tb = el("table"), head = el("tr");
+    ["gr_o_name", "gr_o_people", "gr_o_active", "gr_o_rooms", "gr_o_dec", "gr_o_memory"].forEach(k => head.append(el("th", null, t(k))));
+    const th = el("thead"); th.append(head); tb.append(th);
+    const body = el("tbody");
+    rows.forEach(o => { const tr = el("tr"); tr.append(el("td", null, o.name), el("td", "num", num(o.people)), el("td", "num", num(o.active_30d) + "  " + pct(o.active_30d, o.people)), el("td", "num", num(o.rooms_30d)), el("td", "num", num(o.decisions)), el("td", null, t(o.memory ? "gr_on" : "gr_off"))); body.append(tr); });
+    tb.append(body); tb.style.minWidth = "640px";
+    const w = el("div", "ad-table"); w.append(tb);
+    return [w, orgsBox()];
+  },
+  health(g) {
+    const h = g.health || {};
+    const pill = (ok, txt) => el("span", "gr-pill" + (ok ? "" : " bad"), txt);
+    const card = (n, l, ok, how) => { const c = stat(n ?? "·", l, how); c.append(pill(ok, t(ok ? "gr_ok" : "gr_look"))); return c; };
+    return [grid("ad-stats",
+      card(num(h.failed_now ?? 0), t("gr_h_failed"), !h.failed_now, t("gr_h_failed_how")),
+      card(h.decide_seconds == null ? "·" : h.decide_seconds + "s", t("gr_h_time"), !(h.decide_seconds > 180), t("gr_h_time_how", { max: h.decide_seconds_max ?? "·" })),
+      card(num(h.analyses_7d ?? 0), t("gr_h_runs"), true),
+      card(num(h.decide_limit_hits_7d ?? 0), t("gr_h_limit"), !h.decide_limit_hits_7d, t("gr_h_limit_how")),
+      card(num(h.stuck_open ?? 0), t("gr_h_stuck"), !h.stuck_open, t("gr_h_stuck_how")))];
+  }
+};
 function render() {
   document.title = t("ad_title") + " · " + t("product");
+  const bar = el("div", "gr-tabs"); bar.setAttribute("role", "tablist");
+  TABS.forEach(k => {
+    const b = el("button", null, t("gr_t_" + k)); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === tab));
+    b.onclick = () => { tab = k; try { localStorage.setItem("dr-admin-tab", k); } catch {} render(); };
+    bar.append(b);
+  });
+  let body;
+  if (tab === "people") body = [accessBox(), ...peoplePanel()];
+  else if (!growth) body = [el("p", "gr-empty", t("gr_unavailable"))];
+  else body = [el("p", "gr-q", t("gr_q_" + tab)), ...panels[tab](growth)];
+  const head = el("h1", "db-title", t("ad_title"));
+  if (tab !== "people" && access.requests.length) {
+    const nudge = el("button", "btn soft", t("ac_nudge", { n: access.requests.length })); nudge.type = "button"; nudge.style.width = "auto"; nudge.style.marginBottom = "14px";
+    nudge.onclick = () => { tab = "people"; render(); };
+    body.unshift(nudge);
+  }
+  view.replaceChildren(head, el("p", "small", growth ? t("gr_updated", { at: new Date(growth.generated_at).toLocaleString(Rooms.lang === "ar" ? "ar" : "en") }) : ""), bar, ...body);
+}
+function peoplePanel() {
   const d = data;
-  const stat = (n, l) => { const c = el("div", "ad-stat"); c.append(el("span", "n", String(n)), el("span", "l", l)); return c; };
   const stats = el("div", "ad-stats");
   stats.append(stat(d.accounts, t("ad_accounts")), stat(d.profiles_complete, t("ad_complete")), stat(d.rooms, t("ad_rooms")),
     stat(d.decided, t("ad_decided")), stat(d.reviewed, t("ad_reviewed")), stat(money(d.cost_30d), t("ad_cost30")));
@@ -106,8 +283,7 @@ function render() {
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
   drawTable();
-  view.replaceChildren(el("h1", "db-title", t("ad_title")), stats, two, orgsBox(), el("h2", "sec-h", t("ad_people", { n: (d.people || []).length })), tools, wrap,
-    el("p", "small", t("ad_note")));
+  return [stats, two, el("h2", "sec-h", t("ad_people", { n: (d.people || []).length })), tools, wrap, el("p", "small", t("ad_note"))];
 }
 /* ---------- Organisations (custom plan): create, see, verify the email domain ---------- */
 let orgs = [];
@@ -150,11 +326,62 @@ function orgsBox() {
   return box;
 }
 async function loadOrgs() { try { orgs = (await Rooms.post("/api/admin/orgs", { action: "list" })).orgs || []; } catch { orgs = []; } }
-async function load() {
-  try { data = await Rooms.post("/api/admin/overview", {}); await loadOrgs(); render(); }
-  catch (e) { const c = el("article", "msg"); c.append(el("p", "text", t(e.message === "not_operator" ? "ad_not_operator" : "err_generic"))); view.replaceChildren(c); }
+/* ---------- Admin access: ask, then an admin approves (2026-10-23) ---------- */
+let access = { requests: [], admins: [] };
+async function loadAccess() { try { access = await Rooms.post("/api/admin/access", { action: "list" }); } catch { access = { requests: [], admins: [] }; } }
+function accessBox() {
+  const b = box(t("ac_title", { n: access.requests.length }));
+  if (!access.requests.length) b.append(el("p", "gr-empty", t("ac_none")));
+  access.requests.forEach(r => {
+    const p = r.profiles || {}, row = el("div", "ad-kind"); row.style.flexWrap = "wrap"; row.style.gap = "6px 14px"; row.style.alignItems = "center";
+    const who = el("span"); who.append(el("b", null, p.name || "·"), el("span", "small", "  " + [p.email, p.job_title, p.organisation, fmt(r.created_at)].filter(Boolean).join(" · ")));
+    const acts = el("span"); acts.style.display = "flex"; acts.style.gap = "8px";
+    [["approve", "btn", "ac_approve"], ["decline", "btn ghost", "ac_decline"]].forEach(([action, cls, k]) => {
+      const btn = el("button", cls, t(k)); btn.type = "button"; btn.style.width = "auto"; btn.style.padding = "8px 14px";
+      btn.onclick = async () => {
+        acts.querySelectorAll("button").forEach(x => x.disabled = true);
+        try { await Rooms.post("/api/admin/access", { action, id: r.user_id }); await loadAccess(); render(); }
+        catch { acts.querySelectorAll("button").forEach(x => x.disabled = false); }
+      };
+      acts.append(btn);
+    });
+    row.append(who, acts); b.append(row);
+  });
+  b.append(el("p", "small", t("ac_admins", { names: access.admins.map(a => a.profiles?.name || a.profiles?.email || "·").join(", ") })));
+  b.style.marginBottom = "28px";
+  return b;
 }
-Rooms.langToggle(() => { if (data) render(); });
+// Not an admin: say so, and offer to ask (or show that the request is waiting).
+async function noAccess() {
+  const c = el("article", "msg"), st = el("p", "status"); st.setAttribute("role", "status");
+  const draw = status => {
+    c.replaceChildren(el("p", "text", t(status === "pending" ? "ac_waiting" : status === "declined" ? "ac_declined" : "ac_no_access")));
+    if (status !== "pending") {
+      const ask = el("button", "btn", t("ac_ask")); ask.type = "button"; ask.style.width = "auto"; ask.style.alignSelf = "flex-start";
+      ask.onclick = async () => {
+        ask.disabled = true;
+        try { draw((await Rooms.post("/api/admin/access", { action: "request" })).status); }
+        catch (e) { st.className = "status err"; st.textContent = t(e.message === "profile_first" ? "ac_profile_first" : "err_generic"); ask.disabled = false; }
+      };
+      c.append(ask);
+    }
+    c.append(st);
+  };
+  let status = "none"; try { status = (await Rooms.post("/api/admin/access", { action: "status" })).status; } catch {}
+  draw(status); view.replaceChildren(c);
+}
+async function load() {
+  try {
+    data = await Rooms.post("/api/admin/overview", {});
+    [growth] = await Promise.all([Rooms.post("/api/admin/growth", {}).catch(() => null), loadOrgs(), loadAccess()]);
+    render();
+  }
+  catch (e) {
+    if (e.message === "not_operator") return noAccess();
+    const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); view.replaceChildren(c);
+  }
+}
+Rooms.langToggle(() => { regions = null; if (data) render(); });
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());
   if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }

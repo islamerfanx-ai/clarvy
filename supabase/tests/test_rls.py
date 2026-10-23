@@ -401,5 +401,15 @@ server(f"update workspace_members set role='admin' where workspace_id='{OW}' and
 check("member leaves the organisation", as_user(B, f"delete from workspace_members where workspace_id='{OW}' and user_id='{B}'"), "DELETE 1")
 check("operator sees the organisations", server("select jsonb_array_length(admin_orgs())"), "\n1\n")
 
+# ---------- Growth dashboard (20261031000000_growth.sql) ----------
+check("people can't open the growth numbers", as_user(B, "select admin_growth()"), "permission denied")
+g = server("select admin_growth()")
+check("growth numbers build", g, "north" if False else "'weeks'")
+check("12 weeks of history", server("select jsonb_array_length(admin_growth()->'weeks')"), "\n12\n")
+check("room funnel counts rooms", server("select (admin_growth()->'rooms'->>'opened')::int > 0"), "True")
+check("people can't read admin requests", as_user(B, "select * from operator_requests"), "permission denied")
+check("people can't approve themselves", as_user(B, f"insert into operator_requests (user_id, status) values ('{B}', 'approved')"), "permission denied")
+check("sign-up source is saved once", (as_user(B, "update profiles set signup_source='room_invite' where id=(select auth.uid())") + as_user(B, "update profiles set signup_source='direct' where id=(select auth.uid())") + as_user(B, "select signup_source from profiles where id=(select auth.uid())")), "room_invite")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

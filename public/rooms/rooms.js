@@ -4,6 +4,29 @@
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
+/* ---------- Where people came from (first visit, kept in this browser) ---------- */
+// Saved on the profile once, at sign-up, for the growth dashboard: an invite, an organisation link,
+// a utm_source, the referring site, or direct.
+const firstTouch = (() => {
+  const KEY = "dr-first-touch";
+  try {
+    const q = new URLSearchParams(location.search);
+    const now = q.get("join") && location.pathname.startsWith("/room") ? { src: "room_invite" }
+      : q.get("join") && location.pathname.startsWith("/org") ? { src: "org_link" }
+      : /type=invite/.test(location.hash) ? { src: "org_invite" } : null;
+    // An invite always wins: that's how this person reached us, whatever they saw before.
+    if (now) { localStorage.setItem(KEY, JSON.stringify(now)); return now; }
+    const kept = JSON.parse(localStorage.getItem(KEY) || "null");
+    if (kept) return kept;
+    let ref = ""; try { ref = document.referrer ? new URL(document.referrer).hostname : ""; } catch {}
+    const utm = q.get("utm_source");
+    const first = utm ? { src: utm.toLowerCase().slice(0, 40), detail: [q.get("utm_medium"), q.get("utm_campaign")].filter(Boolean).join(" / ").slice(0, 200) || null }
+      : ref && ref !== location.hostname ? { src: ref.replace(/^www\./, "").slice(0, 40) } : { src: "direct" };
+    localStorage.setItem(KEY, JSON.stringify(first));
+    return first;
+  } catch { return { src: "direct" }; }
+})();
+
 /* ---------- Words: English and Arabic live in /i18n/*.json ---------- */
 let lang = "en", words = {};
 const t = (k, vars = {}) => {
@@ -159,6 +182,7 @@ function profileForm(box, { profile = {}, intro = "", onDone, saveLabel } = {}) 
   f.onsubmit = async e => {
     e.preventDefault();
     const patch = { name: name.value.trim(), organisation: org.value.trim(), job_title: title.value.trim(), country: country.value || null };
+    if (!profile.completed_at) Object.assign(patch, { signup_source: firstTouch.src, signup_detail: firstTouch.detail || null });
     if (!patch.name) { name.focus(); st.textContent = t("need_name"); return; }
     if (!patch.organisation) { org.focus(); st.textContent = t("pf_need_org"); return; }
     if (!patch.job_title) { title.focus(); st.textContent = t("pf_need_title"); return; }
