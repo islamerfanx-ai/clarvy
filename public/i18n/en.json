@@ -837,7 +837,7 @@
   "role_ask_hint": "Tick as many as you like.",
   "role_ask_own_ph": "Or write your own",
   "decide_by_lbl": "Decide by",
-  "decide_by_hint": "If people are still answering after this date, we'll let you know.",
+  "decide_by_hint": "People who haven't answered get a friendly reminder halfway there and the day before. You can switch this off in the room.",
   "brief_running": "Looking at what's happening in the world for you. It'll be ready in a moment.",
   "brief_retry": "Try again",
   "brief_pick_hint2": "Tick what everyone should see. It goes in with the room, with dates and sources.",
@@ -857,7 +857,7 @@
   "rate_note_ph": "Optional. Never shown with your name.",
   "people_title": "Who's in the room",
   "people_hint": "Each person has their own link. Send it again any time until the call is made.",
-  "ps_invited": "Invited",
+  "ps_invited": "Not opened yet",
   "ps_joined": "Joined, not answered yet",
   "ps_answered": "Answered",
   "na_title": "Needs attention",
@@ -1378,5 +1378,11 @@
   "wait_one_left": "{n} of {total} have answered. Just one more to go.",
   "wait_all_in": "Everyone has answered. Thank you all.",
   "rv_rec_save": "Save",
-  "v_decided_thanks": "Thank you, everyone, for your honest views. Next comes the plan."
+  "v_decided_thanks": "Thank you, everyone, for your honest views. Next comes the plan.",
+  "ps_opened": "Opened, not joined yet",
+  "ps_reminded_1": "reminded once",
+  "ps_reminded_n": "reminded {n} times",
+  "auto_nudge_lbl": "Send friendly email reminders to people who haven't answered: halfway to {date}, and the day before.",
+  "join_seen_note": "The person who invited you can see that you've opened this link. Your answers stay private.",
+  "na_soon": "{n} of {total} have answered, and the decide-by date is {date}. A friendly nudge now helps."
 }

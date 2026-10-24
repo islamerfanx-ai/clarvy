@@ -168,6 +168,10 @@ function stuck(r) {
   const today = new Date().toISOString().slice(0, 10);
   if (r.decide_error) return { why: t("na_failed"), act: "open" };
   if (r.status === "open" && r.decide_by && r.decide_by < today && r.submitted < r.members) return { why: t("na_late", { date: Rooms.fmtDate(r.decide_by), n: r.members - r.submitted }), act: "remind" };
+  // An earlier warning: the deadline is close and people are still missing.
+  const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+  if (r.status === "open" && r.decide_by && r.decide_by >= today && r.decide_by <= soon && r.submitted < r.members)
+    return { why: t("na_soon", { n: r.submitted, total: r.members, date: Rooms.fmtDate(r.decide_by) }), act: "remind" };
   if (r.status === "open" && r.submitted >= r.quorum && daysSince(r.last_input) > 2) return { why: t("na_ready", { n: r.submitted }), act: "open" };
   if (r.status === "decided" && daysSince(r.decided_at) > 3 && Number(r.signed) < r.members) return { why: t("na_signoff", { n: Number(r.signed), total: r.members }), act: "signoff" };
   return null;

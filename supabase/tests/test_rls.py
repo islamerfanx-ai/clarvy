@@ -435,5 +435,23 @@ check("one-off revenue by kind", server("select admin_revenue()->'one_off'->0->>
 check("churned customer listed with reason", server("select admin_revenue()->'churned'->0->>'reason'"), "Budget")
 check("paid and void can't both be true", server("insert into revenue_invoices (customer_name, kind, amount, paid_on, void) values ('x', 'other', 1, current_date, true)"), "violates check")
 
+# ---------- Nudges (20261102000000_nudges.sql) ----------
+RN = str(uuid.uuid4()); TN = "nudgetoken" + "x" * 30
+check("nudge room opens", as_user(A, f"insert into rooms (id,workspace_id,type,question,options,criteria,owner_id,decide_by) values ('{RN}','{W}','business','Nudge me?','{opts}','{crit}','{A}', current_date + 2)"), "INSERT 0 1")
+server(f"insert into invites (token, room_id, created_by, person_name, person_contact, max_uses, created_at) values ('{TN}', '{RN}', '{A}', 'Kenji', 'kenji@x.test', 1, now() - interval '3 days')")
+server(f"insert into memberships (room_id, user_id, role, joined_at) values ('{RN}', '{D}', 'member', now() - interval '10 days')")
+due = server("select kind, coalesce(invite_token, user_id::text), email from nudge_due() where question = 'Nudge me?' order by email")
+check("halfway reminder due for an unopened invite", due, "half | " + TN + " | kenji@x.test")
+check("halfway reminder due for a member who hasn't answered", due, "half | " + D)
+check("people can't list due reminders", as_user(B, "select * from nudge_due()"), "permission denied")
+check("opening an invite is recorded", as_user(B, f"select invite_opened('{TN}')") + server(f"select opened_at is not null from invites where token='{TN}'"), "True")
+server(f"insert into nudges (room_id, invite_token, kind) values ('{RN}', '{TN}', 'half')")
+check("a reminder goes only once", server(f"select count(*) from nudge_due() where invite_token = '{TN}'"), "\n0\n")
+check("owner sees how often someone was reminded", as_user(A, f"select n from room_nudges('{RN}') where invite_token = '{TN}'"), "\n1\n")
+check("members don't see reminders", as_user(D, f"select count(*) from room_nudges('{RN}')"), "\n0\n")
+check("people can't read the reminder log", as_user(A, "select * from nudges"), "permission denied")
+check("owner switches reminders off", as_user(A, f"update rooms set auto_nudge = false where id = '{RN}'"), "UPDATE 1")
+check("no reminders once switched off", server("select count(*) from nudge_due() where question = 'Nudge me?'"), "\n0\n")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
