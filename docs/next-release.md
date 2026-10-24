@@ -75,6 +75,17 @@ Checked each feature against the database and server, with probes on a test copy
 
 **Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
 
+## Before launch: build order (decided 2026-10-24)
+All seven ideas ship before launch, in this order, no mock-ups; launch date to be set by the user.
+1. Warmer wording everywhere
+2. Nudges (owner sees who opened; reminders timed by decide-by; needs a Resend key on the server)
+3. Departments on the question
+4. Owner's notepad with the analyst
+5. Assistants (PA)
+6. Talk space after the call
+7. Organisation document library
+8. At launch: switch on the world library ($20 a month to start)
+
 ## Later (after launch)
 - **Departments on the question (idea, 2026-10-24):** several per room, one leading, analyst suggests; drives invitees, memory, asks, visibility, reports.
 - **Assistants (idea, 2026-10-24):** PA manages the owner's rooms at View, Organise, or Organise and run; never makes the call or sees answers; visible and logged.
