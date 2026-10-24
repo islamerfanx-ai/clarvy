@@ -1384,5 +1384,15 @@
   "ps_reminded_n": "reminded {n} times",
   "auto_nudge_lbl": "Send friendly email reminders to people who haven't answered: halfway to {date}, and the day before.",
   "join_seen_note": "The person who invited you can see that you've opened this link. Your answers stay private.",
-  "na_soon": "{n} of {total} have answered, and the decide-by date is {date}. A friendly nudge now helps."
+  "na_soon": "{n} of {total} have answered, and the decide-by date is {date}. A friendly nudge now helps.",
+  "dept_lbl": "Which departments does this concern?",
+  "dept_hint": "Pick one or more. The first one you pick leads.",
+  "dept_suggested": "Suggested from your question. Tap to change; the first one leads.",
+  "dept_leads": "leads",
+  "dept_head_of": "Head of {dept}",
+  "og_head": "Head of {dept}",
+  "og_no_head": "No head",
+  "og_all_depts": "All",
+  "og_dept_count": "{dept}: {n} rooms, {decided} decided",
+  "dept_lead_name": "{name} (leads)"
 }

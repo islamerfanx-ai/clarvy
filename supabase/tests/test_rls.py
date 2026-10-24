@@ -453,5 +453,17 @@ check("people can't read the reminder log", as_user(A, "select * from nudges"), 
 check("owner switches reminders off", as_user(A, f"update rooms set auto_nudge = false where id = '{RN}'"), "UPDATE 1")
 check("no reminders once switched off", server("select count(*) from nudge_due() where question = 'Nudge me?'"), "\n0\n")
 
+# ---------- Departments on the question (20261103000000_departments.sql) ----------
+FIN = server(f"select id from departments where workspace_id='{OW}' and name='Finance'").strip().split("\n")[-1]
+check("admin names a department head", as_user(C, f"update departments set head_id='{D}' where id='{FIN}'"), "UPDATE 1")
+check("a head must be in the organisation", as_user(C, f"update departments set head_id='{B}' where id='{FIN}'"), "head_not_member")
+check("the directory marks the head", as_user(E, f"select is_head from org_directory('{OW}') where user_id='{D}'"), "True")
+RD = str(uuid.uuid4())
+check("a room names its department", as_user(E, f"insert into rooms (id,workspace_id,type,question,options,criteria,owner_id,department_ids) values ('{RD}','{OW}','business','Cut the travel budget?','{opts}','{crit}','{E}',array['{FIN}']::uuid[])"), "INSERT 0 1")
+check("only the organisation's own departments", as_user(E, f"update rooms set department_ids=array['{uuid.uuid4()}']::uuid[] where id='{RD}'"), "department_not_in_org")
+check("room members see the department names", as_user(E, f"select name, lead from room_departments('{RD}')"), "Finance | True")
+check("outsiders don't", as_user(B, f"select count(*) from room_departments('{RD}')"), "\n0\n")
+check("admins see rooms by department", as_user(C, f"select departments from org_rooms('{OW}') where id='{RD}'"), "Finance")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

@@ -38,7 +38,7 @@ const MAX_FILES = 8, MAX_FILE_BYTES = 20 * 1024 * 1024, MAX_TEXT = 50000;
 const DRAFT_KEY = "dr-new-room-3", ORG_KEY = "dr-last-org";
 
 // The draft survives a reload, so nothing typed is lost.
-let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", named: false, orgType: null, orgLabel: "", roles: [], people: [], extra: [], sugFor: "", overrideRule: "owner", overrideRoleId: null, strict: false, decideBy: "",
+let d = { at: 0, type: "business", typeLabel: "", question: "", options: ["", ""], crits: null, model: null, rapid: null, rec: null, recFor: "", context: "", links: [], name: "", email: "", named: false, orgType: null, orgLabel: "", roles: [], people: [], extra: [], sugFor: "", overrideRule: "owner", overrideRoleId: null, strict: false, decideBy: "", depts: [], deptsSuggested: false,
           qRes: null, qKeys: [], qOrig: "", optsDraft: null, critsDraft: null, brief: null, briefFor: "", briefErr: "", briefPicked: [] };
 let files = [];   // files can't be saved in the draft; they live only in this page
 let ids = [];     // the steps, by name
@@ -148,6 +148,52 @@ function stepYou() {
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
     next();
   });
+}
+
+// The question check behind "Check my question" and Next: grammar, clearer ways to ask it, drafted options and
+// what to weigh, and (inside an organisation) the departments it concerns. One call per wording.
+async function checkQuestion() {
+  const q = d.question.trim();
+  if (d.qRes && (d.qKeys || []).includes(q)) return d.qRes;
+  const departments = (await orgDepartments(d.wsId)).map(x => x.name);
+  const r = demo ? demoCheck(q) : await Rooms.post("/api/rooms/question", { question: q, type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, draft: true, lang: Rooms.lang, departments });
+  d.qRes = r; d.qKeys = [q, String(r.corrected || "").trim()]; save();
+  return r;
+}
+function demoCheck(q) {
+  const ar = Rooms.lang === "ar";
+  return {
+    corrected: q.replace(/\s+/g, " ").replace(/^./, c => c.toUpperCase()).replace(/[?؟.]?$/, ar ? "؟" : "?"), changed: true, issues: [t("q_demo_issue")],
+    options: [{ text: q, why: t("q_demo_why") }],
+    alternatives: ar ? ["نبدأ الآن", "تجربة لستة أشهر أولًا", "شراكة مع جهة محلية", "ننتظر حتى العام المقبل"] : ["Go ahead now", "Run a 6-month pilot first", "Partner with a local firm", "Wait until next year"],
+    criteria: template(d.type).map(c => c.label), departments: []
+  };
+}
+function applyCheck(r) {
+  if (!r) return;
+  if (r.changed && r.corrected && r.corrected.trim() !== d.question.trim()) { d.qOrig = d.question; d.question = r.corrected.trim(); }
+  // Fill the next page, unless the owner already wrote their own options or list.
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if ((r.alternatives || []).length >= 2 && (d.options.every(o => !o.trim()) || same(d.options, d.optsDraft))) { d.options = r.alternatives.slice(0, 6); d.optsDraft = [...d.options]; }
+  if ((r.criteria || []).length >= 2 && (!d.crits || same(d.crits, d.critsDraft) || same(d.crits, template(d.type)))) {
+    d.crits = r.criteria.slice(0, 8).map(label => ({ label, on: true })); d.critsDraft = structuredClone(d.crits);
+  }
+  applyDepts(r);
+  save();
+}
+// Suggested departments, only if the owner hasn't picked any.
+function applyDepts(r) {
+  if ((r.departments || []).length && !(d.depts || []).length && orgDeptCache[d.wsId]) {
+    d.depts = r.departments.map(n => orgDeptCache[d.wsId].find(x => x.name === n)?.id).filter(Boolean); d.deptsSuggested = true; save();
+  }
+}
+// The organisation's departments (with their heads), for the room's department chips.
+const orgDeptCache = {};
+async function orgDepartments(wid) {
+  if (!wid || demo || !myOrgs.some(o => o.id === wid)) return [];
+  if (orgDeptCache[wid]) return orgDeptCache[wid];
+  const { data } = await Rooms.sb.from("departments").select("id,name,head_id").eq("workspace_id", wid).order("name");
+  return (orgDeptCache[wid] = data || []);
 }
 
 /* ---------- Say your question (voice) ---------- */
@@ -260,11 +306,29 @@ function stepQuestion() {
       if (r.issues?.length) { const ul = el("ul", "dots"); r.issues.forEach(x => ul.append(el("li", null, x))); nodes.push(el("p", "lbl", t("q_issues")), ul); }
       nodes.push(el("p", "lbl", t("q_pick")), pickers);
       checked.replaceChildren(...nodes);
+      if ((r.departments || []).length && !d.depts.length) { applyDepts(r); drawDepts(); }
     } catch (e) { fail(t(e.message === "quota" ? "err_quota" : "q_check_fail")); }
     finally { check.disabled = false; check.textContent = t("q_check"); }
   };
   if (!d.question.trim()) setTimeout(() => ta.focus(), 50);
-  const f = form([...head(t("nr_q_title"), t("nr_q_hint")), ta, ...(canRecord() ? [voiceBox(ta)] : []), starters, checkF, checked, typeField, customF, actions()], async () => {
+  // Inside an organisation: which departments it concerns. The first one picked leads.
+  const deptF = el("div", "field"); deptF.hidden = true;
+  const drawDepts = async () => {
+    const all = await orgDepartments(d.wsId);
+    deptF.hidden = !all.length;
+    if (!all.length) return;
+    d.depts = (d.depts || []).filter(id => all.some(x => x.id === id));
+    const ch = el("div", "chips"); ch.setAttribute("role", "group");
+    all.forEach(x => {
+      const i = d.depts.indexOf(x.id);
+      ch.append(chip(x.name + (i === 0 ? " · " + t("dept_leads") : ""), i >= 0, () => {
+        d.depts = i >= 0 ? d.depts.filter(y => y !== x.id) : [...d.depts, x.id]; d.deptsSuggested = false; save(); drawDepts();
+      }));
+    });
+    deptF.replaceChildren(el("span", "lbl", t("dept_lbl")), el("p", "small", t(d.deptsSuggested && d.depts.length ? "dept_suggested" : "dept_hint")), ch);
+  };
+  drawDepts();
+  const f = form([...head(t("nr_q_title"), t("nr_q_hint")), ta, ...(canRecord() ? [voiceBox(ta)] : []), starters, checkF, checked, typeField, customF, deptF, actions()], async () => {
     if (!d.question.trim()) return fail(t("need_question"));
     if (d.type === "custom" && !d.typeLabel.trim()) { customIn.focus(); return fail(t("need_custom")); }
     const nb = f.querySelector(".actions .btn:not(.ghost)"); nb.disabled = true; nb.textContent = t("q_preparing");
@@ -607,7 +671,11 @@ function stepPeople() {
     orgBox.hidden = !dir.length;
     if (!dir.length) return;
     const ch = el("div", "chips");
-    const depts = [...new Set(dir.map(p => p.department).filter(Boolean))];
+    // The room's departments come first: their heads, then "all of" each department.
+    const chosen = (await orgDepartments(d.wsId)).filter(x => (d.depts || []).includes(x.id)).map(x => x.name);
+    const depts = [...new Set([...chosen, ...dir.map(p => p.department).filter(Boolean)])];
+    fresh.filter(p => p.is_head && chosen.includes(p.department)).forEach(p =>
+      ch.append(chip("+ " + p.name + " · " + t("dept_head_of", { dept: p.department }), false, () => addPerson(p.name, p.job_title || "", p.email || ""))));
     depts.forEach(dn => {
       const inDept = fresh.filter(p => p.department === dn);
       if (inDept.length > 1) ch.append(chip(t("nr_add_dept", { dept: dn, n: inDept.length }), false, () => { inDept.forEach(p => addPerson(p.name, p.job_title || "", p.email || "")); }));
@@ -823,6 +891,7 @@ async function create() {
       override_rule: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? "authority" : d.rapid && d.overrideRule === "approver" ? "approver" : "owner",
       override_role_id: d.rapid && d.overrideRule === "authority" && roles.some(r => r.id === d.overrideRoleId) ? d.overrideRoleId : null,
       strict_confidential: !!d.strict, report_mode: "both",
+      department_ids: ws.id === d.wsId && myOrgs.some(o => o.id === d.wsId) ? (d.depts || []).slice(0, 6) : [],
       links: links.slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;

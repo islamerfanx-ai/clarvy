@@ -79,7 +79,7 @@ async function render() {
   document.title = o.name + " · " + t("product");
   const sb = Rooms.sb;
   const [{ data: people }, { data: depts }, { data: ws }] = await Promise.all([
-    sb.rpc("org_directory", { wid: o.id }), sb.from("departments").select("id,name").eq("workspace_id", o.id).order("name"),
+    sb.rpc("org_directory", { wid: o.id }), sb.from("departments").select("id,name,head_id").eq("workspace_id", o.id).order("name"),
     sb.from("workspaces").select("id,name,logo_url,email_domain,domain_verified,join_open,join_token").eq("id", o.id).maybeSingle()]);
   const head = el("div", "og-head");
   if (o.logo_url) { const img = el("img"); img.src = o.logo_url; img.alt = ""; head.append(img); }
@@ -159,8 +159,12 @@ async function render() {
     const dc = card("you", el("p", "text sm", t("og_depts")));
     const dl = el("ul", "og-list");
     (depts || []).forEach(d => { const li = el("li"); li.append(el("span", "who", d.name));
+      // The head: suggested first when a room names this department.
+      const hs = el("select", "line role-select"); hs.setAttribute("aria-label", t("og_head", { dept: d.name })); hs.style.maxWidth = "220px";
+      [["", t("og_no_head")], ...(people || []).map(p => [p.user_id, p.name])].forEach(([v, l]) => { const op = el("option", null, l); op.value = v; if ((d.head_id || "") === v) op.selected = true; hs.append(op); });
+      hs.onchange = async () => { hs.disabled = true; await sb.from("departments").update({ head_id: hs.value || null }).eq("id", d.id); hs.disabled = false; };
       const rm = el("button", "linkbtn", t("remove")); rm.type = "button"; rm.onclick = async () => { await sb.from("departments").delete().eq("id", d.id); render(); };
-      li.append(rm); dl.append(li); });
+      li.append(hs, rm); dl.append(li); });
     const dIn = el("input", "line"); Object.assign(dIn, { maxLength: 80, placeholder: t("og_dept_ph") }); dIn.setAttribute("aria-label", t("og_dept_ph"));
     const dAdd = btn(t("add"), "soft", async () => { if (!dIn.value.trim()) return; await sb.from("departments").insert({ workspace_id: o.id, name: dIn.value.trim() }); render(); });
     const dRow = el("div", "add-row"); dRow.append(dIn, dAdd);
@@ -205,16 +209,28 @@ async function render() {
     // Rooms (status and the call only)
     const { data: rooms } = await sb.rpc("org_rooms", { wid: o.id });
     const rc = card("you", el("p", "text sm", t("og_rooms", { n: (rooms || []).length })), el("p", "small", t("og_rooms_hint")));
+    // By department: how many decisions each made, and a filter.
+    const byDept = {};
+    (rooms || []).forEach(r => (r.departments || []).forEach(dn => { byDept[dn] = byDept[dn] || { n: 0, decided: 0 }; byDept[dn].n++; if (["decided", "reviewed"].includes(r.status)) byDept[dn].decided++; }));
     const rl = el("ul", "og-list");
-    (rooms || []).forEach(r => { const li = el("li"); const w2 = el("span", "who");
-      w2.append(el("span", null, r.question), el("span", "small", [r.owner_name, Rooms.fmtDate(String(r.created_at).slice(0, 10)), t("og_answered", { n: r.answered, total: r.members }), r.final_label ? t("og_call", { label: r.final_label }) : t("st_" + (r.status === "open" ? "input" : r.status === "deciding" ? "deciding" : r.status))].filter(Boolean).join(" · ")));
+    const drawRooms = () => { rl.replaceChildren();
+    (rooms || []).filter(r => !roomDept || (r.departments || []).includes(roomDept)).forEach(r => { const li = el("li"); const w2 = el("span", "who");
+      w2.append(el("span", null, r.question), el("span", "small", [(r.departments || []).join(", ") || null, r.owner_name, Rooms.fmtDate(String(r.created_at).slice(0, 10)), t("og_answered", { n: r.answered, total: r.members }), r.final_label ? t("og_call", { label: r.final_label }) : t("st_" + (r.status === "open" ? "input" : r.status === "deciding" ? "deciding" : r.status))].filter(Boolean).join(" · ")));
       li.append(w2); rl.append(li); });
-    if (!(rooms || []).length) rl.append(el("li", "small", t("og_no_rooms")));
+    if (!(rooms || []).length) rl.append(el("li", "small", t("og_no_rooms"))); };
+    drawRooms();
+    if (Object.keys(byDept).length) {
+      const fc = el("div", "chips");
+      const drawF = () => fc.replaceChildren(Rooms.chip(t("og_all_depts"), !roomDept, () => { roomDept = null; drawF(); drawRooms(); }),
+        ...Object.entries(byDept).map(([dn, x]) => Rooms.chip(t("og_dept_count", { dept: dn, n: x.n, decided: x.decided }), roomDept === dn, () => { roomDept = dn; drawF(); drawRooms(); })));
+      drawF(); rc.append(fc);
+    }
     rc.append(rl); cards.push(rc);
   }
   view.replaceChildren(...cards);
 }
 
+let roomDept = null;   // the organisation's room list, filtered by department
 Rooms.langToggle(() => { if (current) render(); });
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());

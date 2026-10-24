@@ -49,7 +49,7 @@ const live = {
   async load() {
     const sb = Rooms.sb, me = Rooms.user.id;
     const { data: room, error } = await sb.from("rooms")
-      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode,decide_stage,decide_by,auto_nudge").eq("id", roomId).maybeSingle();
+      .select("id,type,type_label,question,context,options,criteria,status,language,review_date,quorum,decide_error,model,rapid,links,org_type,org_label,roles,override_rule,override_role_id,strict_confidential,report_mode,decide_stage,decide_by,auto_nudge,department_ids").eq("id", roomId).maybeSingle();
     if (error) throw error;
     if (!room) return null; // row-level security hides rooms you're not in
     const [mem, mine, roster, an, files] = await Promise.all([
@@ -60,7 +60,8 @@ const live = {
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
     ]);
     const role = mem.data?.role;
-    const out = { room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
+    if (room.department_ids?.length) { const { data: dp } = await sb.rpc("room_departments", { rid: roomId }); room.__depts = dp || []; }
+    const out = { departments: room.__depts || [], room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner") {
       out.invites = await this.invites(room);
       const { data: nd } = await sb.rpc("room_nudges", { rid: roomId });
@@ -374,6 +375,10 @@ function questionCard() {
   // While the room is open it shows the decide-by date; once decided, the review date.
   const when = ["decided", "reviewed"].includes(r.status) ? (r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : "") : r.decide_by ? t("decide_by_on", { date: Rooms.fmtDate(r.decide_by) }) : "";
   const c = card("active", meta(Rooms.typeName(r), when), q);
+  if (S.departments?.length) {
+    const dl = el("p", "small", S.departments.map(x => x.lead ? t("dept_lead_name", { name: x.name }) : x.name).join(" · "));
+    dl.style.cssText = "opacity:.85;margin:6px 0 0"; c.append(dl);
+  }
   const links = (Array.isArray(r.links) ? r.links : []).map(l => l?.url).filter(Boolean);
   if (r.context || S.files?.length || links.length) {
     const more = el("details", "more");
