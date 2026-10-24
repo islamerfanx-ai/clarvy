@@ -76,6 +76,9 @@ Checked each feature against the database and server, with probes on a test copy
 **Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
 
 ## Later (after launch)
+- **Departments on the question (idea, 2026-10-24):** several per room, one leading, analyst suggests; drives invitees, memory, asks, visibility, reports.
+- **Assistants (idea, 2026-10-24):** PA manages the owner's rooms at View, Organise, or Organise and run; never makes the call or sees answers; visible and logged.
+- **Warmer wording everywhere (2026-10-24):** names where known, progress while waiting, kind errors, marked moments; Arabic written natively. Before/after per page for approval.
 - **Owner's notepad (idea, 2026-10-24):** private drafts with the analyst; "Make it a room" fills setup; per-room notes the owner can share into the room.
 - **Nudges (idea, 2026-10-24):** owner sees who opened the question; reminders to non-answerers timed by the decide-by date; still wait for the minimum answers.
 - **Organisation document library (idea, 2026-10-24):** tagged, dated, access-levelled documents the Analyst cites by passage. See product-foundation section 0.
