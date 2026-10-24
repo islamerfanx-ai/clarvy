@@ -14,6 +14,10 @@
    as cards with Invite, then Ongoing and Old lists. Flat white cards on the yellow ground, thin dividers. */
 main{--content:none}
 .db-title{margin:24px 0 8px;max-width:14ch}
+.db-hello{margin:24px 0 18px}
+.db-hello .eyebrow{display:block;font-size:14px;color:var(--dim)}
+.db-hello .db-title{margin:6px 0 8px;max-width:22ch}
+.db-hello .db-line{margin:0;font-size:var(--t-h5);max-width:46ch}
 .db-sec{display:flex;flex-direction:column;gap:12px;margin-top:40px}
 .db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .db-head h2{margin:0;font-size:var(--t-h4);font-weight:400;letter-spacing:-.02em}
@@ -201,7 +205,20 @@ const results = el("div");
 /* ---------- Page ---------- */
 function render() {
   searchIn.placeholder = t("db_search_ph"); searchIn.setAttribute("aria-label", t("db_search_ph"));
-  const title = el("h1", "db-title", t("db_title"));
+  // A greeting by first name and time of day, then one line on what needs them now.
+  const first = String(myName || "").trim().split(/\s+/)[0];
+  const hour = new Date().getHours();
+  const part = hour < 5 ? "evening" : hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+  const title = el("div", "db-hello");
+  const needs = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer").length;
+  const ready = rooms.filter(r => r.status === "deciding" && r.has_verdict).length;
+  const stuckN = rooms.filter(r => stuck(r)).length;
+  const line = !rooms.length ? t("hi_new")
+    : needs ? t(needs === 1 ? "hi_need_1" : "hi_need_n", { n: needs })
+    : ready ? t(ready === 1 ? "hi_ready_1" : "hi_ready_n", { n: ready })
+    : stuckN ? t(stuckN === 1 ? "hi_stuck_1" : "hi_stuck_n", { n: stuckN })
+    : t("hi_quiet");
+  title.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line));
   // Numbers row: what needs you, at a glance.
   const finished = r => ["decided", "reviewed"].includes(r.status);
   const needMe = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer");

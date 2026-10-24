@@ -1358,5 +1358,19 @@
   "rv_country": "Country",
   "ad_version": "Version {v} · build {n}",
   "ad_updated": "Last update {at}",
-  "ad_version_local": "Running locally"
+  "ad_version_local": "Running locally",
+  "hi_morning": "Good morning, {name}",
+  "hi_afternoon": "Good afternoon, {name}",
+  "hi_evening": "Good evening, {name}",
+  "hi_morning_noname": "Good morning",
+  "hi_afternoon_noname": "Good afternoon",
+  "hi_evening_noname": "Good evening",
+  "hi_new": "Your rooms are ready for you. What are you deciding next?",
+  "hi_need_1": "One room is waiting for your answer. It takes about two minutes.",
+  "hi_need_n": "{n} rooms are waiting for your answer. Each takes about two minutes.",
+  "hi_ready_1": "A recommended call is ready for you to look at.",
+  "hi_ready_n": "{n} recommended calls are ready for you to look at.",
+  "hi_stuck_1": "One room could use a little push from you.",
+  "hi_stuck_n": "{n} rooms could use a little push from you.",
+  "hi_quiet": "Everything is moving. Nothing needs you right now."
 }
