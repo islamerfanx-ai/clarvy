@@ -1355,5 +1355,8 @@
   "rv_renews_d": "renews {d}",
   "rv_end": "End",
   "rv_end_why": "Why did they stop? (optional)",
-  "rv_country": "Country"
+  "rv_country": "Country",
+  "ad_version": "Version {v} · build {n}",
+  "ad_updated": "Last update {at}",
+  "ad_version_local": "Running locally"
 }

@@ -52,6 +52,9 @@ npm start                      # http://localhost:3000
 - Organisation memory (opt-in, `workspaces.memory_on`, switched by an organisation admin on org.html): when a room in that organisation decides, `orgMemory()` in lib/rooms.js picks up to 6 earlier decided rooms of the organisation that share a subject with the question (never strictly confidential rooms, never inputs) with their call, override reason, main reasons and latest review, and gives them to the Analyst and the Judge, who use lessons in general terms without revealing other rooms. The verdict records `memory_used`. No model is trained.
 - `/api/config` hands the browser `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public by design). The service role key stays on the server.
 
+## Versions
+`package.json` version goes up one minor step (1.4 → 1.5) with each feature release; small fixes only raise the build number. The deploy writes `build.json` (version, build number = commit count, commit, date, message; server only), and the admin page shows it in a yellow band. 1.4.0 (2026-10-24) = sign-up and profiles, organisations and memory, growth dashboard, revenue and Ask.
+
 ## Before going live or publishing
 Feature ideas from competitor research (Cloverpop, Aaru) live in the "New Features" doc: https://claude.ai/artifact/JXvSMrJtfCaVNa1aJbGCGs
 Before any launch, deploy to production or public announcement, remind the user to review its checklists and decide which items ship first.

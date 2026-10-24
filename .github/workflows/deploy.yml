@@ -14,6 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Version, build number and date for the admin page (server only, not served to the public).
+      - name: Write build info
+        run: |
+          printf '{"version":"%s","build":%s,"commit":"%s","date":"%s","message":%s}\n' \
+            "$(node -p "require('./package.json').version")" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)" \
+            "$(git log -1 --format=%cI)" "$(git log -1 --format=%s | node -e 'process.stdin.on("data",d=>process.stdout.write(JSON.stringify(String(d).trim())))')" > build.json
 
       - name: Set up SSH
         env:

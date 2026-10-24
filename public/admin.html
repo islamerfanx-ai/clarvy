@@ -77,6 +77,8 @@ main{--content:1120px}
 .ask-form .btn{width:auto;padding:10px 18px}
 .ask-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
 .ask-chips button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);padding:6px 12px;border-radius:40px;cursor:pointer}
+.ad-version{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--yellow);padding:8px 14px;font-size:14px;margin:-4px 0 12px}
+.ad-version b{font-weight:500;font-family:var(--mono);font-size:13px}
 </style>
 </head>
 <body>
@@ -403,12 +405,18 @@ function render() {
   else if (!growth) body = [el("p", "gr-empty", t("gr_unavailable"))];
   else body = [el("p", "gr-q", t("gr_q_" + tab)), ...panels[tab](growth)];
   const head = el("h1", "db-title", t("ad_title"));
+  const b = data?.build, ver = el("div", "ad-version");
+  if (b) {
+    ver.append(el("b", null, t("ad_version", { v: b.version, n: b.build ?? "·" })),
+      el("span", null, b.local ? t("ad_version_local") : t("ad_updated", { at: new Date(b.date).toLocaleString(Rooms.lang === "ar" ? "ar" : "en", { dateStyle: "medium", timeStyle: "short" }) })));
+    if (b.message) { const m = el("span", "small", "· " + b.message); m.title = b.commit || ""; ver.append(m); }
+  }
   if (tab !== "people" && access.requests.length) {
     const nudge = el("button", "btn soft", t("ac_nudge", { n: access.requests.length })); nudge.type = "button"; nudge.style.width = "auto"; nudge.style.marginBottom = "14px";
     nudge.onclick = () => { tab = "people"; render(); };
     body.unshift(nudge);
   }
-  view.replaceChildren(head, el("p", "small", growth ? t("gr_updated", { at: new Date(growth.generated_at).toLocaleString(Rooms.lang === "ar" ? "ar" : "en") }) : ""), bar, ...body);
+  view.replaceChildren(head, ...(b ? [ver] : []), el("p", "small", growth ? t("gr_updated", { at: new Date(growth.generated_at).toLocaleString(Rooms.lang === "ar" ? "ar" : "en") }) : ""), bar, ...body);
 }
 function peoplePanel() {
   const d = data;

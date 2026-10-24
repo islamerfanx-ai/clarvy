@@ -1355,5 +1355,8 @@
   "rv_renews_d": "تتجدد {d}",
   "rv_end": "إنهاء",
   "rv_end_why": "لماذا توقفوا؟ (اختياري)",
-  "rv_country": "الدولة"
+  "rv_country": "الدولة",
+  "ad_version": "الإصدار {v} · البناء {n}",
+  "ad_updated": "آخر تحديث {at}",
+  "ad_version_local": "يعمل محليًا"
 }

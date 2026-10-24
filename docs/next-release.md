@@ -76,6 +76,7 @@ Checked each feature against the database and server, with probes on a test copy
 **Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
 
 ## Later (after launch)
+- **Owner's notepad (idea, 2026-10-24):** private drafts with the analyst; "Make it a room" fills setup; per-room notes the owner can share into the room.
 - **Nudges (idea, 2026-10-24):** owner sees who opened the question; reminders to non-answerers timed by the decide-by date; still wait for the minimum answers.
 - **Organisation document library (idea, 2026-10-24):** tagged, dated, access-levelled documents the Analyst cites by passage. See product-foundation section 0.
 - **Talk space after the call (idea, 2026-10-24):** Ask the decision, follow-through threads, open team chat, reopen request; everyone posts; badge alerts. Mock-up first. See product-foundation section 0.
