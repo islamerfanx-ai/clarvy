@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Your notes · Decision Rooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* Your notes: a list on the side, the open note, and the analyst's help under it. */
+main{--content:1080px}
+.nt{display:grid;grid-template-columns:260px 1fr;gap:16px;align-items:start}
+@media (max-width:760px){.nt{grid-template-columns:1fr}}
+.nt-list{background:var(--card);padding:10px;display:flex;flex-direction:column;gap:4px}
+.nt-list button.item{font:inherit;text-align:start;align-items:flex-start;background:none;border:0;padding:9px 10px;cursor:pointer;color:var(--fg);display:flex;flex-direction:column;gap:2px}
+.nt-list button.item[aria-current=true]{background:var(--accent-soft)}
+.nt-list button.item small{color:var(--dim);font-size:12px}
+.nt-ed{background:var(--card);padding:18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.nt-ed input.title{font-size:var(--t-h5);border:0;border-bottom:1px solid var(--line);padding:6px 0;background:transparent;color:var(--fg)}
+.nt-ed textarea{min-height:320px;font:inherit;line-height:1.6;border:1px solid var(--line);padding:12px;background:transparent;color:var(--fg);resize:vertical}
+.nt-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.nt-bar .btn{width:auto;padding:9px 14px}
+.nt-bar .saved{margin-inline-start:auto;font-size:12px;color:var(--dim)}
+.nt-help{background:var(--yellow);padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.nt-help h3{margin:0;font-size:15px;font-weight:500}
+.nt-help .q{font-size:var(--t-h5)}
+.nt-help ul{margin:0;padding-inline-start:18px}
+.nt-help .btn{width:auto;align-self:flex-start}
+.nt-empty{color:var(--dim);font-size:14px;padding:10px}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" id="myRoomsLink" href="/dashboard.html" data-t="my_rooms" hidden>Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+// Your notes: private drafts only you can read. Write freely, then the analyst can tidy them or find the
+// decision hiding in them, and "Make it a room" fills the setup. Notes kept on a room show here too.
+const { $, el, t } = Rooms;
+const view = $("view");
+const demo = new URLSearchParams(location.search).has("demo");
+const DRAFT_KEY = "dr-new-room-3";   // the setup's saved draft (new.html)
+let notes = [], current = null, rooms = {}, help = null, timer = null, undo = null;
+
+const store = demo ? {
+  async list() { return notes.length ? notes : [{ id: "n1", title: t("nt_demo_title"), body: t("nt_demo_body"), room_id: null, updated_at: new Date().toISOString() }]; },
+  async save(n) { n.updated_at = new Date().toISOString(); return n; },
+  async create() { return { id: "n" + Date.now(), title: "", body: "", room_id: null, updated_at: new Date().toISOString() }; },
+  async remove() {}
+} : {
+  async list() {
+    const { data } = await Rooms.sb.from("notes").select("id,title,body,room_id,updated_at").order("updated_at", { ascending: false });
+    return data || [];
+  },
+  async save(n) {
+    const { error } = await Rooms.sb.from("notes").update({ title: n.title, body: n.body }).eq("id", n.id);
+    if (error) throw error;
+    n.updated_at = new Date().toISOString(); return n;
+  },
+  async create() {
+    const { data, error } = await Rooms.sb.from("notes").insert({ title: "", body: "" }).select("id,title,body,room_id,updated_at").single();
+    if (error) throw error;
+    return data;
+  },
+  async remove(n) { await Rooms.sb.from("notes").delete().eq("id", n.id); }
+};
+
+const when = ts => new Date(ts).toLocaleString(Rooms.lang === "ar" ? "ar" : "en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const firstLine = n => n.title.trim() || n.body.trim().split("\n")[0].slice(0, 60) || t("nt_untitled");
+
+function render() {
+  document.title = t("nt_title") + " · " + t("product");
+  const list = el("div", "nt-list");
+  const add = el("button", "btn soft", "+ " + t("nt_new")); add.type = "button";
+  add.onclick = async () => { add.disabled = true; try { const n = await store.create(); notes.unshift(n); current = n; help = null; undo = null; render(); } catch { add.disabled = false; } };
+  list.append(add);
+  if (!notes.length) list.append(el("p", "nt-empty", t("nt_none")));
+  notes.forEach(n => {
+    const b = el("button", "item"); b.type = "button"; b.setAttribute("aria-current", String(n === current));
+    b.append(el("span", null, firstLine(n)), el("small", null, (n.room_id ? t("nt_room_note", { q: (rooms[n.room_id] || "").slice(0, 40) }) + " · " : "") + when(n.updated_at)));
+    b.onclick = () => { current = n; help = null; undo = null; render(); };
+    list.append(b);
+  });
+  const ed = el("div", "nt-ed");
+  if (!current) ed.append(el("p", "nt-empty", t("nt_pick")));
+  else ed.append(...editor(current));
+  const wrap = el("div", "nt"); wrap.append(list, ed);
+  view.replaceChildren(el("h1", "db-title", t("nt_title")), el("p", "small", t("nt_hint")), wrap);
+}
+
+function editor(n) {
+  const saved = el("span", "saved", t("nt_saved_at", { at: when(n.updated_at) }));
+  const title = el("input", "title"); Object.assign(title, { value: n.title, maxLength: 120, placeholder: t("nt_title_ph") }); title.setAttribute("aria-label", t("nt_title_ph"));
+  const body = el("textarea"); Object.assign(body, { value: n.body, maxLength: 20000, placeholder: t("nt_body_ph") }); body.setAttribute("aria-label", t("nt_body_ph"));
+  // Saved a moment after you stop typing.
+  const later = () => { saved.textContent = t("nt_saving"); clearTimeout(timer); timer = setTimeout(async () => {
+    n.title = title.value; n.body = body.value;
+    try { await store.save(n); saved.textContent = t("nt_saved_at", { at: when(n.updated_at) }); } catch { saved.textContent = t("err_generic"); }
+  }, 700); };
+  title.oninput = later; body.oninput = later;
+  const bar = el("div", "nt-bar");
+  const st = el("p", "status err"); st.setAttribute("role", "status");
+  const ask = (label, action, ghost) => {
+    const b = el("button", "btn" + (ghost ? " ghost" : ""), label); b.type = "button";
+    b.onclick = async () => {
+      if (!body.value.trim()) { body.focus(); return; }
+      b.disabled = true; const was = b.textContent; b.textContent = t("nt_thinking"); st.textContent = "";
+      try {
+        const r = demo ? demoHelp(action, body.value) : await Rooms.post("/api/rooms/notes", { action, text: body.value, lang: Rooms.lang });
+        if (action === "tidy") { undo = body.value; body.value = r.text; later(); help = { tidied: true }; }
+        else help = r;
+        render();
+      } catch (e) { st.textContent = t(e.message === "quota" ? "err_quota" : "nt_help_fail"); b.disabled = false; b.textContent = was; }
+    };
+    return b;
+  };
+  bar.append(ask(t("nt_find"), "shape"), ask(t("nt_tidy"), "tidy", true));
+  const del = el("button", "linkbtn", t("nt_delete")); del.type = "button";
+  del.onclick = async () => { if (!confirm(t("nt_delete_sure"))) return; await store.remove(n); notes = notes.filter(x => x !== n); current = notes[0] || null; help = null; render(); };
+  bar.append(del, saved);
+  const out = [title, body, bar, st];
+  if (help?.tidied) {
+    const h = el("div", "nt-help"); h.append(el("p", "small", t("nt_tidied")));
+    if (undo != null) { const u = el("button", "linkbtn", t("q_undo")); u.type = "button"; u.onclick = () => { body.value = undo; undo = null; help = null; later(); render(); }; h.append(u); }
+    out.push(h);
+  } else if (help?.question) out.push(shaped(help));
+  return out;
+}
+
+// The decision the analyst found in the notes, and "Make it a room".
+function shaped(r) {
+  const h = el("div", "nt-help");
+  h.append(el("h3", null, t("nt_found")), el("p", "q", r.question));
+  const list = (label, items) => { if (!items?.length) return; const ul = el("ul"); items.forEach(x => ul.append(el("li", null, x))); h.append(el("p", "lbl", label), ul); };
+  list(t("nt_options"), r.options); list(t("nt_weigh"), r.criteria); list(t("nt_missing"), r.missing);
+  if (r.context) h.append(el("p", "lbl", t("nt_context")), el("p", "small", r.context));
+  const go = el("button", "btn", t("nt_make_room")); go.type = "button";
+  go.onclick = () => {
+    // Fill the setup's draft, keeping the owner's name and organisation from the last room.
+    let d = {}; try { d = JSON.parse(localStorage.getItem(DRAFT_KEY)) || {}; } catch {}
+    Object.assign(d, { at: 0, atId: null, question: r.question, qOrig: "", qRes: null, qKeys: [],
+      options: r.options.length >= 2 ? r.options.slice(0, 6) : ["", ""], optsDraft: null,
+      crits: r.criteria.length ? r.criteria.map(label => ({ label, on: true })) : null, critsDraft: null,
+      context: r.context || "", brief: null, briefFor: "", briefPicked: [] });
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {}
+    Rooms.openNewRoom(demo ? "/new.html?demo=1" : "/new.html");
+  };
+  h.append(go, el("p", "small", t("nt_make_room_hint")));
+  return h;
+}
+function demoHelp(action, text) {
+  if (action === "tidy") return { text: "• " + text.split(/\n+/).filter(Boolean).join("\n• ") };
+  return { question: t("nt_demo_q"), options: t("nt_demo_opts"), criteria: t("nt_demo_crit"), missing: t("nt_demo_missing"), context: t("nt_demo_ctx") };
+}
+
+async function load() {
+  notes = await store.list();
+  if (!demo && notes.some(n => n.room_id)) {
+    const ids = [...new Set(notes.filter(n => n.room_id).map(n => n.room_id))];
+    const { data } = await Rooms.sb.from("rooms").select("id,question").in("id", ids);
+    (data || []).forEach(r => { rooms[r.id] = r.question; });
+  }
+  // ?new=1 opens a fresh note (from "Draft a decision" in Your rooms).
+  if (new URLSearchParams(location.search).has("new") && !demo) { try { const n = await store.create(); notes.unshift(n); } catch {} }
+  current = notes[0] || null;
+  render();
+}
+Rooms.langToggle(() => render());
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  if (demo) return load();
+  if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }
+  if (!Rooms.hasAccount()) {
+    const box = el("div", "stack-sm"), c = el("article", "msg you");
+    c.append(el("p", "text sm", t("si_title")), box); view.replaceChildren(c);
+    return Rooms.ensureAccount(box, { onDone: () => { Rooms.showMyRooms(); load(); } });
+  }
+  Rooms.showMyRooms();
+  load();
+})();
+})();
+</script>
+</body>
+</html>

@@ -215,7 +215,7 @@ async function accountMenu() {
   const menu = el("div", "acct-pop"); menu.setAttribute("role", "menu"); menu.hidden = true;
   const head = el("div", "acct-head");
   const item = (label, href, onClick) => { const x = el(href ? "a" : "button", "acct-item", label); x.setAttribute("role", "menuitem"); if (href) { x.href = href; x.target = "_top"; } else { x.type = "button"; x.onclick = onClick; } return x; };
-  menu.append(head, item(t("pf_link"), "/profile.html"), item(t("my_rooms"), "/dashboard.html"));
+  menu.append(head, item(t("pf_link"), "/profile.html"), item(t("my_rooms"), "/dashboard.html"), item(t("nt_link"), "/notes.html"));
   const out = item(t("si_sign_out"), null, async () => { await signOut(); (window.top || window).location.href = "/"; });
   menu.append(out);
   const open = on => { menu.hidden = !on; btn.setAttribute("aria-expanded", String(on)); };

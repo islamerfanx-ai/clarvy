@@ -222,7 +222,7 @@ function render() {
     : ready ? t(ready === 1 ? "hi_ready_1" : "hi_ready_n", { n: ready })
     : stuckN ? t(stuckN === 1 ? "hi_stuck_1" : "hi_stuck_n", { n: stuckN })
     : t("hi_quiet");
-  title.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line));
+  title.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
   // Numbers row: what needs you, at a glance.
   const finished = r => ["decided", "reviewed"].includes(r.status);
   const needMe = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer");

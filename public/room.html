@@ -64,8 +64,9 @@ const live = {
     const out = { departments: room.__depts || [], room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner") {
       out.invites = await this.invites(room);
-      const { data: nd } = await sb.rpc("room_nudges", { rid: roomId });
-      out.nudges = nd || [];
+      const [{ data: nd }, { data: note }] = await Promise.all([sb.rpc("room_nudges", { rid: roomId }),
+        sb.from("notes").select("id,body").eq("room_id", roomId).eq("user_id", me).maybeSingle()]);
+      out.nudges = nd || []; out.note = note || null;
     }
     if (an.data) {
       const { data: plan } = await sb.from("plan_items").select("id,kind,title,note,assignee,owner_label,due_date,status,position").eq("room_id", roomId).order("due_date", { ascending: true, nullsFirst: false }).order("position");
@@ -118,6 +119,18 @@ const live = {
   // The owner adds someone from the room, until the call is made.
   async setAutoNudge(on) {
     const { error } = await Rooms.sb.from("rooms").update({ auto_nudge: on }).eq("id", roomId);
+    if (error) throw error;
+  },
+  // The owner's private note on this room (one per room), and sharing a note into the room's context.
+  async saveNote(body) {
+    const { data, error } = await Rooms.sb.from("notes").upsert({ user_id: Rooms.user.id, room_id: roomId, body }, { onConflict: "user_id,room_id" }).select("id,body").single();
+    if (error) throw error;
+    return data;
+  },
+  async shareNote(text) {
+    const { data: r } = await Rooms.sb.from("rooms").select("context").eq("id", roomId).single();
+    const add = t("rn_shared_head", { date: Rooms.fmtDate(new Date().toISOString().slice(0, 10)) }) + "\n" + text.trim();
+    const { error } = await Rooms.sb.from("rooms").update({ context: (r?.context ? r.context + "\n\n" : "") + add }).eq("id", roomId);
     if (error) throw error;
   },
   async addPerson(name, contact, roleId) {
@@ -263,6 +276,8 @@ function demoStore(kind) {
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
     async setAutoNudge(on) { room.auto_nudge = on; },
+    async saveNote(body) { return { id: "demo-note", body }; },
+    async shareNote(text) { room.context = (room.context ? room.context + "\n\n" : "") + text.trim(); },
     async addPerson(name, contact, roleId) { const x = { token: "demo-" + (people.length + 1), role_id: roleId || null, max_uses: 1, uses: 0, person_name: name, person_contact: contact || null, joined_by: null }; people.push(x); return x; },
     async setRoom(patch) { Object.assign(room, patch); },
     plan: [],
@@ -1522,12 +1537,31 @@ function render() {
   if (inputStep && st === "open" && S.role !== "observer") return vInput();
   if (st === "open") {
     if (!S.mine && S.role === "member") return startInput();   // members go straight to their answers
-    vWaiting(); return poll();
+    vWaiting(); appendNotes(); return poll();
   }
   if (!S.analysis) { if (think && think.now.isConnected) thinkingUpdate(); else vThinking(); return poll(); }
   if (think) { clearInterval(think.tick); clearInterval(think.rot); clearInterval(think.type); think = null; }
-  vVerdict();
+  vVerdict(); appendNotes();
   if (st === "deciding") poll();
+}
+// The owner's private notepad for this room, saved as they type. Sharing a note adds it to the room's context.
+function appendNotes() {
+  if (S.role !== "owner") return;
+  const c = card("you", el("p", "text sm", t("rn_title")), el("p", "small", t("rn_hint")));
+  const ta = el("textarea"); Object.assign(ta, { rows: 4, maxLength: 20000, placeholder: t("rn_ph"), value: S.note?.body || "" }); ta.setAttribute("aria-label", t("rn_title"));
+  const st = el("p", "status"); st.setAttribute("role", "status");
+  let timer = null;
+  ta.oninput = () => { clearTimeout(timer); st.className = "status"; st.textContent = t("nt_saving");
+    timer = setTimeout(async () => { try { S.note = await store.saveNote(ta.value); st.textContent = ""; } catch { st.className = "status err"; st.textContent = t("err_generic"); } }, 700); };
+  const share = btn(t("rn_share"), "ghost", async () => {
+    if (!ta.value.trim() || !confirm(t("rn_share_sure"))) return;
+    share.disabled = true;
+    try { await store.shareNote(ta.value); await refresh(); } catch { share.disabled = false; st.className = "status err"; st.textContent = t("err_generic"); }
+  });
+  const more = el("details", "more"); more.open = !!S.note?.body;
+  more.append(el("summary", null, t("rn_title")), ta, share, st);
+  c.replaceChildren(more, el("p", "small", t("rn_hint")));
+  view.append(c);
 }
 // While waiting on other people (or on the analysis), check again every few seconds.
 function poll() {

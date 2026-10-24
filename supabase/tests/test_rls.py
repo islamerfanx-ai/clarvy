@@ -465,5 +465,14 @@ check("room members see the department names", as_user(E, f"select name, lead fr
 check("outsiders don't", as_user(B, f"select count(*) from room_departments('{RD}')"), "\n0\n")
 check("admins see rooms by department", as_user(C, f"select departments from org_rooms('{OW}') where id='{RD}'"), "Finance")
 
+# ---------- The owner's notepad (20261104000000_notes.sql) ----------
+check("someone writes a private note", as_user(B, "insert into notes (title, body) values ('Jeddah', 'Thinking about a second store')"), "INSERT 0 1")
+check("nobody else can read it", as_user(A, "select count(*) from notes where title='Jeddah'"), "\n0\n")
+check("the server can't be tricked into another author", as_user(B, f"insert into notes (user_id, title) values ('{A}', 'x')"), "row-level security")
+check("an owner keeps notes on their own room", as_user(A, f"insert into notes (room_id, body) values ('{R}', 'Call with the landlord')"), "INSERT 0 1")
+check("but not on someone else's room", as_user(D, f"insert into notes (room_id, body) values ('{R}', 'x')"), "row-level security")
+check("members of the room can't see the owner's note", as_user(B, f"select count(*) from notes where room_id='{R}'"), "\n0\n")
+check("one note per room", as_user(A, f"insert into notes (room_id, body) values ('{R}', 'again')"), "duplicate key")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
