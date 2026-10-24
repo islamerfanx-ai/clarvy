@@ -142,7 +142,7 @@ function stepYou() {
     const wf = el("div", "field"); wf.append(el("span", "lbl", t("nr_ws_lbl")), el("p", "small", t("nr_ws_hint")), where);
     nodes.push(wf);
   }
-  return form([...head(t("nr_you_title_back"), t("nr_you_hint_back")), ...nodes, orgField, actions()], () => {
+  return form([...head(t("nr_you_title_back", { name: String(d.name || "").trim().split(/\s+/)[0] || "" }).replace(/,\s*\./, "."), t("nr_you_hint_back")), ...nodes, orgField, actions()], () => {
     if (!d.orgType) return fail(t("need_org"));
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}

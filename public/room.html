@@ -920,7 +920,8 @@ function vVerdict() {
   // The owner settles the call; everyone else sees it once settled.
   if (settled) {
     cards.push(card("outline", el("h3", null, t("v_final")), contentLang(el("p", "text sm", optLabel(a.final_option || v.call))),
-      el("p", "small", a.owner_decision === "overridden" ? t("v_overridden", { reason: a.override_reason || "" }) : t("v_accepted"))));
+      el("p", "small", a.owner_decision === "overridden" ? t("v_overridden", { reason: a.override_reason || "" }) : t("v_accepted")),
+      el("p", "small", t("v_decided_thanks"))));
   } else if (owner) {
     const st = el("p", "status err"); st.setAttribute("role", "status");
     const pick = el("div", "stack-sm"); pick.hidden = true;

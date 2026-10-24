@@ -289,7 +289,7 @@ function addSubForm() {
   const per = pick([["month", t("rv_per_month")], ["year", t("rv_per_year")]], t("rv_period"));
   const start = field("date", t("rv_start"), today()), renew = field("date", t("rv_renews"), "");
   p.onchange = () => { if (!amount.value) amount.value = { small: 39, team: 99 }[p.value] || ""; }; p.onchange();
-  const st = el("p", "status"), go = el("button", "btn", t("rv_save")); go.type = "button";
+  const st = el("p", "status"), go = el("button", "btn", t("rv_rec_save")); go.type = "button";
   go.onclick = async () => { go.disabled = true; await revenueDo({ action: "add_sub", ...c.value(), plan: p.value, amount: amount.value, period: per.value, started_on: start.value, renews_on: renew.value }, st); go.disabled = false; };
   const f = el("div", "rv-form"); f.append(...c.nodes, p, amount, per, labelled(t("rv_start"), start), labelled(t("rv_renews"), renew), go);
   det.append(f, st); return det;
@@ -301,7 +301,7 @@ function addInvoiceForm() {
   const amount = field("number", t("rv_amount"), ""); amount.min = "0"; amount.step = "0.01";
   const num = field("text", t("rv_number"), ""); num.maxLength = 40;
   const issued = field("date", t("rv_issued"), today()), due = field("date", t("rv_due"), ""), paid = field("date", t("rv_paid_on"), "");
-  const st = el("p", "status"), go = el("button", "btn", t("rv_save")); go.type = "button";
+  const st = el("p", "status"), go = el("button", "btn", t("rv_rec_save")); go.type = "button";
   go.onclick = async () => { go.disabled = true; await revenueDo({ action: "add_invoice", ...c.value(), kind: k.value, amount: amount.value, number: num.value, issued_on: issued.value, due_on: due.value, paid_on: paid.value }, st); go.disabled = false; };
   const f = el("div", "rv-form"); f.append(...c.nodes, k, amount, num, labelled(t("rv_issued"), issued), labelled(t("rv_due"), due), labelled(t("rv_paid_on"), paid), go);
   det.append(f, st); return det;
