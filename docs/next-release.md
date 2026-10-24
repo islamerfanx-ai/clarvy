@@ -76,6 +76,8 @@ Checked each feature against the database and server, with probes on a test copy
 **Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
 
 ## Later (after launch)
+- **Nudges (idea, 2026-10-24):** owner sees who opened the question; reminders to non-answerers timed by the decide-by date; still wait for the minimum answers.
+- **Organisation document library (idea, 2026-10-24):** tagged, dated, access-levelled documents the Analyst cites by passage. See product-foundation section 0.
 - **Talk space after the call (idea, 2026-10-24):** Ask the decision, follow-through threads, open team chat, reopen request; everyone posts; badge alerts. Mock-up first. See product-foundation section 0.
 - **World library (decided 2026-10-24):** daily dated, sourced briefs per sector and customer country in the database, read by the Analyst and the world brief; automatic, shown on an admin tab; $20 a month to start. Not model training. See product-foundation section 0.
 Decision styles (majority vote, everyone agrees) · Slack sharing · Stated → Simulated → Outcome stories on the landing page (not yet decided; needs real reviewed rooms) · automatic reminders, email first, then WhatsApp · WhatsApp number (Kapso) · bot check (Turnstile) · Google and Microsoft sign-in · native Arabic review · contact email and operator name on privacy and terms.
