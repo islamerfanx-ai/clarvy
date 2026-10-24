@@ -83,6 +83,7 @@ function field(id, label, input, hint) {
 // profile. Then confirm who you are and pick the kind of organisation for this room.
 let me = null;   // the signed-in owner's profile
 let myOrgs = [];  // organisations the owner belongs to (a room can open inside one)
+let targets = []; // as someone's assistant: whose room this could be, and where (assist_targets)
 function stepYou() {
   const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
   const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
@@ -133,6 +134,17 @@ function stepYou() {
   // Inside an organisation? Choose where this room lives: the organisation (its admins see it in their list,
   // never the answers) or just you.
   const nodes = [who];
+  // An assistant can open the room for someone they help (their personal space, or an organisation both are in).
+  if (targets.length) {
+    const forC = el("div", "chips"); forC.setAttribute("role", "group");
+    const drawFor = () => forC.replaceChildren(chip(t("as_for_me"), !d.forOwner, () => { d.forOwner = null; save(); drawFor(); }),
+      ...targets.map(x => chip(x.kind === "organisation" ? t("as_for_owner_ws", { name: x.owner_name, ws: x.workspace_name }) : t("as_for_owner", { name: x.owner_name }),
+        d.forOwner?.owner_id === x.owner_id && d.forOwner?.workspace_id === x.workspace_id,
+        () => { d.forOwner = { owner_id: x.owner_id, workspace_id: x.workspace_id, kind: x.kind }; if (x.kind === "organisation") d.wsId = x.workspace_id; save(); drawFor(); })));
+    drawFor();
+    const ff = el("div", "field"); ff.append(el("span", "lbl", t("as_for_lbl")), forC);
+    nodes.push(ff);
+  }
   if (myOrgs.length) {
     if (d.wsId === undefined) { d.wsId = myOrgs[0].id; if (!d.orgType && myOrgs[0].org_type) d.orgType = myOrgs[0].org_type; save(); }
     const where = el("div", "chips"); where.setAttribute("role", "group");
@@ -871,7 +883,9 @@ async function create() {
     }
     if (!Rooms.hasAccount()) throw new Error("sign_in_first");
     const sb = Rooms.sb, me = Rooms.user.id;
-    let ws = d.wsId && myOrgs.some(o => o.id === d.wsId) ? { id: d.wsId } : null;
+    // As an assistant, the room is the owner's: their space, owner_id them, created_by you.
+    const forOwner = d.forOwner && targets.find(x => x.owner_id === d.forOwner.owner_id && x.workspace_id === d.forOwner.workspace_id);
+    let ws = forOwner ? { id: forOwner.workspace_id } : d.wsId && myOrgs.some(o => o.id === d.wsId) ? { id: d.wsId } : null;
     if (!ws) ({ data: ws } = await sb.from("workspaces").select("id").eq("owner_id", me).eq("kind", "personal").order("created_at").limit(1).maybeSingle());
     if (!ws) {
       ws = { id: crypto.randomUUID() };
@@ -883,7 +897,7 @@ async function create() {
     const id = crypto.randomUUID();
     const review = (() => { const x = new Date(); x.setDate(x.getDate() + 42); return x.toISOString().slice(0, 10); })();   // changed after the decision, next to the plan
     const { error } = await sb.from("rooms").insert({
-      id, workspace_id: ws.id, owner_id: me, language: Rooms.lang, type: d.type,
+      id, workspace_id: ws.id, owner_id: forOwner ? forOwner.owner_id : me, created_by: me, language: Rooms.lang, type: d.type,
       type_label: d.type === "custom" ? d.typeLabel.trim() : null, question: d.question.trim(),
       context: contextWithBrief(), options, criteria, review_date: review, named_views: d.named,
       model: d.model || "standard", rapid: !!d.rapid, decide_by: d.decideBy || null,
@@ -978,6 +992,9 @@ async function start() {
       const { data: os } = await Rooms.sb.rpc("my_orgs");
       myOrgs = os || [];
       if (d.wsId && !myOrgs.some(o => o.id === d.wsId)) d.wsId = undefined;
+      const { data: tg } = await Rooms.sb.rpc("assist_targets");
+      targets = tg || [];
+      if (d.forOwner && !targets.some(x => x.owner_id === d.forOwner.owner_id && x.workspace_id === d.forOwner.workspace_id)) d.forOwner = null;
     }
   }
   // The first screen shows for every new room: returning owners just confirm it.

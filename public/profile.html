@@ -87,7 +87,55 @@ async function render() {
   };
   const out = el("button", "linkbtn", t("si_sign_out")); out.type = "button";
   out.onclick = async () => { await Rooms.signOut(); location.href = "/"; };
-  view.replaceChildren(f, out);
+  view.replaceChildren(f, assistantsBox(), out);
+}
+
+/* ---------- Assistants: a PA or secretary who runs your rooms (never makes the call) ---------- */
+function assistantsBox() {
+  const box = el("div", "stack-sm"); box.style.cssText = "margin-top:28px;border-top:1px solid var(--line);padding-top:20px";
+  const draw = async () => {
+    const sb = Rooms.sb;
+    const [{ data: links }, { data: mine }] = await Promise.all([sb.rpc("my_assistants"), sb.rpc("my_rooms")]);
+    const ownRooms = (mine || []).filter(r => r.role === "owner" && !["decided", "reviewed"].includes(r.status));
+    const nodes = [el("p", "text sm", t("as_title")), el("p", "small", t("as_hint"))];
+    const row = (x, label) => {
+      const r = el("div", "ad-kind"); r.style.cssText = "display:flex;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:8px 0;flex-wrap:wrap";
+      r.append(el("span", null, [x.other_name || x.other_email, t("as_level_" + x.level).split(":")[0], x.all_rooms ? null : t("as_rooms_n", { n: x.room_ids.length }), x.expires_at ? t("as_until_d", { d: Rooms.fmtDate(x.expires_at.slice(0, 10)) }) : null].filter(Boolean).join(" · ")));
+      const b = el("button", "linkbtn", label); b.type = "button"; b.onclick = async () => { b.disabled = true; await sb.rpc("stop_assisting", { aid: x.id }); draw(); };
+      r.append(b); return r;
+    };
+    const mineL = (links || []).filter(x => x.side === "mine"), helping = (links || []).filter(x => x.side === "helping");
+    if (mineL.length) nodes.push(el("p", "lbl", t("as_mine")), ...mineL.map(x => row(x, t("as_stop"))));
+    if (helping.length) nodes.push(el("p", "lbl", t("as_helping")), ...helping.map(x => row(x, t("as_step_down"))));
+    // Add one
+    const det = el("details", "more"); det.append(el("summary", null, t("as_add")));
+    const email = el("input", "line"); Object.assign(email, { type: "email", placeholder: t("as_email_ph"), maxLength: 160 }); email.setAttribute("aria-label", t("as_email_ph"));
+    const level = select("asLevel", ["view", "organise", "run"].map(k => [k, t("as_level_" + k)]), "organise", t("as_level"));
+    const scope = select("asScope", [["all", t("as_scope_all")], ["some", t("as_scope_some")]], "all", t("as_scope_all"));
+    scope.querySelector("option[value='']").remove();
+    const picks = el("div", "stack-sm"); picks.hidden = true;
+    ownRooms.forEach(r => { const l = el("label", "check"), c = el("input"); c.type = "checkbox"; c.value = r.id; l.append(c, el("span", "small", r.question)); picks.append(l); });
+    scope.onchange = () => { picks.hidden = scope.value !== "some"; };
+    const until = el("input", "line"); until.type = "date"; until.setAttribute("aria-label", t("as_until"));
+    const st = el("p", "status"); st.setAttribute("role", "status");
+    const go = el("button", "btn", t("as_save")); go.type = "button"; go.style.width = "auto";
+    go.onclick = async () => {
+      if (!Rooms.validEmail(email.value)) { email.focus(); st.className = "status err"; st.textContent = t("need_email"); return; }
+      go.disabled = true;
+      const room_ids = scope.value === "some" ? [...picks.querySelectorAll("input:checked")].map(c => c.value) : [];
+      const { error } = await sb.rpc("add_assistant", { email: email.value.trim(), level: level.value || "organise", all_rooms: scope.value !== "some", room_ids,
+        expires_at: until.value ? new Date(until.value + "T23:59:00").toISOString() : null });
+      go.disabled = false;
+      if (error) { st.className = "status err"; st.textContent = t(/no_account|not_yourself/.test(error.message) ? "as_err_" + error.message.match(/no_account|not_yourself/)[0] : "err_generic"); return; }
+      st.className = "status ok"; st.textContent = t("as_added"); draw();
+    };
+    const lab = (txt, n) => { const w = el("div", "field"); w.append(el("span", "lbl", txt), n); return w; };
+    det.append(email, lab(t("as_level"), level), scope, picks, lab(t("as_until"), until), go, st);
+    nodes.push(det);
+    box.replaceChildren(...nodes);
+  };
+  draw();
+  return box;
 }
 
 Rooms.langToggle(() => { if (Rooms.sb) render(); });

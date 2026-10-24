@@ -59,14 +59,18 @@ const live = {
       sb.from("analyses").select("frame,outcomes,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
     ]);
-    const role = mem.data?.role;
+    // Not a member: maybe the owner's assistant (they run the process, never answer or decide).
+    let role = mem.data?.role, level = null;
+    if (!role) { const { data: lv } = await sb.rpc("my_assist_level", { rid: roomId }); if (lv) { role = "assistant"; level = lv; } }
+    const { data: setupBy } = await sb.rpc("room_setup_by", { rid: roomId });
     if (room.department_ids?.length) { const { data: dp } = await sb.rpc("room_departments", { rid: roomId }); room.__depts = dp || []; }
-    const out = { departments: room.__depts || [], room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
-    if (role === "owner") {
+    const out = { departments: room.__depts || [], setupBy: setupBy || null, level, room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
+    if (role === "owner" || (role === "assistant" && level !== "view")) {
       out.invites = await this.invites(room);
-      const [{ data: nd }, { data: note }] = await Promise.all([sb.rpc("room_nudges", { rid: roomId }),
-        sb.from("notes").select("id,body").eq("room_id", roomId).eq("user_id", me).maybeSingle()]);
-      out.nudges = nd || []; out.note = note || null;
+      const [{ data: nd }, { data: note }, { data: log }] = await Promise.all([sb.rpc("room_nudges", { rid: roomId }),
+        role === "owner" ? sb.from("notes").select("id,body").eq("room_id", roomId).eq("user_id", me).maybeSingle() : Promise.resolve({ data: null }),
+        role === "owner" ? sb.rpc("room_assistant_log", { rid: roomId }) : Promise.resolve({ data: [] })]);
+      out.nudges = nd || []; out.note = note || null; out.assistLog = log || [];
     }
     if (an.data) {
       const { data: plan } = await sb.from("plan_items").select("id,kind,title,note,assignee,owner_label,due_date,status,position").eq("room_id", roomId).order("due_date", { ascending: true, nullsFirst: false }).order("position");
@@ -390,6 +394,7 @@ function questionCard() {
   // While the room is open it shows the decide-by date; once decided, the review date.
   const when = ["decided", "reviewed"].includes(r.status) ? (r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : "") : r.decide_by ? t("decide_by_on", { date: Rooms.fmtDate(r.decide_by) }) : "";
   const c = card("active", meta(Rooms.typeName(r), when), q);
+  if (S.setupBy) { const sb2 = el("p", "small", t("as_setup_by", { a: S.setupBy, o: S.roster.find(p => p.role === "owner")?.name || "" })); sb2.style.cssText = "opacity:.85;margin:6px 0 0"; c.append(sb2); }
   if (S.departments?.length) {
     const dl = el("p", "small", S.departments.map(x => x.lead ? t("dept_lead_name", { name: x.name }) : x.name).join(" · "));
     dl.style.cssText = "opacity:.85;margin:6px 0 0"; c.append(dl);
@@ -610,13 +615,17 @@ const RAPID_KEYS = { recommender: "rr_recommender", approver: "rr_approver", per
 const rapidLabel = p => t(p.role === "owner" ? "rr_decides" : RAPID_KEYS[p.rapid_role] || "rr_input");
 const openObjections = () => (S.objections || []).filter(o => o.status === "open");
 const nameOf = uid => S.roster.find(p => p.user_id === uid)?.name || "·";
+// The owner, or their assistant (organise or run), runs the process; only "run" may press Decide now.
+const runsRoom = () => S.role === "owner" || (S.role === "assistant" && S.level !== "view");
+const mayDecide = () => S.role === "owner" || (S.role === "assistant" && S.level === "run");
 
 function vWaiting() {
-  const r = S.room, owner = S.role === "owner";
+  const r = S.room, owner = runsRoom(), helper = S.role === "assistant";
   const answering = S.roster.filter(p => p.role !== "observer");
   const done = answering.filter(p => p.submitted).length;
   const first = String(S.roster.find(p => p.me)?.name || "").trim().split(/\s+/)[0];
-  const head = el("p", "text sm", owner ? t(first ? "wait_title_owner_n" : "wait_title_owner", { name: first }) : S.mine ? t(first ? "wait_title_member_n" : "wait_title_member", { name: first }) : t("observer"));
+  const ownerName = S.roster.find(p => p.role === "owner")?.name || "";
+  const head = el("p", "text sm", helper ? t("as_head", { owner: ownerName }) : owner ? t(first ? "wait_title_owner_n" : "wait_title_owner", { name: first }) : S.mine ? t(first ? "wait_title_member_n" : "wait_title_member", { name: first }) : t("observer"));
   // Progress that encourages: almost there, everyone in.
   const left = answering.length - done;
   const progress = !answering.length ? t("wait_progress", { n: 0, total: 0 }) : left === 0 ? t("wait_all_in") : left === 1 ? t("wait_one_left", { n: done, total: answering.length }) : t("wait_progress", { n: done, total: answering.length });
@@ -633,7 +642,7 @@ function vWaiting() {
   const status = el("div", "block"); status.append(el("h3", null, progress), meter, list);
   const main = card("you", head, status);
 
-  if (S.role !== "observer") {
+  if (S.role !== "observer" && !helper) {
     if (!S.mine) main.append(btn(t("give_answers"), owner ? "soft" : "", startInput));
     else if (r.status === "open") { const l = el("button", "linkbtn", t("edit_answers")); l.type = "button"; l.onclick = startInput; main.append(l); }
   }
@@ -648,7 +657,8 @@ function vWaiting() {
       catch (err) { d.disabled = false; say(st, t(["need_more_inputs", "rooms_not_configured", "room_not_open", "objection_open", "quota"].includes(err.message) ? err.message : "err_generic", { need: r.quorum })); }
     });
     d.disabled = !ready;
-    main.append(d);
+    if (mayDecide()) main.append(d);
+    else main.append(el("p", "small", t("as_no_decide", { owner: ownerName })));
     if (done < r.quorum) main.append(el("p", "small", t("decide_need", { need: r.quorum })));
     else if (blocked) main.append(el("p", "small", t("obj_open_note")));
     main.append(st);
@@ -662,7 +672,7 @@ function vWaiting() {
   if (r.rapid && (S.objections || []).length) cards.push(objectionsCard());
   cards.push(main);
   if (r.rapid && S.roster.find(p => p.me)?.rapid_role === "approver" && r.status === "open") cards.push(approverCard());
-  if (owner && r.rapid) cards.push(rolesCard());
+  if (S.role === "owner" && r.rapid) cards.push(rolesCard());
   // A brand-new room puts the invite first; after that it sits under the progress.
   if (owner && S.invites?.length) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
   show(...cards);
@@ -1046,7 +1056,7 @@ function vVerdict() {
     });
     cards.push(card("", el("h3", null, t("v_facts")), ul));
   }
-  if (settled && S.role !== "observer") cards.push(signOffCard());
+  if (settled && !["observer", "assistant"].includes(S.role)) cards.push(signOffCard());
   if (settled || (S.plan || []).length) cards.push(planCard());
   (S.reviews || []).slice().reverse().forEach(x => cards.push(outcomeCard(x)));
   const mode = r.report_mode || "both";
@@ -1095,7 +1105,7 @@ function reviewCards() {
     if (rv.due) c.append(...body);
     else { const d = el("details", "more"); d.append(el("summary", null, t("rv_log_early")), ...body); c.append(d); }
     out.push(c);
-  } else if (rv.due && S.role !== "observer") {
+  } else if (rv.due && !["observer", "assistant"].includes(S.role)) {
     const c = card("you", el("p", "text sm", t("rv_rate_title")), el("p", "small", t("rv_rate_hint")));
     const st = el("p", "status");
     let rating = S.myRating?.rating || null;
@@ -1349,7 +1359,7 @@ function downloadIcs(items, name) {
 const gcal = x => { const end = new Date(x.due_date + "T00:00:00Z"); end.setUTCDate(end.getUTCDate() + 1);
   return "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent(x.title) + "&dates=" + icsDate(x.due_date) + "/" + end.toISOString().slice(0, 10).replace(/-/g, "") + "&details=" + encodeURIComponent(S.room.question + (x.note ? " · " + x.note : "")); };
 function planCard() {
-  const owner = S.role === "owner", plan = S.plan || [], me = S.roster.find(p => p.me)?.user_id;
+  const owner = runsRoom(), plan = S.plan || [], me = S.roster.find(p => p.me)?.user_id;
   const c = card("you", el("p", "text sm", t("plan_title")), el("p", "small", t("plan_hint")));
   const st = el("p", "status err");
   if (!plan.length) {
@@ -1547,6 +1557,13 @@ function render() {
 // The owner's private notepad for this room, saved as they type. Sharing a note adds it to the room's context.
 function appendNotes() {
   if (S.role !== "owner") return;
+  if (S.assistLog?.length) {
+    const lc = card("you", el("p", "text sm", t("as_log_title")));
+    const ul = el("ul", "dots");
+    S.assistLog.slice(0, 12).forEach(x => ul.append(el("li", null, t("as_log_line", { who: x.who || "·", what: x.detail, at: new Date(x.at).toLocaleString(Rooms.lang === "ar" ? "ar" : "en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) }))));
+    const det = el("details", "more"); det.append(el("summary", null, t("as_log_sum", { n: S.assistLog.length })), ul); lc.append(det);
+    view.append(lc);
+  }
   const c = card("you", el("p", "text sm", t("rn_title")), el("p", "small", t("rn_hint")));
   const ta = el("textarea"); Object.assign(ta, { rows: 4, maxLength: 20000, placeholder: t("rn_ph"), value: S.note?.body || "" }); ta.setAttribute("aria-label", t("rn_title"));
   const st = el("p", "status"); st.setAttribute("role", "status");

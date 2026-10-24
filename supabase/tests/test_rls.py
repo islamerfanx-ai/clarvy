@@ -474,5 +474,27 @@ check("but not on someone else's room", as_user(D, f"insert into notes (room_id,
 check("members of the room can't see the owner's note", as_user(B, f"select count(*) from notes where room_id='{R}'"), "\n0\n")
 check("one note per room", as_user(A, f"insert into notes (room_id, body) values ('{R}', 'again')"), "duplicate key")
 
+# ---------- Assistants (20261105000000_assistants.sql) ----------
+# A (owner of R and RN) makes D their assistant at the organise level.
+check("owner adds an assistant by email", as_user(A, "select add_assistant('D@x.test', 'organise') is not null"), "True")
+check("both sides see it", as_user(D, "select side, level from my_assistants()"), "helping | organise")
+check("assistant reads the owner's room", as_user(D, f"select question from rooms where id='{R}'"), "Open in Jeddah?")
+check("assistant sees the roster", as_user(D, f"select count(*) > 0 from room_roster('{R}')"), "True")
+check("assistant invites someone", as_user(D, f"insert into invites (room_id, created_by, person_name, person_contact, max_uses) values ('{R}', '{D}', 'Lina', 'lina@x.test', 1)"), "INSERT 0 1")
+check("assistant edits the decide-by date", as_user(D, f"update rooms set decide_by = current_date + 9 where id='{R}'"), "UPDATE 1")
+check("assistant can't change the decision rule", as_user(D, f"update rooms set override_rule='approver' where id='{R}'"), "owner_only_setting")
+check("assistant can't settle the call", as_user(D, f"select decide_verdict('{R}', 'accepted')"), "only_owner_decides")
+check("assistant can't read private answers", as_user(D, f"select count(*) from inputs where room_id='{R}'"), "\n0\n")
+check("assistant can't answer", as_user(D, f"insert into inputs (room_id, user_id, weights, risk_appetite, gut_pick) values ('{R2}', '{D}', '{{}}', 'balanced', 'a')"), "ERROR")
+check("the owner sees what the assistant did", as_user(A, f"select detail from room_assistant_log('{R}')"), "invited Lina")
+check("assistant level shows on the room", as_user(D, f"select my_assist_level('{R}')"), "organise")
+check("assistant opens a room for the owner", as_user(D, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id,created_by) values ('{W}','business','Hire a store manager?','{opts}','{crit}','{A}','{D}')"), "INSERT 0 1")
+check("members see who set it up", as_user(A, "select room_setup_by(id) from rooms where question='Hire a store manager?'"), "D")
+check("the assistant can't open rooms for anyone else", as_user(D, f"insert into rooms (workspace_id,type,question,options,criteria,owner_id,created_by) values ('{W}','business','x?','{opts}','{crit}','{B}','{D}')"), "row-level security")
+check("strangers see nothing", as_user(E, f"select count(*) from rooms where id='{R}'"), "\n0\n")
+check("view-only assistants can't invite", as_user(A, "select add_assistant('E@x.test', 'view') is not null") + as_user(E, f"insert into invites (room_id, created_by, person_name, max_uses) values ('{R}', '{E}', 'Zed', 1)"), "row-level security")
+aid = as_user(D, "select id from my_assistants()").strip().split("\n")[-1]
+check("the assistant can step down", as_user(D, f"select stop_assisting('{aid}')") + as_user(D, "select count(*) from rooms where question='Hire a store manager?'"), "\n0\n")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

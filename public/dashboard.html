@@ -85,7 +85,7 @@ main{--content:none}
 const { $, el, t } = Rooms;
 const demo = new URLSearchParams(location.search).get("demo");
 const view = $("view");
-let rooms = null, myName = "";
+let rooms = null, myName = "", helping = [];   // helping: rooms you run for someone else, as their assistant
 
 // Demo data mirrors the sketch: two open rooms of yours, one ongoing, one old.
 const DEMO = [
@@ -295,9 +295,23 @@ function drawResults() {
     sec.append(ul);
     return sec;
   };
-  results.replaceChildren(s1,
+  // Rooms you help someone else with, as their assistant.
+  const help = helping.filter(matches);
+  let s4 = null;
+  if (help.length) {
+    s4 = section(t("db_helping"), help.length);
+    const ul = el("ul", "rows");
+    help.forEach(r => {
+      const li = el("li", "rrow"), a = el("a"); a.href = "/room.html?room=" + encodeURIComponent(r.id);
+      a.append(q(r), el("span", "when", t("db_helping_for", { owner: r.owner_name || "" })),
+        el("span", "st", r.status === "open" ? t("og_answered", { n: r.submitted, total: r.members }) : t("st_" + (r.status === "deciding" ? "deciding" : r.status))));
+      li.append(a); ul.append(li);
+    });
+    s4.append(ul);
+  }
+  results.replaceChildren(...[s1, s4,
     list(t("db_ongoing"), ongoing, t(query ? "db_no_match" : "db_empty_ongoing"), false),
-    list(t("db_old"), old, t(query ? "db_no_match" : "db_empty_old"), true));
+    list(t("db_old"), old, t(query ? "db_no_match" : "db_empty_old"), true)].filter(Boolean));
 }
 
 // No account in this browser yet (trial accounts live in the browser that made them).
@@ -320,7 +334,8 @@ async function load() {
     const a = el("a", "navlink", os.length === 1 ? os[0].name : t("og_link")); a.id = "orgLink"; a.href = "/org.html";
     document.querySelector(".top-acts").prepend(a);
   }, () => {});
-  const [{ data, error }, p] = await Promise.all([sb.rpc("my_rooms"), Rooms.profile()]);
+  const [{ data, error }, p, { data: helps }] = await Promise.all([sb.rpc("my_rooms"), Rooms.profile(), sb.rpc("assisted_rooms")]);
+  helping = helps || [];
   if (error) { const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); return view.replaceChildren(c); }
   myName = p?.name || "";
   // Member names come from each room's roster (names and ticks only, never answers).
