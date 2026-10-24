@@ -71,6 +71,7 @@ const live = {
         role === "owner" ? sb.from("notes").select("id,body").eq("room_id", roomId).eq("user_id", me).maybeSingle() : Promise.resolve({ data: null }),
         role === "owner" ? sb.rpc("room_assistant_log", { rid: roomId }) : Promise.resolve({ data: [] })]);
       out.nudges = nd || []; out.note = note || null; out.assistLog = log || [];
+      if (room.status === "open") { const { data: dl } = await sb.rpc("room_documents", { rid: roomId }); out.library = dl || []; }
     }
     if (an.data) {
       const { data: plan } = await sb.from("plan_items").select("id,kind,title,note,assignee,owner_label,due_date,status,position").eq("room_id", roomId).order("due_date", { ascending: true, nullsFirst: false }).order("position");
@@ -136,6 +137,12 @@ const live = {
   },
   async hideMessage(id) {
     const { error } = await Rooms.sb.from("room_messages").update({ hidden: true }).eq("id", id);
+    if (error) throw error;
+  },
+  async setDocExcluded(docId, excluded) {
+    const { data: r } = await Rooms.sb.from("rooms").select("doc_exclude").eq("id", roomId).single();
+    const set = new Set(r?.doc_exclude || []); excluded ? set.add(docId) : set.delete(docId);
+    const { error } = await Rooms.sb.from("rooms").update({ doc_exclude: [...set] }).eq("id", roomId);
     if (error) throw error;
   },
   async askReopen(reason) {
@@ -307,6 +314,7 @@ function demoStore(kind) {
     async setAutoNudge(on) { room.auto_nudge = on; },
     async postMessage(thread, body) { this.talk.push({ id: "m" + Date.now(), name: myName, thread, body, hidden: false, created_at: new Date().toISOString(), mine: true }); },
     async hideMessage(id) { const m = this.talk.find(x => x.id === id); if (m) { m.hidden = true; m.body = ""; } },
+    async setDocExcluded() {},
     async askReopen(reason) { this.reopen.unshift({ id: "q" + Date.now(), name: myName, reason, status: "open", created_at: new Date().toISOString(), backers: 0, backed: false, mine: true }); },
     async backReopen(id, on) { const q = this.reopen.find(x => x.id === id); if (q) { q.backed = on; q.backers += on ? 1 : -1; } },
     async reopen(id, decline) { if (decline) { const q = this.reopen.find(x => x.id === id); if (q) q.status = "declined"; } else { room.status = "open"; this.reopen.forEach(q => { if (q.status === "open") q.status = "reopened"; }); } },
@@ -707,6 +715,7 @@ function vWaiting() {
   if (S.role === "owner" && r.rapid) cards.push(rolesCard());
   // A brand-new room puts the invite first; after that it sits under the progress.
   if (owner && S.invites?.length) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
+  if (owner && S.library?.length) cards.push(libraryCard());
   show(...cards);
 }
 
@@ -970,6 +979,7 @@ function vVerdict() {
   const top = card("active", meta(r.rapid && ownerName ? t("v_recommend_to", { name: ownerName }) : t("v_call"), MODELS[v.model || r.model]?.framework || Rooms.typeName(r)), contentLang(el("p", "text", v.headline || v.call_label)),
     contentLang(el("p", "body", "→ " + (v.call_label || optLabel(v.call)))), pills);
   if (v.memory_used?.n) top.append(el("p", "small", t("v_memory", { n: v.memory_used.n, org: v.memory_used.org || "" })));
+  if (v.docs_used?.length) top.append(el("p", "small", t("v_docs", { list: v.docs_used.slice(0, 6).map(x => x.title + (x.page ? " p." + x.page : "")).join(", ") })));
   cards.push(top);
   if (settled) cards.push(...reviewCards());
   const flip = flipLine();
@@ -1097,6 +1107,17 @@ function vVerdict() {
   if (S.role === "owner" || mode !== "personal") cards.push(reportCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
+}
+/* ---------- The organisation's documents this room's analysis reads ---------- */
+function libraryCard() {
+  const c = card("you", el("p", "text sm", t("rd_title")), el("p", "small", t("rd_hint")));
+  S.library.forEach(d => {
+    const l = el("label", "check"), box = el("input"); box.type = "checkbox"; box.checked = !d.excluded;
+    box.onchange = async () => { box.disabled = true; try { await store.setDocExcluded(d.id, !box.checked); d.excluded = !box.checked; } catch { box.checked = !box.checked; } box.disabled = false; };
+    l.append(box, el("span", "small", [d.title, t("od_tag_" + d.tag), d.valid_until ? t("od_valid", { d: Rooms.fmtDate(d.valid_until) }) : null].filter(Boolean).join(" · ")));
+    c.append(l);
+  });
+  return c;
 }
 /* ---------- Talk after the call ---------- */
 // Named and visible to the room: one thread for everyone, one per plan step and per tripwire. "Ask about this

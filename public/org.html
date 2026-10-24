@@ -115,6 +115,7 @@ async function render() {
   });
   pc.append(ul);
   cards.push(pc);
+  if (!admin) cards.push(await docsCard(o, depts || [], false));
 
   if (admin) {
     // Add people: one per line, "Name, email, job title".
@@ -169,6 +170,9 @@ async function render() {
     const dAdd = btn(t("add"), "soft", async () => { if (!dIn.value.trim()) return; await sb.from("departments").insert({ workspace_id: o.id, name: dIn.value.trim() }); render(); });
     const dRow = el("div", "add-row"); dRow.append(dIn, dAdd);
     dc.append(dl, dRow); cards.push(dc);
+
+    // Documents: the organisation's library the analysis reads (admins upload and manage)
+    cards.push(await docsCard(o, depts || [], true));
 
     // Joining: the private link, and the email domain
     const jc = card("you", el("p", "text sm", t("og_joining")));
@@ -231,6 +235,93 @@ async function render() {
 }
 
 let roomDept = null;   // the organisation's room list, filtered by department
+
+/* ---------- Document library ---------- */
+// Admins add documents (read in the browser, stored as passages with their page); the analysis reads them in
+// rooms where every member may see them. Members see the titles of the documents they may see.
+const DOC_TAGS = ["legal", "finance", "marketing", "hr", "strategy", "operations", "other"];
+function passages(text) {
+  // Split by "[page N]" markers (PDFs) or paragraphs, into pieces of about 1,500 characters.
+  const out = [], parts = text.split(/(?=\[page \d+\])/);
+  for (const part of parts) {
+    const m = part.match(/^\[page (\d+)\]\s*/), page = m ? Number(m[1]) : null, body = part.replace(/^\[page \d+\]\s*/, "");
+    let buf = "";
+    for (const para of body.split(/\n{2,}|(?<=\.)\s+(?=[A-Z\u0600-\u06FF])/)) {
+      if ((buf + " " + para).length > 1500 && buf) { out.push({ page, body: buf.trim() }); buf = ""; }
+      buf += (buf ? " " : "") + para;
+      while (buf.length > 3500) { out.push({ page, body: buf.slice(0, 3500) }); buf = buf.slice(3500); }
+    }
+    if (buf.trim()) out.push({ page, body: buf.trim() });
+  }
+  return out.filter(x => x.body.length > 20).slice(0, 1999);
+}
+async function docsCard(o, depts, admin) {
+  const sb = Rooms.sb;
+  const { data: docs } = await sb.from("org_documents").select("id,title,tag,valid_until,access,department_ids,pages,file_name,storage_path,created_at").eq("workspace_id", o.id).order("tag").order("title");
+  const c = card("you", el("p", "text sm", t("od_title", { n: (docs || []).length })), el("p", "small", t(admin ? "od_hint_admin" : "od_hint")));
+  const today = new Date().toISOString().slice(0, 10);
+  const ul = el("ul", "og-list");
+  (docs || []).forEach(d => {
+    const li = el("li"), w = el("span", "who");
+    const access = d.access === "departments" ? t("od_access_depts", { list: depts.filter(x => d.department_ids.includes(x.id)).map(x => x.name).join(", ") }) : t("od_access_" + d.access);
+    w.append(el("span", null, d.title), el("span", "small", [t("od_tag_" + d.tag), access, d.valid_until ? t(d.valid_until < today ? "od_expired" : "od_valid", { d: Rooms.fmtDate(d.valid_until) }) : null, d.pages ? t("od_pages", { n: d.pages }) : null].filter(Boolean).join(" · ")));
+    li.append(w);
+    if (admin) {
+      const rm = el("button", "linkbtn", t("remove")); rm.type = "button";
+      rm.onclick = async () => { if (!confirm(t("od_remove_sure"))) return; rm.disabled = true;
+        if (d.storage_path) await sb.storage.from("org-docs").remove([d.storage_path]);
+        await sb.from("org_documents").delete().eq("id", d.id); render(); };
+      li.append(rm);
+    }
+    ul.append(li);
+  });
+  if (!(docs || []).length) ul.append(el("li", "small", t("od_none")));
+  c.append(ul);
+  if (!admin) return c;
+  // Add a document
+  const det = el("details", "more"); det.append(el("summary", null, t("od_add")));
+  const file = el("input"); file.type = "file"; file.accept = ".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"; file.setAttribute("aria-label", t("od_file"));
+  const title = el("input", "line"); Object.assign(title, { maxLength: 160, placeholder: t("od_title_ph") }); title.setAttribute("aria-label", t("od_title_ph"));
+  file.onchange = () => { if (file.files[0] && !title.value) title.value = file.files[0].name.replace(/\.[^.]+$/, ""); };
+  const mk = (opts, label) => { const s2 = el("select", "line role-select"); s2.setAttribute("aria-label", label); s2.style.width = "100%"; opts.forEach(([v, l]) => { const op = el("option", null, l); op.value = v; s2.append(op); }); return s2; };
+  const tag = mk(DOC_TAGS.map(x => [x, t("od_tag_" + x)]), t("od_tag"));
+  const access = mk([["everyone", t("od_access_everyone")], ["departments", t("od_access_some")], ["admins", t("od_access_admins")]], t("od_access"));
+  const dbox = el("div", "chips"); dbox.hidden = true; const picked = new Set();
+  const drawD = () => dbox.replaceChildren(...depts.map(x => Rooms.chip(x.name, picked.has(x.id), () => { picked.has(x.id) ? picked.delete(x.id) : picked.add(x.id); drawD(); })));
+  drawD();
+  access.onchange = () => { dbox.hidden = access.value !== "departments"; };
+  const until = el("input", "line"); until.type = "date"; until.setAttribute("aria-label", t("od_until"));
+  const st = el("p", "status"); st.setAttribute("role", "status");
+  const go = btn(t("od_upload"), "", async () => {
+    const f = file.files[0];
+    if (!f) { st.className = "status err"; st.textContent = t("od_need_file"); return; }
+    if (!Rooms.fileKind(f) || Rooms.fileKind(f) === "zip") { st.className = "status err"; st.textContent = t("od_bad_type"); return; }
+    if (f.size > 20 * 1024 * 1024) { st.className = "status err"; st.textContent = t("od_too_big"); return; }
+    if (access.value === "departments" && !picked.size) { st.className = "status err"; st.textContent = t("od_need_dept"); return; }
+    go.disabled = true; st.className = "status"; st.textContent = t("od_reading");
+    try {
+      const text = await Rooms.readFile(f);
+      const parts = passages(text);
+      if (!parts.length) throw Object.assign(new Error("empty"), { code: "empty" });
+      const id = crypto.randomUUID(), path = `${o.id}/${id}/${f.name.replace(/[^\w.\- ]+/g, "_").slice(0, 120)}`;
+      const pages = Math.max(0, ...parts.map(x => x.page || 0)) || null;
+      const { error } = await sb.from("org_documents").insert({ id, workspace_id: o.id, title: title.value.trim() || f.name, tag: tag.value, access: access.value,
+        department_ids: access.value === "departments" ? [...picked] : [], valid_until: until.value || null, file_name: f.name, pages, chars: text.length, uploaded_by: Rooms.user.id });
+      if (error) throw error;
+      const up = await sb.storage.from("org-docs").upload(path, f);
+      if (!up.error) await sb.from("org_documents").update({ storage_path: path }).eq("id", id);
+      for (let i = 0; i < parts.length; i += 100) {
+        const { error: ce } = await sb.from("org_doc_chunks").insert(parts.slice(i, i + 100).map((x, k) => ({ doc_id: id, n: i + k, page: x.page, body: x.body.slice(0, 4000) })));
+        if (ce) throw ce;
+      }
+      render();
+    } catch (e) { console.error(e); go.disabled = false; st.className = "status err"; st.textContent = t(e.code === "empty" ? "od_empty" : "err_generic"); }
+  });
+  const lab = (txt, n) => { const w = el("div", "field"); w.append(el("span", "lbl", txt), n); return w; };
+  det.append(lab(t("od_file"), file), title, lab(t("od_tag"), tag), lab(t("od_access"), access), dbox, lab(t("od_until"), until), el("p", "small", t("od_private")), go, st);
+  c.append(det);
+  return c;
+}
 Rooms.langToggle(() => { if (current) render(); });
 (async () => {
   await Rooms.loadLang(Rooms.firstLang());

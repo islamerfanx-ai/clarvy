@@ -518,5 +518,24 @@ check("the owner reopens the room", as_user(A, f"select reopen_room('{R}')") + a
 check("the request is marked as reopened", as_user(B, f"select status from room_reopen_requests('{R}')"), "reopened")
 check("members can change their answers again", as_user(B, f"update inputs set concern='rent went up' where room_id='{R}' and user_id='{B}'"), "UPDATE 1")
 
+# ---------- Organisation document library (20261107000000_documents.sql) ----------
+DOC1, DOC2, DOC3 = (str(uuid.uuid4()) for _ in range(3))
+check("an admin adds a document for everyone", as_user(C, f"insert into org_documents (id, workspace_id, title, tag, uploaded_by) values ('{DOC1}', '{OW}', 'Travel policy 2026', 'hr', '{C}')"), "INSERT 0 1")
+check("an admin adds a finance-only document", as_user(C, f"insert into org_documents (id, workspace_id, title, tag, access, department_ids, uploaded_by) values ('{DOC2}', '{OW}', 'Budget Q4', 'finance', 'departments', array['{FIN}']::uuid[], '{C}')"), "INSERT 0 1")
+check("an expired document", as_user(C, f"insert into org_documents (id, workspace_id, title, valid_until, uploaded_by) values ('{DOC3}', '{OW}', 'Old plan', current_date - 1, '{C}')"), "INSERT 0 1")
+check("members can't add documents", as_user(E, f"insert into org_documents (workspace_id, title, uploaded_by) values ('{OW}', 'x', '{E}')"), "row-level security")
+check("an admin adds passages", as_user(C, f"insert into org_doc_chunks (doc_id, n, page, body) values ('{DOC1}', 0, 2, 'Economy class for flights under six hours.'), ('{DOC2}', 0, 1, 'Travel budget is 120k for Q4.')"), "INSERT 0 2")
+check("members see the list they may see", as_user(E, f"select count(*) from org_documents where workspace_id='{OW}'"), "\n2\n")
+check("members never read the passages", as_user(E, "select count(*) from org_doc_chunks"), "\n0\n")
+check("outsiders see nothing", as_user(B, f"select count(*) from org_documents where workspace_id='{OW}'"), "\n0\n")
+# Room RD (E owns it, Finance): E isn't in Finance, so the finance-only budget isn't read there.
+docs = as_user(E, f"select title from room_documents('{RD}')")
+check("the room reads documents everyone in it may see", docs, "Travel policy 2026")
+check("but not ones some members may not see", "Budget Q4" not in docs and "OK" or docs, "OK")
+check("and not expired ones", "Old plan" not in docs and "OK" or docs, "OK")
+check("the owner unticks a document", as_user(E, f"update rooms set doc_exclude = array['{DOC1}']::uuid[] where id='{RD}'") + as_user(E, f"select excluded from room_documents('{RD}')"), "True")
+check("people can't call the server's version", as_user(E, f"select * from room_documents_for('{RD}')"), "permission denied")
+check("documents are for organisations", server(f"insert into org_documents (workspace_id, title) values ('{W}', 'x')"), "documents_are_for_organisations")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

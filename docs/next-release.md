@@ -76,7 +76,7 @@ Checked each feature against the database and server, with probes on a test copy
 **Live 2026-10-22:** 2.4 The numbers (no saved scenarios yet) and 2.7 Review (migration 20261027000000_review). Still to build from release 2: 2.2 said vs do (combined block), 2.3 value line, 2.6 reopen, 2.8 track record (per owner); later with AI: 2.1 reactions, 2.5 what-if re-run.
 
 ## Before launch: build order (decided 2026-10-24)
-All seven ideas ship before launch, in this order, no mock-ups; launch date to be set by the user.
+All seven ideas ship before launch, in this order, no mock-ups; launch date to be set by the user. **Built 2026-10-24 (version 1.5.0)**: items 1 to 7. Automatic reminder emails wait for `RESEND_API_KEY` on the server.
 1. Warmer wording everywhere
 2. Nudges (owner sees who opened; reminders timed by decide-by; needs a Resend key on the server)
 3. Departments on the question
