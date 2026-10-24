@@ -1545,5 +1545,9 @@
   "rd_title": "Documents the analysis will read",
   "rd_hint": "From your organisation's library: only documents everyone in this room may see. Untick any you'd rather leave out.",
   "rd_none": "No documents from the library apply to this room.",
-  "v_docs": "Checked against: {list}"
+  "v_docs": "Checked against: {list}",
+  "ds_open_one": "Open the room: {title}",
+  "ds_show_these": "Show these rooms: {title}",
+  "ds_show_all": "Show all rooms",
+  "ds_showing": "Showing {title} ({n})"
 }

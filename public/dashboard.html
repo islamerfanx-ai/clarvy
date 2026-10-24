@@ -32,6 +32,11 @@ main{--content:none}
 [dir=rtl] .stat .cap{padding:0 12px 14px 0}
 .stat .foot{margin-top:auto;padding-top:24px;font-size:var(--t-ui);line-height:1.4}
 .stat.go .num{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:8px}
+button.stat{font:inherit;text-align:start;border:0;cursor:pointer;width:100%}
+button.stat:hover h3,button.stat:focus-visible h3{text-decoration:underline;text-underline-offset:4px}
+button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.stat[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:-2px}
+.filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 0;font-size:var(--t-ui)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
 .rcard{display:flex;flex-direction:column;gap:14px;background:#fff;padding:20px}
 .rcard a.open{display:flex;flex-direction:column;gap:8px;color:var(--fg);text-decoration:none;flex:1}
@@ -85,7 +90,8 @@ main{--content:none}
 const { $, el, t } = Rooms;
 const demo = new URLSearchParams(location.search).get("demo");
 const view = $("view");
-let rooms = null, myName = "", helping = [];   // helping: rooms you run for someone else, as their assistant
+let rooms = null, myName = "", helping = [];
+let statFilter = null, statSets = {};   // a number card chosen above filters the room lists   // helping: rooms you run for someone else, as their assistant
 
 // Demo data mirrors the sketch: two open rooms of yours, one ongoing, one old.
 const DEMO = [
@@ -231,17 +237,29 @@ function render() {
   const waiting = rooms.filter(r => r.status === "open" && r.i_submitted);
   const verdicts = rooms.filter(r => r.status === "deciding" && r.has_verdict);
   const stats = el("div", "stats band");
-  const stat = (title, n, cap, foot, go) => {
-    const c = el("div", "stat" + (go && n ? " go" : ""));
+  // Each number opens its rooms: one room goes straight to it, several filter the lists below.
+  const stat = (key, title, list, cap, foot, go) => {
+    const n = list.length;
+    const c = el(n ? "button" : "div", "stat" + (go && n ? " go" : ""));
+    if (n) {
+      c.type = "button"; c.setAttribute("aria-pressed", String(statFilter === key));
+      c.setAttribute("aria-label", t(n === 1 ? "ds_open_one" : "ds_show_these", { title }));
+      c.onclick = () => {
+        if (n === 1) { location.href = roomHref(list[0]); return; }
+        statFilter = statFilter === key ? null : key; render();
+        results.scrollIntoView({ behavior: "smooth", block: "start" });
+      };
+    }
     const fig = el("div", "fig"); fig.append(el("span", "num", String(n)), el("span", "cap", cap));
     c.append(el("h3", null, title), fig, el("p", "foot", foot));
     return c;
   };
+  statSets = { need: needMe, wait: waiting, verdict: verdicts, done: rooms.filter(finished) };
   stats.append(
-    stat(t("ds_need_t"), needMe.length, t("ds_need_c"), t("ds_need_f"), true),
-    stat(t("ds_wait_t"), waiting.length, t("ds_wait_c"), t("ds_wait_f")),
-    stat(t("ds_verdict_t"), verdicts.length, t("ds_verdict_c"), t("ds_verdict_f"), true),
-    stat(t("ds_done_t"), rooms.filter(finished).length, t("ds_done_c"), t("ds_done_f")));
+    stat("need", t("ds_need_t"), needMe, t("ds_need_c"), t("ds_need_f"), true),
+    stat("wait", t("ds_wait_t"), waiting, t("ds_wait_c"), t("ds_wait_f")),
+    stat("verdict", t("ds_verdict_t"), verdicts, t("ds_verdict_c"), t("ds_verdict_f"), true),
+    stat("done", t("ds_done_t"), statSets.done, t("ds_done_c"), t("ds_done_f")));
   const search = el("div", "search"); search.append(searchIn);
   view.replaceChildren(...[title, stats, attention(), rooms.length > 3 ? search : null, results].filter(Boolean));
   drawResults();
@@ -249,7 +267,8 @@ function render() {
 function drawResults() {
   document.title = t("my_rooms") + " · " + t("product");
   const finished = r => ["decided", "reviewed"].includes(r.status);
-  const shown = rooms.filter(matches);
+  const inStat = r => !statFilter || (statSets[statFilter] || []).includes(r);
+  const shown = rooms.filter(r => matches(r) && inStat(r));
   const yours = shown.filter(r => r.role === "owner" && r.status === "open");
   const ongoing = shown.filter(r => !finished(r) && !yours.includes(r));
   const old = shown.filter(finished);
@@ -311,7 +330,15 @@ function drawResults() {
     });
     s4.append(ul);
   }
-  results.replaceChildren(...[s1, s4,
+  // When a number card is chosen, say so and offer a way back to everything.
+  let bar = null;
+  if (statFilter) {
+    bar = el("div", "filterbar");
+    const all = el("button", "linkbtn", t("ds_show_all")); all.type = "button";
+    all.onclick = () => { statFilter = null; render(); };
+    bar.append(el("span", null, t("ds_showing", { title: t({ need: "ds_need_t", wait: "ds_wait_t", verdict: "ds_verdict_t", done: "ds_done_t" }[statFilter]), n: statSets[statFilter].length })), all);
+  }
+  results.replaceChildren(...[bar, s1, statFilter ? null : s4,
     list(t("db_ongoing"), ongoing, t(query ? "db_no_match" : "db_empty_ongoing"), false),
     list(t("db_old"), old, t(query ? "db_no_match" : "db_empty_old"), true)].filter(Boolean));
 }
