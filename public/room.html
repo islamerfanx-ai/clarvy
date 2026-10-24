@@ -583,7 +583,11 @@ function vWaiting() {
   const r = S.room, owner = S.role === "owner";
   const answering = S.roster.filter(p => p.role !== "observer");
   const done = answering.filter(p => p.submitted).length;
-  const head = el("p", "text sm", owner ? t("wait_title_owner") : S.mine ? t("wait_title_member") : t("observer"));
+  const first = String(S.roster.find(p => p.me)?.name || "").trim().split(/\s+/)[0];
+  const head = el("p", "text sm", owner ? t(first ? "wait_title_owner_n" : "wait_title_owner", { name: first }) : S.mine ? t(first ? "wait_title_member_n" : "wait_title_member", { name: first }) : t("observer"));
+  // Progress that encourages: almost there, everyone in.
+  const left = answering.length - done;
+  const progress = !answering.length ? t("wait_progress", { n: 0, total: 0 }) : left === 0 ? t("wait_all_in") : left === 1 ? t("wait_one_left", { n: done, total: answering.length }) : t("wait_progress", { n: done, total: answering.length });
   const meter = el("div", "meter"); const fill = el("i"); fill.style.width = (answering.length ? done / answering.length * 100 : 0) + "%"; meter.append(fill);
   const list = el("ul", "roster");
   answering.forEach(p => {
@@ -594,7 +598,7 @@ function vWaiting() {
     li.append(who, el("span", "st" + (p.submitted ? " done" : ""), p.submitted ? t("answered") : t("not_yet")));
     list.append(li);
   });
-  const status = el("div", "block"); status.append(el("h3", null, t("wait_progress", { n: done, total: answering.length })), meter, list);
+  const status = el("div", "block"); status.append(el("h3", null, progress), meter, list);
   const main = card("you", head, status);
 
   if (S.role !== "observer") {
