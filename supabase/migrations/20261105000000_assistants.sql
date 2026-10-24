@@ -27,7 +27,7 @@ create policy "owner changes it" on assistants for update
 -- Either side can end it (the assistant can step down).
 create policy "owner removes it" on assistants for delete using (owner_id = (select auth.uid()));
 
-create function level_rank(l text) returns int language sql immutable as $$
+create function level_rank(l text) returns int language sql immutable set search_path = public as $$
   select case l when 'view' then 1 when 'organise' then 2 when 'run' then 3 else 0 end
 $$;
 
