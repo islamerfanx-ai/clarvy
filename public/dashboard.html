@@ -163,7 +163,9 @@ async function togglePanel(r, card, btn) {
 // and never say who hasn't answered: the owner sees the count only.
 const daysSince = ts => ts ? (Date.now() - new Date(ts).getTime()) / 864e5 : 0;
 function stuck(r) {
+  if (Number(r.reopen_asks) > 0) return { why: t("na_reopen"), act: "open" };
   if (r.review_due && r.role !== "observer") return { why: t(r.role === "owner" ? "na_review" : "na_review_member"), act: "open" };
+  if (Number(r.unread) > 0) return { why: t("na_talk", { n: r.unread }), act: "open" };
   if (r.role !== "owner") return null;
   const today = new Date().toISOString().slice(0, 10);
   if (r.decide_error) return { why: t("na_failed"), act: "open" };

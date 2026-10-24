@@ -562,6 +562,8 @@ function goToRoom(url) {
 // A chat in the corner of setup and room pages. It helps people word the question, use each step and
 // bring in sources from the web. It only knows what everyone in the room can see, never private answers.
 // opts: {page, roomId, draft: () => ({question, options, criteria, type}), onAddSource: url => Promise}
+let helperApi = null;   // set by helper(): open the panel and ask a question from a button
+function askHelper(q) { helperApi?.(q); }
 function helper(opts = {}) {
   if (document.getElementById("helperBtn")) return;
   const demoMode = new URLSearchParams(location.search).get("demo");
@@ -614,6 +616,7 @@ function helper(opts = {}) {
   };
   const open = on => { panel.hidden = !on; btn.setAttribute("aria-expanded", String(on)); btn.hidden = on; if (on) { draw(); setTimeout(() => inp.focus(), 50); } };
   btn.onclick = () => open(true); x.onclick = () => open(false);
+  helperApi = q => { open(true); if (q) ask(q); };
   f.onsubmit = e => { e.preventDefault(); ask(inp.value); };
   inp.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(inp.value); } };
 }
@@ -622,7 +625,7 @@ window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, signedConfidence, helper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
   openNewRoom, goToRoom, embedded, validUrl, linksEditor
 };
 })();

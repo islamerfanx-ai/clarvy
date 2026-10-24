@@ -86,6 +86,10 @@ const live = {
         sb.rpc("signoff_counts", { rid: roomId })
       ]);
       out.signoff = so.data;
+      // The talk after the call, and requests to reopen. Opening the room marks the talk as read.
+      const [tk, rq] = await Promise.all([sb.rpc("room_talk", { rid: roomId }), sb.rpc("room_reopen_requests", { rid: roomId })]);
+      out.talk = tk.data || []; out.reopen = rq.data || [];
+      sb.rpc("mark_talk_read", { rid: roomId }).then(() => {}, () => {});
       out.counts = Object.fromEntries((counts.data || []).map(c => [c.stance, Number(c.n)]));
       // Review: where it stands, the logged reviews, and my own private rating for the open one.
       const [rs, sum] = await Promise.all([sb.rpc("review_state", { rid: roomId }), sb.rpc("review_summary", { rid: roomId })]);
@@ -124,6 +128,27 @@ const live = {
   async setAutoNudge(on) {
     const { error } = await Rooms.sb.from("rooms").update({ auto_nudge: on }).eq("id", roomId);
     if (error) throw error;
+  },
+  // Talk after the call, and reopening.
+  async postMessage(thread, body) {
+    const { error } = await Rooms.sb.from("room_messages").insert({ room_id: roomId, thread, body });
+    if (error) throw error;
+  },
+  async hideMessage(id) {
+    const { error } = await Rooms.sb.from("room_messages").update({ hidden: true }).eq("id", id);
+    if (error) throw error;
+  },
+  async askReopen(reason) {
+    const { error } = await Rooms.sb.from("reopen_requests").insert({ room_id: roomId, reason });
+    if (error) throw error;
+  },
+  async backReopen(id, on) {
+    const q = on ? Rooms.sb.from("reopen_backers").insert({ request_id: id }) : Rooms.sb.from("reopen_backers").delete().eq("request_id", id).eq("user_id", Rooms.user.id);
+    const { error } = await q; if (error) throw error;
+  },
+  async reopen(requestId, decline) {
+    const { error } = await Rooms.sb.rpc("reopen_room", { rid: roomId, request_id: requestId || null, decline: !!decline });
+    if (error) throw new Error(Rooms.errKey(error, ["only_owner_reopens", "room_not_decided"]));
   },
   // The owner's private note on this room (one per room), and sharing a note into the room's context.
   async saveNote(body) {
@@ -266,7 +291,7 @@ function demoStore(kind) {
       const invites = !owner ? null : withPeople ? people : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
       room.report_mode = "both";
       if (room.status === "decided" && params.get("review") === "1" && !this.reviews.length && !this.review) this.review = { round: 1, due: true, review_date: room.review_date, raters: 2 };
-      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, nudges: owner ? [{ invite_token: "demo-3", user_id: null, n: 1 }] : [], signoff, counts, objections: room.rapid ? objections : undefined,
+      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, nudges: owner ? [{ invite_token: "demo-3", user_id: null, n: 1 }] : [], talk: this.talk, reopen: this.reopen, signoff, counts, objections: room.rapid ? objections : undefined,
         review: this.review, reviews: this.reviews, myRating: this.myRating };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
@@ -280,6 +305,13 @@ function demoStore(kind) {
     async overrule(oid, why) { const o = objections.find(x => x.id === oid); if (o) Object.assign(o, { status: "overridden", override_reason: why }); },
     async save(input) { mine = input; },
     async setAutoNudge(on) { room.auto_nudge = on; },
+    async postMessage(thread, body) { this.talk.push({ id: "m" + Date.now(), name: myName, thread, body, hidden: false, created_at: new Date().toISOString(), mine: true }); },
+    async hideMessage(id) { const m = this.talk.find(x => x.id === id); if (m) { m.hidden = true; m.body = ""; } },
+    async askReopen(reason) { this.reopen.unshift({ id: "q" + Date.now(), name: myName, reason, status: "open", created_at: new Date().toISOString(), backers: 0, backed: false, mine: true }); },
+    async backReopen(id, on) { const q = this.reopen.find(x => x.id === id); if (q) { q.backed = on; q.backers += on ? 1 : -1; } },
+    async reopen(id, decline) { if (decline) { const q = this.reopen.find(x => x.id === id); if (q) q.status = "declined"; } else { room.status = "open"; this.reopen.forEach(q => { if (q.status === "open") q.status = "reopened"; }); } },
+    talk: [{ id: "m1", name: "Sara Haddad", thread: "room", body: "Who's calling the landlord this week?", hidden: false, created_at: "2026-10-23T10:00:00Z", mine: false }],
+    reopen: [],
     async saveNote(body) { return { id: "demo-note", body }; },
     async shareNote(text) { room.context = (room.context ? room.context + "\n\n" : "") + text.trim(); },
     async addPerson(name, contact, roleId) { const x = { token: "demo-" + (people.length + 1), role_id: roleId || null, max_uses: 1, uses: 0, person_name: name, person_contact: contact || null, joined_by: null }; people.push(x); return x; },
@@ -1058,12 +1090,82 @@ function vVerdict() {
   }
   if (settled && !["observer", "assistant"].includes(S.role)) cards.push(signOffCard());
   if (settled || (S.plan || []).length) cards.push(planCard());
+  if (settled) cards.push(talkCard(), reopenCard());
   (S.reviews || []).slice().reverse().forEach(x => cards.push(outcomeCard(x)));
   const mode = r.report_mode || "both";
   if (S.mine && mode !== "team") cards.push(personalCard());
   if (S.role === "owner" || mode !== "personal") cards.push(reportCard());
   if (["finance", "politics"].includes(r.type)) cards.push(el("p", "small", t("advice_note")));
   show(...cards);
+}
+/* ---------- Talk after the call ---------- */
+// Named and visible to the room: one thread for everyone, one per plan step and per tripwire. "Ask about this
+// call" opens the analyst, which explains the call from its reasons and never from anyone's answers.
+let talkThread = "room";
+function talkCard() {
+  const c = card("you", el("p", "text sm", t("tk_title")), el("p", "small", t("tk_hint")));
+  const ask = btn(t("tk_ask"), "soft", () => Rooms.askHelper(t("tk_ask_q")));
+  c.append(ask);
+  const talk = S.talk || [];
+  const threads = [["room", t("tk_everyone")],
+    ...(S.plan || []).filter(x => x.kind !== "review").map(x => ["plan:" + x.id, t("tk_step", { title: x.title.slice(0, 40) })]),
+    ...(S.analysis?.verdict?.tripwires || []).map((w, i) => ["tripwire:" + i, t("tk_tripwire", { signal: String(w.signal || w).slice(0, 40) })])];
+  if (!threads.some(([k]) => k === talkThread)) talkThread = "room";
+  const chips = el("div", "chips");
+  threads.forEach(([k, label]) => { const n = talk.filter(m => m.thread === k && !m.hidden).length; chips.append(Rooms.chip(label + (n ? " (" + n + ")" : ""), k === talkThread, () => { talkThread = k; render(); })); });
+  const list = el("ul", "talk");
+  const shown = talk.filter(m => m.thread === talkThread);
+  if (!shown.length) list.append(el("li", "small", t("tk_none")));
+  shown.forEach(m => {
+    const li = el("li"); li.style.cssText = "border-top:1px solid var(--line);padding:8px 0;list-style:none";
+    const head = el("p", "small", [m.name || "·", new Date(m.created_at).toLocaleString(Rooms.lang === "ar" ? "ar" : "en", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })].join(" · "));
+    li.append(head, m.hidden ? el("p", "small", t("tk_hidden")) : contentLang(el("p", "body", m.body)));
+    if (!m.hidden && (S.role === "owner" || m.mine)) { const h = el("button", "linkbtn", t(m.mine ? "tk_take_back" : "tk_hide")); h.type = "button"; h.onclick = async () => { h.disabled = true; try { await store.hideMessage(m.id); await refresh(); } catch { h.disabled = false; } }; li.append(h); }
+    list.append(li);
+  });
+  list.style.paddingInlineStart = "0";
+  c.append(chips, list);
+  if (S.role !== "observer" && (S.role !== "assistant" || S.level !== "view")) {
+    const ta = el("textarea"); Object.assign(ta, { rows: 2, maxLength: 2000, placeholder: t("tk_ph") }); ta.setAttribute("aria-label", t("tk_ph"));
+    const st = el("p", "status err");
+    const send = btn(t("tk_send"), "", async () => {
+      if (!ta.value.trim()) { ta.focus(); return; }
+      send.disabled = true;
+      try { await store.postMessage(talkThread, ta.value.trim()); await refresh(); }
+      catch (e) { send.disabled = false; say(st, t(String(e.message).includes("too_many_messages") ? "tk_slow" : "err_generic")); }
+    });
+    c.append(ta, send, st);
+  }
+  return c;
+}
+// "Something changed": anyone in the room asks to reopen, others back it, the owner decides.
+function reopenCard() {
+  const reqs = S.reopen || [], open = reqs.filter(q => q.status === "open"), owner = S.role === "owner";
+  const c = card(open.length && owner ? "attention" : "outline", el("h3", null, t("ro_title")), el("p", "small", t(owner ? "ro_hint_owner" : "ro_hint")));
+  const st = el("p", "status err");
+  reqs.slice(0, 6).forEach(q => {
+    const box = el("div", "block");
+    box.append(contentLang(el("p", "body", q.reason)), el("p", "small", [q.name, t("ro_backers", { n: q.backers }), q.status !== "open" ? t("ro_st_" + q.status) : null].filter(Boolean).join(" · ")));
+    if (q.status === "open") {
+      if (!q.mine && ["owner", "member"].includes(S.role)) box.append(btn(t(q.backed ? "ro_unback" : "ro_back"), "ghost", async () => { try { await store.backReopen(q.id, !q.backed); await refresh(); } catch { say(st, t("err_generic")); } }));
+      if (owner) box.append(btn(t("ro_decline"), "ghost", async () => { try { await store.reopen(q.id, true); await refresh(); } catch { say(st, t("err_generic")); } }));
+    }
+    c.append(box);
+  });
+  if (owner) {
+    c.append(btn(t("ro_reopen"), open.length ? "" : "ghost", async () => {
+      if (!confirm(t("ro_sure"))) return;
+      try { await store.reopen(null, false); await refresh(); } catch { say(st, t("err_generic")); }
+    }));
+  } else if (S.role === "member" && !open.some(q => q.mine)) {
+    const ta = el("textarea"); Object.assign(ta, { rows: 2, maxLength: 600, placeholder: t("ro_ph") }); ta.setAttribute("aria-label", t("ro_ph"));
+    c.append(ta, btn(t("ro_ask"), "ghost", async () => {
+      if (ta.value.trim().length < 3) { ta.focus(); return; }
+      try { await store.askReopen(ta.value.trim()); await refresh(); } catch { say(st, t("err_generic")); }
+    }));
+  }
+  c.append(st);
+  return c;
 }
 /* ---------- Review: how did the call turn out? ---------- */
 // On the review date the owner logs what happened and members rate privately (1-5). The owner can log early.

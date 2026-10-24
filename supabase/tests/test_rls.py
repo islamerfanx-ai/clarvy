@@ -496,5 +496,27 @@ check("view-only assistants can't invite", as_user(A, "select add_assistant('E@x
 aid = as_user(D, "select id from my_assistants()").strip().split("\n")[-1]
 check("the assistant can step down", as_user(D, f"select stop_assisting('{aid}')") + as_user(D, "select count(*) from rooms where question='Hire a store manager?'"), "\n0\n")
 
+# ---------- Talk space after the call (20261106000000_talk.sql) ----------
+check("a member talks after the call", as_user(B, f"insert into room_messages (room_id, body) values ('{R}', 'When do we sign the lease?')"), "INSERT 0 1")
+check("the room reads it with names", as_user(A, f"select name, body from room_talk('{R}')"), "When do we sign the lease?")
+check("no talk before the call", as_user(A, f"insert into room_messages (room_id, body) values ('{RN}', 'too early')"), "row-level security")
+check("strangers can't read the talk", as_user(F, f"select count(*) from room_talk('{R}')"), "\n0\n")
+check("a plan thread", as_user(A, f"insert into room_messages (room_id, thread, body) values ('{R}', 'plan:{uuid.uuid4()}', 'On it')"), "INSERT 0 1")
+check("bad thread names are refused", as_user(A, f"insert into room_messages (room_id, thread, body) values ('{R}', 'gossip', 'x')"), "check constraint")
+check("the owner sees one unread message", as_user(A, f"select unread from my_rooms() where id='{R}'"), "\n1\n")
+as_user(A, f"select mark_talk_read('{R}')")
+check("and none after reading", as_user(A, f"select unread from my_rooms() where id='{R}'"), "\n0\n")
+check("messages can't be edited", as_user(B, f"update room_messages set body='changed' where room_id='{R}' and user_id='{B}'"), "messages_are_not_edited")
+check("the owner can hide a message", as_user(A, f"update room_messages set hidden=true where room_id='{R}' and user_id='{B}'"), "UPDATE 1")
+check("a hidden message shows no text", as_user(B, f"select body = '' from room_talk('{R}') where hidden"), "True")
+check("a member asks to reopen", as_user(B, f"insert into reopen_requests (room_id, reason) values ('{R}', 'The landlord changed the rent')"), "INSERT 0 1")
+qid = as_user(A, f"select id from room_reopen_requests('{R}')").strip().split("\n")[-1]
+check("others back it", as_user(A, f"insert into reopen_backers (request_id) values ('{qid}')"), "INSERT 0 1")
+check("the owner sees the request in Your rooms", as_user(A, f"select reopen_asks from my_rooms() where id='{R}'"), "\n1\n")
+check("only the owner reopens", as_user(B, f"select reopen_room('{R}')"), "only_owner_reopens")
+check("the owner reopens the room", as_user(A, f"select reopen_room('{R}')") + as_user(A, f"select status from rooms where id='{R}'"), "open")
+check("the request is marked as reopened", as_user(B, f"select status from room_reopen_requests('{R}')"), "reopened")
+check("members can change their answers again", as_user(B, f"update inputs set concern='rent went up' where room_id='{R}' and user_id='{B}'"), "UPDATE 1")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)
