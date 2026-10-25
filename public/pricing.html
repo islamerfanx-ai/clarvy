@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Pricing · Decision Rooms</title>
+<meta name="description" content="Decision Rooms plans: free to start, priced by the people in a room and the decisions you make. Only owners pay.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* Pricing (decided 2026-10-25): annual prices first (about 20% off), monthly on the toggle. Only owners pay;
+   members who answer are always free. Plans are priced by people per room and decisions a month. */
+main{--content:1180px}
+.pr-head{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:24px;align-items:end;margin:24px 0 28px}
+@media (max-width:860px){.pr-head{grid-template-columns:1fr}}
+.pr-head h1{margin:0;font-size:var(--t-display);line-height:1.02;font-weight:400;letter-spacing:-.03em;text-wrap:balance}
+.pr-side{display:flex;flex-direction:column;gap:14px;align-items:flex-start}
+.pr-side p{margin:0;font-size:var(--t-h5);line-height:1.4}
+.toggle{display:inline-flex;border:1px solid var(--line);border-radius:40px;padding:4px;background:#fff;position:relative}
+.toggle button{font:inherit;font-size:14px;border:0;background:none;padding:9px 16px;border-radius:40px;cursor:pointer;color:var(--dim)}
+.toggle button[aria-pressed=true]{background:var(--accent);color:#fff}
+.save{position:absolute;inset-block-end:-12px;inset-inline-start:22px;background:var(--yellow);font:500 11px/1 var(--mono);letter-spacing:.04em;padding:4px 7px;text-transform:uppercase}
+.trialbar{display:inline-block;background:var(--accent);color:#fff;padding:7px 14px;font-size:14px;border-radius:40px}
+.plans{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;background:#fff;margin-bottom:16px}
+@media (max-width:1000px){.plans{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:560px){.plans{grid-template-columns:1fr}}
+.pl{padding:26px 22px;display:flex;flex-direction:column;gap:12px;border-inline-start:1px solid var(--line);min-width:0}
+.pl:first-child{border-inline-start:0}
+@media (max-width:1000px){.pl:nth-child(3){border-inline-start:0}.pl:nth-child(n+3){border-top:1px solid var(--line)}}
+@media (max-width:560px){.pl{border-inline-start:0!important;border-top:1px solid var(--line)}.pl:first-child{border-top:0}}
+.pl h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.pl .for{margin:0;font-size:14px;color:var(--dim);min-height:2.8em}
+.pl .price{font-size:var(--t-h3);line-height:1;font-weight:400;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.pl .unit{font-size:13px;color:var(--dim);margin-top:-4px;min-height:2.8em}
+.pl .pl-meter{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:4px;font-size:15px}
+.pl .pl-meter b{font-weight:500}
+.pl .btn{width:100%;text-align:center}
+.pl ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px;font-size:14px}
+.pl li{padding-inline-start:20px;position:relative}
+.pl li::before{content:"";position:absolute;inset-inline-start:2px;top:.45em;width:9px;height:5px;border-inline-start:1.5px solid var(--accent);border-bottom:1.5px solid var(--accent);transform:rotate(-45deg)}
+[dir=rtl] .pl li::before{transform:rotate(45deg)}
+.pl .new{font:500 10px/1 var(--mono);letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);padding:2px 5px;margin-inline-start:6px;color:var(--dim)}
+.fac{background:var(--yellow);padding:22px 24px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;margin-bottom:28px}
+@media (max-width:640px){.fac{grid-template-columns:1fr}}
+.fac h2{margin:0 0 4px;font-size:var(--t-h5);font-weight:400}
+.fac p{margin:0;font-size:15px}
+.fac .price{font-size:var(--t-h4);font-weight:400}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-bottom:40px}
+.notes div{background:#fff;padding:20px}
+.notes h3{margin:0 0 6px;font-size:16px;font-weight:500}
+.notes p{margin:0;font-size:15px;line-height:1.55;color:var(--dim)}
+[lang=ar] body{font-family:var(--arabic)}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+
+  <section class="pr-head">
+    <div><span class="trialbar" data-t="lp_trial">Free during the trial</span><h1 data-t="px_title" style="margin-top:16px">Decide together, priced by the room</h1></div>
+    <div class="pr-side">
+      <p data-t="px_sub">Only the person who opens rooms pays. Everyone they invite answers for free.</p>
+      <div class="toggle" role="group" aria-label="Billing">
+        <button type="button" id="bAnnual" aria-pressed="true" data-t="px_annual">Annual billing</button>
+        <button type="button" id="bMonthly" aria-pressed="false" data-t="px_monthly">Monthly billing</button>
+        <span class="save" data-t="px_save">Save 20%</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="plans" id="plans" aria-label="Plans"></section>
+
+  <section class="fac">
+    <div><h2 data-t="px_fac_t">Facilitated decision</h2><p data-t="px_fac_b">For the decisions that matter most: succession, a partner exit, a public stance. A room plus a session with a human facilitator.</p></div>
+    <div><span class="price" data-t="px_fac_p">From $1,500</span><p class="small" data-t="px_fac_u">one-off, per decision</p></div>
+  </section>
+
+  <section class="notes">
+    <div><h3 data-t="px_n1_t">Who pays?</h3><p data-t="px_n1_b">Only owners, the people who open rooms. Members who are invited to answer never pay and never need a plan.</p></div>
+    <div><h3 data-t="px_n2_t">What counts as a decision?</h3><p data-t="px_n2_b">A room that reaches a recommended call. Rooms you open and close without deciding don't count. On paid plans, extra decisions are $10 each.</p></div>
+    <div><h3 data-t="px_n3_t">Annual plans</h3><p data-t="px_n3_b">Billed once a year at about 20% less. The year's decisions are yours upfront, so a busy month never hits a wall.</p></div>
+    <div><h3 data-t="px_n4_t">Your data</h3><p data-t="px_n4_b">Answers stay private to the person who gave them, on every plan. We never train an AI model on your data.</p></div>
+  </section>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+// The plans. Prices in US dollars; annual is about 20% below monthly.
+const PLANS = [
+  { key: "free", monthly: 0, annual: 0, people: "3", decisions: "2", cta: "/dashboard.html" },
+  { key: "small", monthly: 39, annual: 31, people: "5", decisions: "5", cta: "/dashboard.html" },
+  { key: "team", monthly: 99, annual: 79, people: "10", decisions: "15", cta: "/dashboard.html" },
+  { key: "org", monthly: null, annual: null, people: "10+", decisions: null, cta: "/#faq" }
+];
+let annual = true;
+function draw() {
+  document.title = t("px_page") + " · " + t("product");
+  const wrap = $("plans"); wrap.replaceChildren();
+  PLANS.forEach(p => {
+    const c = el("article", "pl");
+    const price = p.monthly == null ? t("px_custom") : p.monthly === 0 ? "$0" : "$" + (annual ? p.annual : p.monthly);
+    const unit = p.monthly == null ? t("px_org_unit") : p.monthly === 0 ? t("px_free_unit") : t(annual ? "px_unit_annual" : "px_unit_monthly", { year: p.annual * 12 });
+    const meter = el("div", "pl-meter");
+    meter.append(el("span", null, p.key === "org" ? t("px_people_org") : t("px_people", { n: p.people })), el("span", null, p.decisions ? t("px_decisions", { n: p.decisions }) : t("px_decisions_custom")));
+    const cta = el("a", "btn" + (p.key === "free" ? "" : " ghost"), t(p.key === "org" ? "px_talk" : p.key === "free" ? "lp_cta" : "px_start")); cta.href = p.cta;
+    const ul = el("ul");
+    [].concat(Array.isArray(t("px_" + p.key + "_list")) ? t("px_" + p.key + "_list") : []).forEach(x => { const li = el("li", null, x.replace(/\s*\[new\]$/, "")); if (/\[new\]$/.test(x)) li.append(el("span", "new", t("px_new"))); ul.append(li); });
+    c.append(el("h2", null, t("px_" + p.key + "_t")), el("p", "for", t("px_" + p.key + "_for")), el("span", "price", price), el("span", "unit", unit), meter, cta, ul);
+    wrap.append(c);
+  });
+  $("bAnnual").setAttribute("aria-pressed", String(annual)); $("bMonthly").setAttribute("aria-pressed", String(!annual));
+}
+$("bAnnual").onclick = () => { annual = true; draw(); };
+$("bMonthly").onclick = () => { annual = false; draw(); };
+Rooms.langToggle(draw);
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  draw();
+  if (await Rooms.connect()) Rooms.showMyRooms();
+})();
+})();
+</script>
+</body>
+</html>
