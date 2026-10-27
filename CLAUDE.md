@@ -61,7 +61,7 @@ npm start                      # http://localhost:3000
 - `/api/config` hands the browser `SUPABASE_URL` and `SUPABASE_ANON_KEY` (public by design). The service role key stays on the server.
 
 ## Versions
-`package.json` version goes up one minor step (1.4 → 1.5) with each feature release; small fixes only raise the build number. The deploy writes `build.json` (version, build number = commit count, commit, date, message; server only), and the admin page shows it in a yellow band. 1.4.0 (2026-10-24) = sign-up and profiles, organisations and memory, growth dashboard, revenue and Ask. 1.5.0 (2026-10-24) = warmer wording, nudges, departments, notepad, assistants, talk space, document library.
+`package.json` version goes up one minor step (1.4 → 1.5) with each feature release; small fixes only raise the build number. The deploy writes `build.json` (version, build number = commit count, commit, date, message; server only), and the admin page shows it in a yellow band. 1.4.0 (2026-10-24) = sign-up and profiles, organisations and memory, growth dashboard, revenue and Ask. 1.5.0 (2026-10-24) = warmer wording, nudges, departments, notepad, assistants, talk space, document library. 1.6.0 (2026-10-27) = pricing page and the quick Simulation Room.
 
 ## Before going live or publishing
 Feature ideas from competitor research (Cloverpop, Aaru) live in the "New Features" doc: https://claude.ai/artifact/JXvSMrJtfCaVNa1aJbGCGs
