@@ -537,5 +537,20 @@ check("the owner unticks a document", as_user(E, f"update rooms set doc_exclude 
 check("people can't call the server's version", as_user(E, f"select * from room_documents_for('{RD}')"), "permission denied")
 check("documents are for organisations", server(f"insert into org_documents (workspace_id, title) values ('{W}', 'x')"), "documents_are_for_organisations")
 
+# ---------- Simulation Room, quick version (20261108000000_simulations.sql) ----------
+SIM = str(uuid.uuid4())
+server(f"insert into simulations (id, room_id, created_by, stages, audiences, questions) values ('{SIM}', '{RN}', '{A}', '[]', '[]', '[]')")
+check("the owner edits a draft", as_user(A, f"""update simulations set audiences='[{{"id":"a1","name":"Families","weight":100}}]' where id='{SIM}'"""), "UPDATE 1")
+check("the owner can't write results", as_user(A, f"""update simulations set findings='[]' where id='{SIM}'"""), "simulation_is_managed")
+check("the owner can't mark it done", as_user(A, f"update simulations set status='done' where id='{SIM}'"), "simulation_is_managed")
+check("room members see it", as_user(D, f"select count(*) from simulations where room_id='{RN}'"), "\n1\n")
+check("strangers don't", as_user(F, f"select count(*) from simulations where room_id='{RN}'"), "\n0\n")
+check("members can't edit it", as_user(D, f"update simulations set stages='[]' where id='{SIM}'"), "UPDATE 0")
+check("people can't insert simulations themselves", as_user(A, f"insert into simulations (room_id) values ('{RN}')"), "row-level security")
+server(f"update simulations set status='queued', requested_at=now() where id='{SIM}'")
+check("the worker claims a queued run", server("select status from claim_simulation()"), "running")
+check("people can't claim runs", as_user(A, "select claim_simulation()"), "permission denied")
+check("a running simulation can't be edited", as_user(A, f"update simulations set stages='[]' where id='{SIM}'"), "UPDATE 0")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

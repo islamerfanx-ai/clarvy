@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Simulation · Decision Rooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* The Simulation Room (quick version): test a room's options on simulated people before the group decides.
+   Draft (stages, audiences, questions) → run → findings, each marked simulated with low / likely / high. */
+main{--content:980px}
+.sm-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin:20px 0 18px}
+.sm-head h1{margin:0;font-size:var(--t-h3);line-height:1.08;font-weight:400;letter-spacing:-.02em;text-wrap:balance}
+.stamp{font:500 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--accent);color:var(--accent);padding:6px 10px;transform:rotate(-3deg)}
+.sm-q{background:var(--accent);color:#fff;padding:16px 20px;margin-bottom:16px}
+.sm-q p{margin:0}.sm-q .small{color:#fff;opacity:.8}
+.sm-card{background:#fff;padding:18px 20px;display:flex;flex-direction:column;gap:10px;margin-bottom:14px;min-width:0}
+.sm-card h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.sm-row{display:grid;grid-template-columns:minmax(0,1fr) 90px 40px;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.sm-row:first-of-type{border-top:0}
+.sm-row input.line{width:100%}
+.traits{font-size:13px;color:var(--dim);grid-column:1/-1;margin-top:-4px}
+.stages{display:flex;flex-direction:column;gap:8px}
+.stages .st{display:flex;gap:12px;align-items:center}
+.stages .n{font:500 14px var(--mono);color:var(--accent);width:22px}
+.qrow{display:grid;grid-template-columns:110px minmax(0,1fr) 40px;gap:10px;align-items:center;border-top:1px solid var(--line);padding-top:8px}
+.kind{font:500 11px/1.3 var(--mono);letter-spacing:.04em;text-transform:uppercase;color:var(--dim)}
+.prog{height:10px;background:var(--accent-soft);border-radius:10px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+@media (max-width:720px){.grid2{grid-template-columns:1fr}.qrow{grid-template-columns:1fr 40px}.qrow .kind{grid-column:1/-1}}
+.chart{display:flex;flex-direction:column;gap:6px}
+.bar{display:grid;grid-template-columns:minmax(70px,140px) minmax(0,1fr) 124px;gap:8px;align-items:center;font-size:13px}
+.track{height:16px;background:var(--accent-soft);position:relative}
+.track i{position:absolute;inset-block:0;inset-inline-start:0;background:var(--accent)}
+.track b{position:absolute;inset-block:-3px;border-inline:2px solid var(--fg);opacity:.55}
+.bar .v{font-variant-numeric:tabular-nums;text-align:end;color:var(--dim)}
+.bar.mark .track{outline:2px dashed var(--fg);outline-offset:2px}
+.sowhat{font-size:15px;margin:0}
+.persona{font-size:14px;color:var(--dim);border-top:1px solid var(--line);padding-top:8px}
+.persona b{color:var(--fg);font-weight:500}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.acts .btn{width:auto}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const view = $("view");
+const params = new URLSearchParams(location.search);
+const demo = params.has("demo");
+const roomId = params.get("room");
+let room = null, runs = false, sim = null, poll = null, busy = false;
+
+/* ---------- Demo: a smart oven launch, every number an example ---------- */
+const DEMO_ROOM = { id: "demo", question: "Should we launch the smart oven at $199, $249 or $299?", status: "open", language: "en", options: [{ id: "o1", label: "$199" }, { id: "o2", label: "$249" }, { id: "o3", label: "$299" }] };
+const DEMO_DRAFT = { id: "demo-sim", status: "draft", size: 10,
+  stages: [{ id: "s1", title: "Who wants a smart oven at all?", keep: "all 3" }, { id: "s2", title: "Which version would they rather own?", keep: "top 2" }, { id: "s3", title: "Where does interest drop by half?", keep: "the winner" }],
+  audiences: [{ id: "a1", name: "Young couples", weight: 30, traits: [{ name: "income", values: [{ label: "lower", share: 55 }, { label: "higher", share: 45 }] }] },
+    { id: "a2", name: "Families with kids", weight: 35, traits: [{ name: "cooks", values: [{ label: "daily", share: 70 }, { label: "weekends", share: 30 }] }] },
+    { id: "a3", name: "Home cooks, 50+", weight: 20, traits: [{ name: "tech", values: [{ label: "cautious", share: 65 }, { label: "curious", share: 35 }] }] },
+    { id: "a4", name: "Tech early adopters", weight: 15, traits: [{ name: "budget", values: [{ label: "flexible", share: 70 }, { label: "tight", share: 30 }] }] }],
+  questions: [{ id: "q1", stage: "s1", kind: "choice", text: "If you could add just one, which would you choose?", options: [{ id: "o1", label: "$199" }, { id: "o2", label: "$249" }, { id: "o3", label: "$299" }, { id: "none", label: "None of these" }] },
+    { id: "q2", stage: "s2", kind: "scale", per_option: true, text: "At a fair price, how likely would you be to buy each?" },
+    { id: "q3", stage: "s3", kind: "price", prices: [199, 229, 249, 279, 299], unit: "$", text: "At each price, how likely are you to buy?" },
+    { id: "q4", stage: "s3", kind: "number", unit: "$", text: "How much more would you pay for a premium version?" }] };
+const DEMO_DONE = { ...DEMO_DRAFT, status: "done", confidence: "low", added_at: null, progress: 100,
+  findings: [{ kind: "breadth", title: "$249 is the first choice in 3 of 4 audiences", so_what: "A broad winner is safer than a big win with one group.", chart: { format: "pct", labels: ["$199", "$249", "$299"], values: [24, 47, 18], low: [12, 31, 7], high: [38, 63, 30] } },
+    { kind: "price_cliff", title: "Interest halves above $249", so_what: "Price the main model at or below $249.", chart: { format: "pct", labels: ["$199", "$229", "$249", "$279", "$299"], values: [78, 70, 61, 29, 18], low: [62, 53, 44, 15, 8], high: [90, 84, 76, 43, 30], mark: "$279" } },
+    { kind: "hard_rejection", title: "Home cooks over 50 are the most likely to say never", so_what: "Don't lead the launch with this group.", chart: { format: "pct", labels: ["Young couples", "Families with kids", "Home cooks, 50+", "Tech early adopters"], values: [12, 15, 38, 5] } },
+    { kind: "niche", title: "Early adopters would pay about $80 more", so_what: "A premium tier works as a small add-on, not the main line.", chart: { format: "num", unit: "$", labels: ["Young couples", "Families with kids", "Home cooks, 50+", "Tech early adopters"], values: [20, 35, 15, 80] } }],
+  results: { people: 10, samples: [{ audience: "Families with kids", traits: [["cooks", "daily"]], why: "We cook every night, but $299 is a lot for an oven." }, { audience: "Tech early adopters", traits: [["budget", "flexible"]], why: "I'd pay more if the app actually works." }, { audience: "Home cooks, 50+", traits: [["tech", "cautious"]], why: "My old oven works. I don't need it to talk to my phone." }] } };
+
+/* ---------- Data ---------- */
+const store = demo ? {
+  async load() { room = DEMO_ROOM; runs = true; sim = sim || null; },
+  async draft() { sim = structuredClone(DEMO_DRAFT); },
+  async save() {},
+  async run() { sim.status = "running"; sim.progress = 0; const tick = setInterval(() => { sim.progress += 25; if (sim.progress >= 100) { clearInterval(tick); sim = structuredClone(DEMO_DONE); } render(); }, 700); },
+  async add() { sim.added_at = new Date().toISOString(); },
+  async again() { sim = structuredClone(DEMO_DRAFT); }
+} : {
+  async load() {
+    const sb = Rooms.sb, me = Rooms.user.id;
+    const { data: r } = await sb.from("rooms").select("id,question,options,status,language").eq("id", roomId).maybeSingle();
+    room = r;
+    if (!room) return;
+    const { data: mem } = await sb.from("memberships").select("role").eq("room_id", roomId).eq("user_id", me).maybeSingle();
+    const { data: lv } = mem ? { data: null } : await sb.rpc("my_assist_level", { rid: roomId });
+    runs = mem?.role === "owner" || lv === "organise" || lv === "run";
+    let q = sb.from("simulations").select("*").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1);
+    if (!runs) q = q.not("added_at", "is", null);
+    const { data: s } = await q.maybeSingle();
+    sim = s || null;
+  },
+  async draft(from) { const r = await Rooms.post("/api/rooms/simulate", { action: "draft", room_id: roomId, simulation_id: from || null, lang: Rooms.lang }); await this.load(); return r; },
+  async save() { const { error } = await Rooms.sb.from("simulations").update({ stages: sim.stages, audiences: sim.audiences, questions: sim.questions }).eq("id", sim.id); if (error) throw error; },
+  async run() { await this.save(); await Rooms.post("/api/rooms/simulate", { action: "run", room_id: roomId, simulation_id: sim.id }); await this.load(); },
+  async add() { await Rooms.post("/api/rooms/simulate", { action: "add", room_id: roomId, simulation_id: sim.id }); await this.load(); },
+  async again() { await this.draft(sim.id); }
+};
+
+/* ---------- Views ---------- */
+function shell(...nodes) {
+  document.title = t("sm_title") + " · " + t("product");
+  const head = el("div", "sm-head"); const h = el("div"); h.append(el("p", "small", t("sm_eyebrow")), el("h1", null, t(sim?.status === "done" ? "sm_found" : "sm_title")));
+  head.append(h); if (sim?.status === "done") head.append(el("span", "stamp", t("sm_simulated")));
+  const q = el("div", "sm-q"); const qt = el("p", "text sm", room.question); qt.lang = room.language; qt.dir = room.language === "ar" ? "rtl" : "ltr";
+  q.append(el("p", "small", t("sm_question")), qt);
+  const back = el("a", "linkbtn", "← " + t("sm_back_room")); back.href = demo ? "/room.html?demo=owner" : "/room.html?room=" + encodeURIComponent(roomId);
+  view.replaceChildren(back, head, q, ...nodes);
+}
+const card = (title, ...kids) => { const c = el("section", "sm-card"); if (title) c.append(el("h2", null, title)); c.append(...kids.filter(Boolean)); return c; };
+function err(e) { const st = el("p", "status err", t(e?.message === "quota" ? "err_quota" : "err_generic")); return st; }
+
+function vOffer() {
+  if (!runs) return shell(card(null, el("p", "body", t("sm_none_member"))));
+  const go = el("button", "btn", t("sm_setup")); go.type = "button";
+  const st = el("p", "status err");
+  go.onclick = async () => { go.disabled = true; go.textContent = t("sm_drafting"); try { await store.draft(); render(); } catch (e) { go.disabled = false; go.textContent = t("sm_setup"); st.replaceWith(err(e)); } };
+  shell(card(t("sm_offer_t"), el("p", "body", t("sm_offer_b")), el("p", "small", t("sm_offer_size")), el("div", "acts"), go, st));
+}
+
+function vDraft() {
+  const s = sim, dirty = () => { if (!demo) { clearTimeout(vDraft.t); vDraft.t = setTimeout(() => store.save().catch(() => {}), 600); } };
+  // Stages
+  const stages = el("div", "stages");
+  s.stages.forEach((x, i) => { const r = el("div", "st"); const inp = el("input", "line"); Object.assign(inp, { value: x.title, maxLength: 120 }); inp.setAttribute("aria-label", t("sm_stage_n", { n: i + 1 }));
+    inp.oninput = () => { x.title = inp.value; dirty(); }; r.append(el("span", "n", String(i + 1)), inp); stages.append(r); });
+  // Audiences with weights
+  const aud = el("div");
+  const total = el("p", "small");
+  const sumW = () => { const n = s.audiences.reduce((a, x) => a + (Number(x.weight) || 0), 0); total.textContent = t("sm_total", { n }); total.className = "small" + (n === 100 ? "" : " status err"); };
+  s.audiences.forEach((a, i) => {
+    const r = el("div", "sm-row");
+    const name = el("input", "line"); Object.assign(name, { value: a.name, maxLength: 60 }); name.setAttribute("aria-label", t("sm_aud_name"));
+    name.oninput = () => { a.name = name.value; dirty(); };
+    const w = el("input", "line"); Object.assign(w, { type: "number", min: 0, max: 100, value: a.weight }); w.setAttribute("aria-label", t("sm_weight", { name: a.name }));
+    w.oninput = () => { a.weight = Number(w.value) || 0; sumW(); dirty(); };
+    const rm = el("button", "linkbtn", "×"); rm.type = "button"; rm.setAttribute("aria-label", t("sm_remove", { name: a.name }));
+    rm.onclick = () => { if (s.audiences.length <= 1) return; s.audiences.splice(i, 1); dirty(); render(); };
+    r.append(name, w, rm, el("span", "traits", a.traits.map(tr => tr.name + ": " + tr.values.map(v => `${v.label} ${v.share}%`).join(", ")).join(" · ")));
+    aud.append(r);
+  });
+  sumW();
+  // Questions
+  const qs = el("div");
+  s.questions.forEach((q, i) => {
+    const r = el("div", "qrow"); const inp = el("input", "line"); Object.assign(inp, { value: q.text, maxLength: 200 }); inp.setAttribute("aria-label", t("sm_q_n", { n: i + 1 }));
+    inp.oninput = () => { q.text = inp.value; dirty(); };
+    const rm = el("button", "linkbtn", "×"); rm.type = "button"; rm.setAttribute("aria-label", t("sm_q_remove", { n: i + 1 }));
+    rm.onclick = () => { if (s.questions.length <= 1) return; s.questions.splice(i, 1); dirty(); render(); };
+    const stageNo = s.stages.findIndex(x => x.id === q.stage) + 1;
+    r.append(el("span", "kind", t("sm_kind_" + (q.kind === "scale" && q.per_option ? "scale_options" : q.kind)) + (stageNo ? " · " + stageNo : "")), inp, rm);
+    qs.append(r);
+  });
+  const st = el("p", "status err");
+  const go = el("button", "btn", t("sm_run")); go.type = "button";
+  go.onclick = async () => {
+    const n = s.audiences.reduce((a, x) => a + (Number(x.weight) || 0), 0);
+    if (n !== 100) { total.focus?.(); return st.replaceChildren(document.createTextNode(t("sm_need_100"))); }
+    go.disabled = true; try { await store.run(); render(); } catch (e) { go.disabled = false; st.replaceWith(err(e)); }
+  };
+  shell(card(t("sm_stages_t"), el("p", "small", t("sm_stages_h")), stages),
+    card(t("sm_aud_t"), el("p", "small", t("sm_aud_h")), aud, total, el("p", "small", t("sm_size", { n: s.size }))),
+    card(t("sm_q_t"), el("p", "small", t("sm_q_h")), qs),
+    card(null, el("p", "small", t("sm_run_note")), go, st));
+}
+
+function vRunning() {
+  const p = el("div", "prog"); const i = el("i"); i.style.width = (sim.progress || 0) + "%"; p.append(i);
+  shell(card(t("sm_running_t", { n: sim.size }), el("p", "small", t("sm_running_h")), p, el("p", "small", t(sim.status === "queued" ? "sm_queued" : "sm_pct", { n: sim.progress || 0 }))));
+  clearTimeout(poll); if (!demo) poll = setTimeout(async () => { await store.load(); render(); }, 3000);
+}
+
+function chart(c) {
+  const box = el("div", "chart"), max = Math.max(1, ...c.values, ...(c.high || []));
+  const fmt = v => v == null ? "·" : c.format === "num" ? (c.unit || "") + v : v + "%";
+  c.labels.forEach((label, k) => {
+    const row = el("div", "bar" + (c.mark && c.mark === label ? " mark" : ""));
+    const tr = el("span", "track"); const f = el("i"); f.style.width = (100 * (c.values[k] || 0) / max) + "%"; tr.append(f);
+    if (c.low && c.high && c.low[k] != null) { const rg = el("b"); rg.style.insetInlineStart = (100 * c.low[k] / max) + "%"; rg.style.width = (100 * (c.high[k] - c.low[k]) / max) + "%"; tr.append(rg); }
+    row.append(el("span", null, label), tr, el("span", "v", fmt(c.values[k]) + (c.low && c.low[k] != null ? ` (${fmt(c.low[k])}–${fmt(c.high[k])})` : "")));
+    box.append(row);
+  });
+  return box;
+}
+function vDone() {
+  const cards = (sim.findings || []).map(f => card(f.title, chart(f.chart), f.so_what ? el("p", "sowhat", t("sm_sowhat") + " " + f.so_what) : null));
+  const grid = el("div", "grid2"); grid.append(...cards);
+  const meta = el("p", "small", t("sm_meta", { n: sim.results?.people || sim.size, conf: t("sm_conf_" + (sim.confidence || "low")) }));
+  const samples = card(t("sm_samples_t"), el("p", "small", t("sm_samples_h")), ...(sim.results?.samples || []).map(p => {
+    const d = el("div", "persona"); d.append(el("b", null, p.audience), document.createTextNode(" · " + (p.traits || []).map(x => x.join(": ")).join(" · ")), el("br"), document.createTextNode("“" + (p.why || "") + "”")); return d; }));
+  const acts = el("div", "acts"), st = el("p", "status err");
+  if (runs) {
+    if (!sim.added_at) { const add = el("button", "btn", t("sm_add")); add.type = "button"; add.onclick = async () => { add.disabled = true; try { await store.add(); render(); } catch (e) { add.disabled = false; st.replaceWith(err(e)); } }; acts.append(add); }
+    else acts.append(el("span", "status ok", t("sm_added")));
+    if (room.status === "open") { const again = el("button", "btn ghost", t("sm_again")); again.type = "button"; again.onclick = async () => { again.disabled = true; try { await store.again(); render(); } catch (e) { again.disabled = false; st.replaceWith(err(e)); } }; acts.append(again); }
+  }
+  shell(meta, grid, card(null, el("p", "small", t("sm_disclaimer"))), samples, acts, st);
+}
+function vFailed() {
+  const again = el("button", "btn", t("sm_try_again")); again.type = "button";
+  again.onclick = async () => { again.disabled = true; try { await store.again(); render(); } catch (e) { again.disabled = false; } };
+  shell(card(null, el("p", "body", t("sm_failed")), runs ? again : null));
+}
+function render() {
+  if (!room) return view.replaceChildren(el("p", "text", t("no_access")));
+  if (!sim) return vOffer();
+  if (sim.status === "draft") return runs ? vDraft() : vOffer();
+  if (sim.status === "queued" || sim.status === "running") return vRunning();
+  if (sim.status === "failed") return vFailed();
+  return vDone();
+}
+Rooms.langToggle(() => render());
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  if (demo) { await store.load(); return render(); }
+  if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }
+  if (!Rooms.hasAccount()) {
+    const box = el("div", "stack-sm"), c = el("article", "msg you"); c.append(el("p", "text sm", t("si_title")), box); view.replaceChildren(c);
+    return Rooms.ensureAccount(box, { onDone: async () => { Rooms.showMyRooms(); await store.load(); render(); } });
+  }
+  Rooms.showMyRooms();
+  await store.load(); render();
+})();
+})();
+</script>
+</body>
+</html>

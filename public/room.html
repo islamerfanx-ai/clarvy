@@ -63,8 +63,9 @@ const live = {
     let role = mem.data?.role, level = null;
     if (!role) { const { data: lv } = await sb.rpc("my_assist_level", { rid: roomId }); if (lv) { role = "assistant"; level = lv; } }
     const { data: setupBy } = await sb.rpc("room_setup_by", { rid: roomId });
+    const { data: simShared } = await sb.from("simulations").select("id,findings,size,confidence,results").eq("room_id", roomId).eq("status", "done").not("added_at", "is", null).order("added_at", { ascending: false }).limit(1).maybeSingle();
     if (room.department_ids?.length) { const { data: dp } = await sb.rpc("room_departments", { rid: roomId }); room.__depts = dp || []; }
-    const out = { departments: room.__depts || [], setupBy: setupBy || null, level, room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
+    const out = { simulation: simShared || null, departments: room.__depts || [], setupBy: setupBy || null, level, room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
     if (role === "owner" || (role === "assistant" && level !== "view")) {
       out.invites = await this.invites(room);
       const [{ data: nd }, { data: note }, { data: log }] = await Promise.all([sb.rpc("room_nudges", { rid: roomId }),
@@ -434,6 +435,13 @@ function questionCard() {
   // While the room is open it shows the decide-by date; once decided, the review date.
   const when = ["decided", "reviewed"].includes(r.status) ? (r.review_date ? t("review_on", { date: Rooms.fmtDate(r.review_date) }) : "") : r.decide_by ? t("decide_by_on", { date: Rooms.fmtDate(r.decide_by) }) : "";
   const c = card("active", meta(Rooms.typeName(r), when), q);
+  if (S.simulation?.findings?.length) {
+    const b = el("div", "block"); b.style.cssText = "margin-top:10px;background:rgba(255,255,255,.12);padding:10px 12px";
+    b.append(el("p", "small", t("sm_room_findings", { n: S.simulation.results?.people || S.simulation.size }) + " · " + t("sm_simulated")));
+    const ul = el("ul", "dots"); S.simulation.findings.slice(0, 5).forEach(f => ul.append(el("li", null, f.title))); b.append(ul);
+    const a = el("a", "linkbtn", t("sm_room_see")); a.href = demo ? "/sim.html?demo=1" : "/sim.html?room=" + encodeURIComponent(roomId); a.style.color = "inherit"; b.append(a);
+    c.append(b);
+  }
   if (S.setupBy) { const sb2 = el("p", "small", t("as_setup_by", { a: S.setupBy, o: S.roster.find(p => p.role === "owner")?.name || "" })); sb2.style.cssText = "opacity:.85;margin:6px 0 0"; c.append(sb2); }
   if (S.departments?.length) {
     const dl = el("p", "small", S.departments.map(x => x.lead ? t("dept_lead_name", { name: x.name }) : x.name).join(" · "));
@@ -716,6 +724,10 @@ function vWaiting() {
   // A brand-new room puts the invite first; after that it sits under the progress.
   if (owner && S.invites?.length) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
   if (owner && S.library?.length) cards.push(libraryCard());
+  if (owner && r.status === "open") {
+    const a = el("a", "btn soft", t("sm_room_btn")); a.href = demo ? "/sim.html?demo=1" : "/sim.html?room=" + encodeURIComponent(roomId); a.style.width = "auto";
+    cards.push(card("you", el("p", "text sm", t("sm_room_t")), el("p", "small", t("sm_room_b")), a));
+  }
   show(...cards);
 }
 
