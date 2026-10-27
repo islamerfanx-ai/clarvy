@@ -86,6 +86,17 @@ All seven ideas ship before launch, in this order, no mock-ups; launch date to b
 7. Organisation document library
 8. At launch: switch on the world library ($20 a month to start)
 
+## Version 2.0 (planned, decided 2026-10-27)
+**Top priority: the Simulation Room with grounded personas.** Not built yet; build after the pre-launch work and launch.
+- **Where it fits:** an optional step after "Options and what to weigh": frame (3–4 stages), audiences (5–7 with % weights), questions (from the bank), run, findings (4–5 charts with a "so what", low / likely / high, marked simulated). Findings go into "What everyone should know" and the analysis; the group decides as usual, no second vote. Review outcomes calibrate the personas over time.
+- **Personas:** code draws each person from an audience recipe (traits with realistic spreads), so the mix is exact and runs are repeatable; the AI answers in character, 10 personas per call, told to say "none" or "never" where that person would.
+- **Grounded personas (the priority):** a slower, deeper option. A research step reads real voices and turns the patterns (needs, objections, prices mentioned, wording) into the recipes; each card says what it is based on, and every run shows an evidence pack (themes, number of discussions, sources). Sources in this order: the client's own data (reviews, support tickets, surveys, via the document library), real public discussions chosen per market (for the Gulf: Arabic X, Google reviews, Haraj, Instagram comments, not mainly Reddit), then public statistics (e.g. GASTAT) for the proportions. Never one persona per real person; no usernames stored. About 10–20 minutes, with a notification. Organisation plan, or a paid add-on for Team.
+- **Before building:** a legal check on which sources we may use commercially (platform terms, Saudi PDPL, GDPR), and a choice between licensed data and web search results only.
+- **Sizes and price:** Small and Team: 10 personas, one call. Organisation: 30 per audience, plus agent packs (around $5 per 100; "smoother charts and finer splits, not more certainty"). Start on the main model; compare a cheaper model for the agents later.
+- **Politics:** voters stay as an audience, as in the spec; suggested guardrails: everything marked simulated, no tailored persuasion messages.
+- **Still open:** pack prices, a sample for Free, whether the KSA apartment project is the first real test, owners editing persona cards (suggested: show the recipe and a few sample cards).
+- **Materials:** spec in the New Features doc ("Simulation Room spec"); sketch https://claude.ai/artifact/9QeCj9p9gcaqu1ywsw3dEo; wireframes https://claude.ai/artifact/3gaTjBZqLe3hHKoedr1Dmy. A client animation (generic product launch, English and Arabic) comes later.
+
 ## Later (after launch)
 - **Departments on the question (idea, 2026-10-24):** several per room, one leading, analyst suggests; drives invitees, memory, asks, visibility, reports.
 - **Assistants (idea, 2026-10-24):** PA manages the owner's rooms at View, Organise, or Organise and run; never makes the call or sees answers; visible and logged.
