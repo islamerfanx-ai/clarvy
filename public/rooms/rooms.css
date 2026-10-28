@@ -477,3 +477,17 @@ ul.live-done li.in{animation:thinkIn .45s ease both}
 @keyframes barRun{0%{transform:translateX(-100%)}100%{transform:translateX(260%)}}
 @media (prefers-reduced-motion:reduce){.spark,.spark rect,.live-bar i.now::after,.live-sub::after,ul.live-done li.in,.live-label,.live-label.in{animation:none}.live-label{-webkit-text-fill-color:currentColor;background:none}.live-bar i.now{background:var(--accent);opacity:.5}}
 
+
+/* ================= The app: install and notifications box, back arrow, safe areas in the installed app ================= */
+.ap-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.ap-note:empty{display:none}
+.ap-on{color:var(--accent)}
+.ap-kinds{border:0;padding:0;margin:16px 0 0;display:flex;flex-direction:column;gap:10px}
+.ap-kinds legend{font-size:var(--t-ui);color:var(--dim);margin-bottom:6px;padding:0}
+.ap-start{display:flex;align-items:center;gap:6px;min-width:0}
+.ap-back{width:36px;height:36px;margin-inline-start:-8px;border:0;background:transparent;color:var(--fg);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;border-radius:50%;padding:0}
+.ap-back:hover{background:rgba(0,0,0,.05)}
+[dir=rtl] .ap-back svg{transform:scaleX(-1)}
+html.in-app .top{height:auto;min-height:60px;padding-top:env(safe-area-inset-top,0px)}
+html.in-app .top > *{align-self:center}
+@media (max-width:720px){html.in-app .top{min-height:calc(60px + env(safe-area-inset-top,0px))}}

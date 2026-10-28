@@ -86,6 +86,12 @@ All seven ideas ship before launch, in this order, no mock-ups; launch date to b
 7. Organisation document library
 8. At launch: switch on the world library ($20 a month to start)
 
+## Mobile app (decided 2026-10-28, before launch)
+Why: notifications, faster answering, store presence, owners on the go. Everything the website does, laid out for the phone.
+1. **Installable web app with phone notifications: built (version 1.7.0).** `manifest.webmanifest`, `sw.js` (pages network-first with an offline copy; never `/api/` or Supabase), the door icon in `public/app/`. Install from Your rooms, the profile or the room after answering; on iPhone people add it to the home screen first (iOS 16.4+), then turn notifications on. Notifications: invites and reminders, room progress for the owner (joined, new answers as a count, everyone in, objections), the call (ready, made), after the call (talk at most every 10 minutes, tasks handed over, due today, review day, reopen requests). People choose the four kinds on their profile.
+2. **Store apps (App Store and Google Play), next:** the same pages in a Capacitor shell with native push. Needs: developer accounts in the user's name (Apple $99 a year, Google Play $25 once; not opened yet), **Sign in with Apple** next to Google and Microsoft (Apple's rule), store listings and screenshots in English and Arabic, privacy answers for both stores.
+3. **Payments stay on the website.** The app has no buy button, so Apple and Google take no cut.
+
 ## Version 2.0 (planned, decided 2026-10-27)
 **Top priority: the Simulation Room with grounded personas.** Not built yet; build after the pre-launch work and launch.
 - **Where it fits:** an optional step after "Options and what to weigh": frame (3–4 stages), audiences (5–7 with % weights), questions (from the bank), run, findings (4–5 charts with a "so what", low / likely / high, marked simulated). Findings go into "What everyone should know" and the analysis; the group decides as usual, no second vote. Review outcomes calibrate the personas over time.

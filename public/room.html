@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="A decision room: give your view privately, then see the group's call.">
 <title>Decision Rooms</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#F6F4E9">
+<link rel="icon" type="image/png" href="/app/favicon-48.png">
+<link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Decision Rooms">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
@@ -724,11 +731,32 @@ function vWaiting() {
   // A brand-new room puts the invite first; after that it sits under the progress.
   if (owner && S.invites?.length) cards.splice(params.get("new") && !done ? 1 : cards.indexOf(main) + 1, 0, shareCard(done < answering.length));
   if (owner && S.library?.length) cards.push(libraryCard());
+  if (S.mine || owner) { const p = pingCard(); if (p) cards.push(p); }
   if (owner && r.status === "open") {
     const a = el("a", "btn soft", t("sm_room_btn")); a.href = demo ? "/sim.html?demo=1" : "/sim.html?room=" + encodeURIComponent(roomId); a.style.width = "auto";
     cards.push(card("you", el("p", "text sm", t("sm_room_t")), el("p", "small", t("sm_room_b")), a));
   }
   show(...cards);
+}
+
+// Once someone has answered: a notification when the call is made (installs the app first on iPhone).
+let pingEl = null;
+function pingCard() {
+  if (demo || !Rooms.hasAccount()) return null;
+  if (pingEl) return pingEl;
+  pingEl = card("you"); pingEl.hidden = true;
+  let later = 0; try { later = Number(localStorage.getItem("dr-ping-later")) || 0; } catch {}
+  if (Date.now() - later < 14 * 864e5) return pingEl;
+  Rooms.app.pushState().then(st => {
+    if (!["off", "install-first"].includes(st)) return;
+    const inner = el("div");
+    const no = el("button", "linkbtn", t("ap_later")); no.type = "button";
+    no.onclick = () => { try { localStorage.setItem("dr-ping-later", String(Date.now())); } catch {} pingEl.remove(); };
+    pingEl.append(el("p", "text sm", t("ap_room_ping")), inner, no);
+    Rooms.appBox(inner, { onDone: () => pingEl.remove() });
+    pingEl.hidden = false;
+  });
+  return pingEl;
 }
 
 // RAPID: the owner names who recommends, who must agree and who carries it out.

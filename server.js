@@ -4,10 +4,10 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ask, search, config } from "./lib/core.js";
-import { brief, criteria, decide, faq, helper, notes, question, roles, startDecideWorker, startNudgeWorker, startSimulationWorker, simulate, triage, voice, admin, adminGrowth, adminAccess, adminRevenue, adminAsk, adminOrgs, orgInvite } from "./lib/rooms.js";
+import { brief, criteria, decide, faq, helper, notes, question, roles, startDecideWorker, startNudgeWorker, startSimulationWorker, startPushWorker, simulate, triage, voice, admin, adminGrowth, adminAccess, adminRevenue, adminAsk, adminOrgs, orgInvite } from "./lib/rooms.js";
 
 const root = join(fileURLToPath(new URL(".", import.meta.url)), "public");
-const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".ico": "image/x-icon" };
+const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".json": "application/json", ".css": "text/css", ".svg": "image/svg+xml", ".png": "image/png", ".webmanifest": "application/manifest+json", ".ico": "image/x-icon" };
 const routes = { "/api/ask": ask, "/api/search": search, "/api/config": config, "/api/rooms/decide": decide, "/api/rooms/triage": triage, "/api/rooms/criteria": criteria, "/api/rooms/roles": roles, "/api/rooms/question": question, "/api/rooms/voice": voice, "/api/rooms/brief": brief, "/api/rooms/helper": helper, "/api/rooms/notes": notes, "/api/rooms/simulate": simulate, "/api/faq": faq, "/api/admin/overview": admin, "/api/admin/growth": adminGrowth, "/api/admin/access": adminAccess, "/api/admin/revenue": adminRevenue, "/api/admin/ask": adminAsk, "/api/admin/orgs": adminOrgs, "/api/org/invite": orgInvite };
 const MAX_BODY = 8 * 1024 * 1024;
 
@@ -28,4 +28,4 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { "Content-Type": types[extname(path)] || "application/octet-stream" });
     res.end(file);
   } catch { res.writeHead(404); res.end("Not found"); }
-}).listen(process.env.PORT || 3000, process.env.HOST, () => { console.log(`Clarvy running on http://localhost:${process.env.PORT || 3000}`); startDecideWorker(); startNudgeWorker(); startSimulationWorker(); });
+}).listen(process.env.PORT || 3000, process.env.HOST, () => { console.log(`Clarvy running on http://localhost:${process.env.PORT || 3000}`); startDecideWorker(); startNudgeWorker(); startSimulationWorker(); startPushWorker(); });

@@ -38,6 +38,7 @@ async function loadLang(l) {
   document.documentElement.lang = l;
   document.documentElement.dir = words.dir;
   document.querySelectorAll("[data-t]").forEach(e => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll(".ap-back").forEach(e => e.setAttribute("aria-label", t("ap_back")));
   document.querySelectorAll("[data-t-ph]").forEach(e => { e.placeholder = t(e.dataset.tPh); });
   const b = $("langBtn");
   if (b) { b.textContent = t("lang_other"); b.setAttribute("aria-label", t("lang_other_label")); }
@@ -66,11 +67,13 @@ async function connect() {
   emailCodes = !!cfg.emailCodes;
   providers = Array.isArray(cfg.providers) ? cfg.providers : [];
   turnstileKey = cfg.turnstile || "";
+  pushKey = cfg.push || null;
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
   sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
   user = (await sb.auth.getSession()).data.session?.user || null;
   sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; });
   showMyRooms();
+  syncPush();
   return true;
 }
 const isGuest = () => !!user?.is_anonymous;      // joined with just a name
@@ -621,11 +624,121 @@ function helper(opts = {}) {
   inp.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(inp.value); } };
 }
 
+/* ---------- The app: install to the home screen, and phone notifications ---------- */
+// The site installs as an app (manifest.webmanifest, sw.js). Notifications need the app installed on iPhone
+// (iOS 16.4+); Android and computers allow them in the browser too. Each device saves a subscription
+// (save_push_subscription); what people hear about is set in push_prefs.
+let pushKey = null, installEvt = null;
+const PUSH_KINDS = ["invites", "progress", "call", "after"];
+const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const pushReady = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+if ("serviceWorker" in navigator && !embedded) navigator.serviceWorker.register("/sw.js").catch(() => {});
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; document.dispatchEvent(new Event("dr-app")); });
+addEventListener("appinstalled", () => { installEvt = null; document.dispatchEvent(new Event("dr-app")); });
+const keyBytes = k => { const s = atob(k.replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(s, c => c.charCodeAt(0)); };
+const deviceName = () => {
+  const u = navigator.userAgent;
+  const dev = /iPhone/.test(u) ? "iPhone" : /iPad/.test(u) || isIOS() ? "iPad" : /Android/.test(u) ? "Android" : /Mac/.test(u) ? "Mac" : /Windows/.test(u) ? "Windows" : "Computer";
+  const app = standalone() ? "app" : /Edg\//.test(u) ? "Edge" : /Firefox\//.test(u) ? "Firefox" : /Chrome\//.test(u) ? "Chrome" : /Safari\//.test(u) ? "Safari" : "browser";
+  return `${dev} · ${app}`;
+};
+async function currentSub() {
+  if (!pushReady()) return null;
+  const reg = await navigator.serviceWorker.getRegistration("/");
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+async function saveSub(sub) {
+  const j = sub.toJSON();
+  const { error } = await sb.rpc("save_push_subscription", { p_endpoint: j.endpoint, p_key: j.keys.p256dh, p_auth: j.keys.auth, p_ua: deviceName() });
+  if (error) throw error;
+}
+// A device that already allowed notifications follows whoever signed in on it.
+async function syncPush() {
+  try { if (hasAccount() && Notification.permission === "granted") { const sub = await currentSub(); if (sub) await saveSub(sub); } } catch {}
+}
+const app = {
+  standalone, isIOS, kinds: PUSH_KINDS,
+  canInstall: () => !!installEvt,
+  async install() { if (!installEvt) return false; installEvt.prompt(); const r = await installEvt.userChoice.catch(() => ({})); installEvt = null; return r.outcome === "accepted"; },
+  // "unsupported", "install-first" (iPhone outside the app), "denied", "off" or "on".
+  async pushState() {
+    if (!pushKey) return "unsupported";
+    if (isIOS() && !standalone()) return "install-first";
+    if (!pushReady()) return "unsupported";
+    if (Notification.permission === "denied") return "denied";
+    return Notification.permission === "granted" && await currentSub() ? "on" : "off";
+  },
+  async enablePush() {
+    if (await Notification.requestPermission() !== "granted") return app.pushState();
+    const reg = await navigator.serviceWorker.register("/sw.js").then(() => navigator.serviceWorker.ready);
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(pushKey) });
+    await saveSub(sub);
+    return "on";
+  },
+  async disablePush() {
+    const sub = await currentSub();
+    if (!sub) return;
+    await sb.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
+    await sub.unsubscribe().catch(() => {});
+  },
+  async prefs() { const { data } = await sb.from("push_prefs").select("off").eq("user_id", user.id).maybeSingle(); return data?.off || []; },
+  async savePrefs(off) { const { error } = await sb.from("push_prefs").upsert({ user_id: user.id, off }); if (error) throw error; }
+};
+// The install and notifications box. full: also the four kinds (profile page). onDone: called once
+// notifications are on and the app is installed, so a page can hide a reminder card.
+async function appBox(box, { full = false, onDone } = {}) {
+  const draw = async () => {
+    box.replaceChildren();
+    const state = await app.pushState().catch(() => "unsupported");
+    const row = el("div", "ap-row");
+    const btn = (label, cls, fn) => { const b = el("button", "btn " + cls, label); b.type = "button"; b.onclick = async () => { b.disabled = true; try { await fn(); } catch { note.textContent = t("ap_push_fail"); } b.disabled = false; }; return b; };
+    const note = el("p", "small ap-note");
+    if (!standalone()) {
+      if (app.canInstall()) row.append(btn(t("ap_install"), "", async () => { await app.install(); draw(); }));
+      else box.append(el("p", "small", t(isIOS() ? "ap_ios" : "ap_other")));
+    } else box.append(el("p", "small", t("ap_installed")));
+    if (state === "off") row.append(btn(t("ap_push_on_btn"), standalone() || !app.canInstall() ? "" : "ghost", async () => { const r = await app.enablePush(); if (r !== "on") note.textContent = t(r === "denied" ? "ap_push_denied" : "ap_push_fail"); else draw(); }));
+    else if (state === "on") { box.append(el("p", "small ap-on", t("ap_push_on"))); if (full) row.append(btn(t("ap_push_off_btn"), "ghost", async () => { await app.disablePush(); draw(); })); }
+    else if (state === "denied") note.textContent = t("ap_push_denied");
+    if (row.children.length) box.append(row);
+    box.append(note);
+    if (state === "on" && full) {
+      const off = await app.prefs().catch(() => []);
+      const fs = el("fieldset", "ap-kinds"); fs.append(el("legend", null, t("ap_kinds")));
+      PUSH_KINDS.forEach(k => {
+        const lab = el("label", "check"); const c = el("input"); c.type = "checkbox"; c.checked = !off.includes(k);
+        c.onchange = async () => {
+          const now = PUSH_KINDS.filter(x => !fs.querySelector(`[data-k=${x}]`).checked);
+          try { await app.savePrefs(now); note.textContent = t("ap_saved"); } catch { c.checked = !c.checked; note.textContent = t("ap_push_fail"); }
+        };
+        c.dataset.k = k; lab.append(c, el("span", "small", t("ap_k_" + k))); fs.append(lab);
+      });
+      box.append(fs);
+    }
+    if (state === "on" && (standalone() || !isIOS()) && onDone) onDone();
+  };
+  document.addEventListener("dr-app", draw);
+  await draw();
+}
+// In the installed app there's no browser back button: a back arrow at the start of the header.
+function appBack() {
+  if (!standalone() || embedded || location.pathname === "/dashboard.html") return;
+  const top = document.querySelector(".top"); if (!top || top.querySelector(".ap-back")) return;
+  const b = el("button", "ap-back"); b.type = "button"; b.setAttribute("aria-label", t("ap_back"));
+  b.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>';
+  b.onclick = () => history.length > 1 ? history.back() : location.assign("/dashboard.html");
+  const wm = top.querySelector(".wm");
+  if (wm) { const g = el("div", "ap-start"); wm.replaceWith(g); g.append(b, wm); } else top.prepend(b);
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", appBack); else appBack();
+if (standalone()) document.documentElement.classList.add("in-app");
+
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
-  openNewRoom, goToRoom, embedded, validUrl, linksEditor
+  openNewRoom, goToRoom, embedded, validUrl, linksEditor, app, appBox
 };
 })();

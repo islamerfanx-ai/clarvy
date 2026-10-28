@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Your decision rooms: open, ongoing and finished.">
 <title>Your rooms · Decision Rooms</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#F6F4E9">
+<link rel="icon" type="image/png" href="/app/favicon-48.png">
+<link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Decision Rooms">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
@@ -18,6 +25,9 @@ main{--content:none}
 .db-hello .eyebrow{display:block;font-size:14px;color:var(--dim)}
 .db-hello .db-title{margin:6px 0 8px;max-width:22ch}
 .db-hello .db-line{margin:0;font-size:var(--t-h5);max-width:46ch}
+.db-app{background:#fff;padding:20px;margin:8px 0 0;display:flex;flex-direction:column;gap:6px;max-width:640px}
+.db-app h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.db-app .linkbtn{align-self:flex-start;margin-top:6px}
 .db-sec{display:flex;flex-direction:column;gap:12px;margin-top:40px}
 .db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .db-head h2{margin:0;font-size:var(--t-h4);font-weight:400;letter-spacing:-.02em}
@@ -215,6 +225,25 @@ const matches = r => !query || [r.question, r.final_label, ...(r.options || []).
 const results = el("div");
 
 /* ---------- Page ---------- */
+// "Decision Rooms on your phone": until the app is installed with notifications on (or "Not now", for two weeks).
+let appEl = null;
+function appCard() {
+  if (demo) return null;
+  if (appEl) return appEl;
+  appEl = el("div", "msg db-app"); appEl.hidden = true;
+  let later = 0; try { later = Number(localStorage.getItem("dr-app-later")) || 0; } catch {}
+  if (Date.now() - later < 14 * 864e5) return appEl;
+  Rooms.app.pushState().then(st => {
+    if (st === "unsupported" || (st === "on" && Rooms.app.standalone())) return;
+    const inner = el("div");
+    const no = el("button", "linkbtn", t("ap_later")); no.type = "button";
+    no.onclick = () => { try { localStorage.setItem("dr-app-later", String(Date.now())); } catch {} appEl.remove(); };
+    appEl.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner, no);
+    Rooms.appBox(inner, { onDone: () => appEl.remove() });
+    appEl.hidden = false;
+  });
+  return appEl;
+}
 function render() {
   searchIn.placeholder = t("db_search_ph"); searchIn.setAttribute("aria-label", t("db_search_ph"));
   // A greeting by first name and time of day, then one line on what needs them now.
@@ -261,7 +290,7 @@ function render() {
     stat("verdict", t("ds_verdict_t"), verdicts, t("ds_verdict_c"), t("ds_verdict_f"), true),
     stat("done", t("ds_done_t"), statSets.done, t("ds_done_c"), t("ds_done_f")));
   const search = el("div", "search"); search.append(searchIn);
-  view.replaceChildren(...[title, stats, attention(), rooms.length > 3 ? search : null, results].filter(Boolean));
+  view.replaceChildren(...[title, appCard(), stats, attention(), rooms.length > 3 ? search : null, results].filter(Boolean));
   drawResults();
 }
 function drawResults() {
