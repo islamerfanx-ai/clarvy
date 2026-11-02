@@ -17,70 +17,112 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/rooms/rooms.css">
 <style>
-/* Dashboard (from the paper sketch, in the editorial style of the reference): numbers row, your open rooms
-   as cards with Invite, then Ongoing and Old lists. Flat white cards on the yellow ground, thin dividers. */
-main{--content:none}
-.db-title{margin:24px 0 8px;max-width:14ch}
-.db-hello{margin:24px 0 18px}
+/* Your rooms as a dashboard: a sidebar of pages (a tab bar on a phone), the greeting with Add a room and the app at the
+   top right, slim number cards, what needs attention, open rooms in two rows of cards, then one compact table for the
+   rest, decision and research rooms together. One gap (--gap) between every block. */
+main{--content:none;--gap:28px}
+.db-shell{display:grid;grid-template-columns:196px minmax(0,1fr);gap:32px;align-items:start}
+.db-nav{position:sticky;top:93px;display:flex;flex-direction:column;gap:2px;padding-inline-end:20px;border-inline-end:1px solid var(--line);min-height:calc(100vh - 140px)}
+.db-nav a,.db-nav button{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font:inherit;font-size:15px;background:none;border:0;cursor:pointer;text-align:start}
+.db-nav a:hover,.db-nav button:hover{background:rgba(0,0,0,.05)}
+.db-nav [aria-current=page]{background:#fff;font-weight:500}
+.db-nav .foot{margin-top:auto;color:var(--dim)}
+.db-nav svg,.db-tabs svg,.db-appbtn svg{flex:none}
+.db-main{display:flex;flex-direction:column;min-width:0}
+.db-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
 .db-hello .eyebrow{display:block;font-size:14px;color:var(--dim)}
-.db-hello .db-title{margin:6px 0 8px;max-width:22ch}
-.db-hello .db-line{margin:0;font-size:var(--t-h5);max-width:46ch}
-.db-app{background:#fff;padding:20px;margin:8px 0 0;display:flex;flex-direction:column;gap:6px;max-width:640px}
-.db-app h2{margin:0;font-size:var(--t-h5);font-weight:400}
-.db-sec{display:flex;flex-direction:column;gap:12px;margin-top:40px}
-.db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
-.db-head h2{margin:0;font-size:var(--t-h4);font-weight:400;letter-spacing:-.02em}
+.db-hello .db-title{margin:4px 0 6px;font-size:var(--t-h3);max-width:none}
+.db-hello .db-line{margin:0 0 4px;font-size:16px;max-width:52ch}
+.db-acts{display:flex;gap:10px;align-items:center;position:relative}
+.db-acts .btn{width:auto;padding:13px 20px}
+.db-appbtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:var(--t-ui);background:#fff;border:1px solid var(--line);border-radius:40px;padding:11px 16px;color:var(--fg);cursor:pointer}
+.db-appbtn:hover{border-color:var(--fg)}
+.db-apppop{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:30;width:min(360px,calc(100vw - 32px));background:#fff;padding:18px;box-shadow:0 8px 28px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:6px}
+.db-apppop h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.db-sec{display:flex;flex-direction:column;gap:12px;margin-top:var(--gap)}
+.db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+.db-head h2{margin:0;font-size:var(--t-h5);font-weight:500;letter-spacing:-.01em}
 .db-head .n{font-size:var(--t-ui);color:var(--dim)}
-/* Number cards: title, divider, big figure beside a short label, one sentence at the foot */
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:28px;padding-block:28px}
-.stat{display:flex;flex-direction:column;background:#fff;padding:20px 20px 22px;min-height:300px;color:var(--fg);text-decoration:none}
-.stat h3{margin:0 0 16px;font-size:var(--t-h5);font-weight:400;letter-spacing:-.01em;color:var(--fg);padding-bottom:16px;border-bottom:1px solid var(--line)}
-.stat .fig{display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--line)}
-.stat .num{font-size:var(--t-display);line-height:1;font-weight:400;letter-spacing:-.04em;padding:22px 0 14px;border-inline-end:1px solid var(--line)}
-.stat .cap{align-self:end;font-size:var(--t-ui);line-height:1.25;padding:0 0 14px 12px}
-[dir=rtl] .stat .cap{padding:0 12px 14px 0}
-.stat .foot{margin-top:auto;padding-top:24px;font-size:var(--t-ui);line-height:1.4}
-.stat.go .num{text-decoration:underline;text-decoration-thickness:3px;text-underline-offset:8px}
+.db-head .linkbtn{margin-inline-start:auto}
+/* Number cards: slim, the figure beside its title; tap to filter */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:var(--gap)}
+.stat{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:4px 14px;background:#fff;padding:14px 16px;color:var(--fg);text-decoration:none;min-height:0}
+.stat .num{grid-row:1/3;font-size:40px;line-height:1;font-weight:400;letter-spacing:-.03em}
+.stat h3{margin:0;font-size:15px;font-weight:500;letter-spacing:0}
+.stat .cap{font-size:13px;line-height:1.3;color:var(--dim)}
+.stat.go .num{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:6px}
 button.stat{font:inherit;text-align:start;border:0;cursor:pointer;width:100%}
 button.stat:hover h3,button.stat:focus-visible h3{text-decoration:underline;text-underline-offset:4px}
 button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .stat[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:-2px}
-.filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:18px 0 0;font-size:var(--t-ui)}
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
-.rcard{display:flex;flex-direction:column;gap:14px;background:#fff;padding:20px}
+.filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:var(--gap) 0 0;font-size:var(--t-ui)}
+/* Open rooms: cards, two rows at most until See all */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.rcard{display:flex;flex-direction:column;gap:12px;background:#fff;padding:16px 18px}
 .rcard a.open{display:flex;flex-direction:column;gap:8px;color:var(--fg);text-decoration:none;flex:1}
-.rcard a.open .meta{padding-bottom:12px;border-bottom:1px solid var(--line)}
+.rcard a.open .meta{display:flex;justify-content:space-between;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .rcard a.open:hover .q{text-decoration:underline;text-underline-offset:3px}
-.rcard .q{font-size:var(--t-h5);font-weight:400;line-height:1.3;letter-spacing:-.01em}
+.rcard .q{font-size:17px;font-weight:400;line-height:1.3;letter-spacing:-.01em}
 .rcard .st{font-size:14px;color:var(--dim)}
 .rcard .st.go{color:var(--fg);font-weight:600}
-.rcard .invite{width:100%}
+.rcard .invite{width:100%;padding:13px 16px}
+.kind{justify-self:start;font-size:12px;border:1px solid var(--line);border-radius:40px;padding:1px 8px;white-space:nowrap;color:var(--fg)}
+.kind.rs{background:var(--yellow);border-color:transparent}
 .panel{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
 .panel .share{grid-template-columns:1fr 1fr}
-.addcard{display:flex;align-items:center;justify-content:center;gap:10px;min-height:160px;border:1.5px dashed rgba(20,20,20,.35);
-  color:var(--fg);text-decoration:none;font-size:16px;font-weight:500}
-.addcard:hover{background:#fff;border-style:solid}
-.addcard b{font-size:26px;font-weight:300;line-height:1}
-.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px;background:var(--line)}
-.rrow a{display:grid;grid-template-columns:1fr auto;gap:6px 24px;align-items:start;background:#fff;padding:18px 20px;color:var(--fg);text-decoration:none}
-.rrow a:hover .q{text-decoration:underline;text-underline-offset:3px}
-.rrow.old a{background:#FFF8D6}
-.rrow .q{font-size:var(--t-h5);font-weight:400;line-height:1.35;letter-spacing:-.01em}
-.rrow .when{font-size:14px;color:var(--dim);white-space:nowrap}
-.rrow .who{grid-column:1/-1;font-size:14px;color:var(--dim)}
-.rrow .who b{font-weight:500;color:var(--fg)}
-.rrow .st{grid-column:1/-1;font-size:14px;color:var(--dim)}
-.rrow .st.go{color:var(--fg);font-weight:600}
-.search{display:flex;gap:10px;align-items:center;margin:8px 0 28px}
-.search input{flex:1;font-size:16px}
-.attention{display:flex;flex-direction:column;gap:1px;background:var(--line);list-style:none;margin:0 0 8px;padding:0}
-.attention li{display:grid;grid-template-columns:1fr auto;gap:6px 18px;align-items:center;background:var(--yellow);padding:16px 20px}
-.attention .q{font-size:16px;line-height:1.35}
-.attention .why{grid-column:1;font-size:14px}
-.attention .act{grid-row:1/3;grid-column:2;white-space:nowrap}
-@media (max-width:560px){.attention li{grid-template-columns:1fr}.attention .act{grid-row:auto;grid-column:1}}
 .empty{margin:0;font-size:15px;color:var(--dim);padding:6px 0}
-@media (max-width:560px){.rrow a{grid-template-columns:1fr}.rrow .when{white-space:normal}.addcard{min-height:72px}.stat{min-height:0}.stat .num{font-size:56px}}
+/* Ongoing and old: one thin row per room */
+.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tools input{flex:1;min-width:180px;font-size:15px}
+.seg{display:inline-flex;background:rgba(0,0,0,.05);border-radius:40px;padding:3px}
+.seg button{font:inherit;font-size:var(--t-ui);border:0;background:none;border-radius:40px;padding:7px 14px;cursor:pointer;color:var(--fg)}
+.seg button[aria-pressed=true]{background:#fff;font-weight:500}
+.dt{list-style:none;margin:0;padding:0;background:#fff}
+.dt li + li{border-top:1px solid var(--line)}
+.dt-row{display:grid;grid-template-columns:minmax(0,3fr) 96px minmax(0,1.4fr) 70px 96px;gap:12px;align-items:center;padding:11px 16px;color:var(--fg);text-decoration:none;font-size:14px}
+a.dt-row:hover .q{text-decoration:underline;text-underline-offset:3px}
+.dt-head{font-size:13px;color:var(--dim);padding-block:9px;background:transparent}
+.dt .q{font-size:15px;line-height:1.35;overflow:hidden;text-overflow:ellipsis}
+.dt .st.go{font-weight:600}
+.dt .dim{color:var(--dim)}
+details.old{margin-top:var(--gap)}
+details.old > summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:var(--t-h5);font-weight:500}
+details.old > summary::-webkit-details-marker{display:none}
+details.old > summary::before{content:"▸";margin-inline-end:8px;display:inline-block;transition:transform .15s}
+details.old[open] > summary::before{transform:rotate(90deg)}
+details.old > summary span:first-child{margin-inline-end:auto}
+details.old > summary .n{font-size:var(--t-ui);color:var(--dim);font-weight:400}
+details.old .dt{margin-top:12px}
+.attention{display:flex;flex-direction:column;gap:1px;background:var(--line);list-style:none;margin:0;padding:0}
+.attention li{display:grid;grid-template-columns:1fr auto;gap:4px 18px;align-items:center;background:var(--yellow);padding:12px 16px}
+.attention .q{font-size:15px;line-height:1.35}
+.attention .why{grid-column:1;font-size:13px}
+.attention .act{grid-row:1/3;grid-column:2;white-space:nowrap;width:auto;padding:11px 16px}
+/* Phone tab bar */
+.db-tabs{display:none}
+@media (min-width:821px){.top #orgLink{display:none}}
+@media (max-width:1100px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:820px){
+  .db-shell{grid-template-columns:minmax(0,1fr)}
+  .db-nav{display:none}
+  main{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+  .db-tabs{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:40;background:var(--ink);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around}
+  .db-tabs a,.db-tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font:inherit;font-size:11px;color:var(--dim);text-decoration:none;background:none;border:0;padding:4px 0;cursor:pointer}
+  .db-tabs [aria-current=page]{color:var(--fg);font-weight:500}
+  .db-tabs .add span.ic{display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin-top:-14px;border-radius:50%;background:var(--accent);color:#fff}
+  .db-acts .btn.add{display:none}
+}
+@media (max-width:640px){
+  .db-top{flex-direction:column}
+  .db-acts{align-self:stretch}
+  .db-apppop{inset-inline-start:0;inset-inline-end:auto}
+  .stat{padding:12px 14px}.stat .num{font-size:32px}.stat .cap{display:none}
+  .dt-head{display:none}
+  .dt-row{grid-template-columns:1fr auto;gap:4px 10px}
+  .dt-row .q{grid-column:1/-1}
+  .dt-row .c-ppl,.dt-row .c-date{display:none}
+  .attention li{grid-template-columns:1fr}.attention .act{grid-row:auto;grid-column:1}
+}
 </style>
 </head>
 <body>
@@ -89,10 +131,15 @@ button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
   </header>
-  <div id="view" aria-live="polite"><div class="ld" data-load="rooms"></div></div>
-  <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
+  <div class="db-shell">
+    <nav class="db-nav" id="dbNav"></nav>
+    <div class="db-main">
+      <div id="view" aria-live="polite"><div class="ld" data-load="rooms"></div></div>
+      <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
+    </div>
+  </div>
+  <nav class="db-tabs" id="dbTabs"></nav>
 </main>
-
 <script src="/rooms/rooms.js"></script>
 <script>
 (() => {
@@ -223,62 +270,116 @@ searchIn.oninput = () => { query = searchIn.value.trim().toLowerCase(); drawResu
 const matches = r => !query || [r.question, r.final_label, ...(r.options || []).map(o => o?.label)].filter(Boolean).some(x => String(x).toLowerCase().includes(query));
 const results = el("div");
 
-/* ---------- Page ---------- */
-// "Decision Rooms on your phone": until the app is installed with notifications on (or "Not now", for two weeks).
-let appEl = null;
-function appCard() {
-  if (demo) return null;
-  if (appEl) return appEl;
-  appEl = el("div", "msg db-app"); appEl.hidden = true;
-  let later = 0; try { later = Number(localStorage.getItem("dr-app-later")) || 0; } catch {}
-  if (Date.now() - later < 14 * 864e5) return appEl;
-  Rooms.app.pushState().then(st => {
-    if (st === "unsupported" || (st === "on" && Rooms.app.standalone())) return;
-    const inner = el("div");
-    const later = () => { try { localStorage.setItem("dr-app-later", String(Date.now())); } catch {} appEl.remove(); };
-    appEl.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner);
-    Rooms.appBox(inner, { onDone: () => appEl.remove(), later });
-    appEl.hidden = false;
-  });
-  return appEl;
+/* ---------- Sidebar and phone tabs ---------- */
+const ICON = {
+  rooms: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+  research: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/>',
+  notes: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/>',
+  org: '<path d="M4 21V5l8-2v18M12 8h8v13M2 21h20M8 9h.01M8 13h.01M8 17h.01M16 12h.01M16 16h.01"/>',
+  profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+  app: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  add: '<path d="M12 5v14M5 12h14"/>'
+};
+const icon = k => { const s = el("span", "ic"); s.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`; return s; };
+let kindFilter = null, myOrgs = [];   // kindFilter: null (all), "decision" or "research"
+const addHref = () => demo ? "/new.html?demo=1" : "/new.html";
+function drawNav() {
+  const nav = $("dbNav"), tabs = $("dbTabs");
+  nav.setAttribute("aria-label", t("dn_nav")); tabs.setAttribute("aria-label", t("dn_nav"));
+  const item = (key, label, { href, onClick, current, cls } = {}) => {
+    const x = el(href ? "a" : "button", cls || null);
+    if (href) x.href = href; else { x.type = "button"; x.onclick = onClick; }
+    if (current) x.setAttribute("aria-current", "page");
+    x.append(icon(key), el("span", null, label));
+    return x;
+  };
+  const showKind = k => () => { kindFilter = k; statFilter = null; render(); if (k) $("dbList")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const org = myOrgs.length ? item("org", myOrgs.length === 1 ? myOrgs[0].name : t("og_link"), { href: "/org.html" }) : null;
+  nav.replaceChildren(...[
+    item("rooms", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
+    item("research", t("dn_research"), { onClick: showKind("research"), current: kindFilter === "research" }),
+    item("notes", t("dn_notes"), { href: demo ? "/notes.html?demo=1" : "/notes.html" }),
+    org,
+    item("profile", t("dn_profile"), { href: "/profile.html" }),
+    appShown ? item("app", t("dn_app"), { onClick: e => { e.stopPropagation(); toggleApp(true); }, cls: "foot" }) : null
+  ].filter(Boolean));
+  tabs.replaceChildren(
+    item("rooms", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
+    item("research", t("dn_research"), { onClick: showKind("research"), current: kindFilter === "research" }),
+    item("add", t("dn_add"), { href: addHref(), cls: "add" }),
+    item("notes", t("dn_notes"), { href: demo ? "/notes.html?demo=1" : "/notes.html" }),
+    item("profile", t("dn_profile"), { href: "/profile.html" }));
 }
+
+/* ---------- The app, top right ---------- */
+// A small "Get the app" button until the app is installed with notifications on; it opens the install steps.
+let appShown = false, appPop = null;
+const appBtn = el("button", "db-appbtn"); appBtn.type = "button"; appBtn.setAttribute("aria-expanded", "false");
+appBtn.hidden = true;
+appBtn.onclick = e => { e.stopPropagation(); toggleApp(); };
+document.addEventListener("click", e => { if (appPop && !appPop.contains(e.target)) toggleApp(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && appPop) toggleApp(false); });
+function toggleApp(on = !appPop) {
+  if (appPop) { appPop.remove(); appPop = null; }
+  appBtn.setAttribute("aria-expanded", String(on));
+  if (!on || !appBtn.isConnected) return;
+  appPop = el("div", "db-apppop"); appPop.setAttribute("role", "dialog"); appPop.setAttribute("aria-label", t("ap_title"));
+  const inner = el("div");
+  appPop.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner);
+  Rooms.appBox(inner, { onDone: () => { toggleApp(false); appShown = false; appBtn.hidden = true; drawNav(); }, later: () => toggleApp(false) });
+  appBtn.parentNode.append(appPop);
+}
+Rooms.app.pushState().then(st => {
+  appShown = !(st === "unsupported" || (st === "on" && Rooms.app.standalone()));
+  appBtn.hidden = !appShown;
+  if (rooms) drawNav();
+}, () => {});
+
+/* ---------- Page ---------- */
 function render() {
   searchIn.placeholder = t("db_search_ph"); searchIn.setAttribute("aria-label", t("db_search_ph"));
+  appBtn.replaceChildren(icon("app"), el("span", null, t("dn_app")));
+  drawNav();
   // A greeting by first name and time of day, then one line on what needs them now.
   const first = String(myName || "").trim().split(/\s+/)[0];
   const hour = new Date().getHours();
   const part = hour < 5 ? "evening" : hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
-  const title = el("div", "db-hello");
+  const hello = el("div", "db-hello");
   const needs = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer").length;
   const ready = rooms.filter(r => r.status === "deciding" && r.has_verdict).length;
   const stuckN = rooms.filter(r => stuck(r)).length;
-  const line = !rooms.length ? t("hi_new")
+  const line = !rooms.length && !research.length ? t("hi_new")
     : needs ? t(needs === 1 ? "hi_need_1" : "hi_need_n", { n: needs })
     : ready ? t(ready === 1 ? "hi_ready_1" : "hi_ready_n", { n: ready })
     : stuckN ? t(stuckN === 1 ? "hi_stuck_1" : "hi_stuck_n", { n: stuckN })
     : t("hi_quiet");
-  title.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
+  hello.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
+  // Add a room (asks decision or research) and the app, top right.
+  const acts = el("div", "db-acts");
+  const add = el("a", "btn add", "+ " + t("db_add")); add.href = addHref();
+  acts.append(add, appBtn);
+  const top = el("div", "db-top"); top.append(hello, acts);
   // Numbers row: what needs you, at a glance.
   const finished = r => ["decided", "reviewed"].includes(r.status);
   const needMe = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer");
   const waiting = rooms.filter(r => r.status === "open" && r.i_submitted);
   const verdicts = rooms.filter(r => r.status === "deciding" && r.has_verdict);
-  const stats = el("div", "stats band");
+  const stats = el("div", "stats");
   // Each number opens its rooms: one room goes straight to it, several filter the lists below.
   const stat = (key, title, list, cap, foot, go) => {
     const n = list.length;
     const c = el(n ? "button" : "div", "stat" + (go && n ? " go" : ""));
+    c.title = foot;
     if (n) {
       c.type = "button"; c.setAttribute("aria-pressed", String(statFilter === key));
       c.setAttribute("aria-label", t(n === 1 ? "ds_open_one" : "ds_show_these", { title }));
       c.onclick = () => {
         if (n === 1) { location.href = roomHref(list[0]); return; }
-        statFilter = statFilter === key ? null : key; render();
+        statFilter = statFilter === key ? null : key; kindFilter = null; render();
         results.scrollIntoView({ behavior: "smooth", block: "start" });
       };
     }
-    const fig = el("div", "fig"); fig.append(el("span", "num", String(n)), el("span", "cap", cap));
-    c.append(el("h3", null, title), fig, el("p", "foot", foot));
+    c.append(el("span", "num", String(n)), el("h3", null, title), el("span", "cap", cap));
     return c;
   };
   statSets = { need: needMe, wait: waiting, verdict: verdicts, done: rooms.filter(finished) };
@@ -287,117 +388,132 @@ function render() {
     stat("wait", t("ds_wait_t"), waiting, t("ds_wait_c"), t("ds_wait_f")),
     stat("verdict", t("ds_verdict_t"), verdicts, t("ds_verdict_c"), t("ds_verdict_f"), true),
     stat("done", t("ds_done_t"), statSets.done, t("ds_done_c"), t("ds_done_f")));
-  const search = el("div", "search"); search.append(searchIn);
-  view.replaceChildren(...[title, appCard(), stats, attention(), rooms.length > 3 ? search : null, results].filter(Boolean));
+  view.replaceChildren(...[top, stats, attention(), results].filter(Boolean));
   drawResults();
 }
-function drawResults() {
-  document.title = t("my_rooms") + " · " + t("product");
-  const finished = r => ["decided", "reviewed"].includes(r.status);
-  const inStat = r => !statFilter || (statSets[statFilter] || []).includes(r);
-  const shown = rooms.filter(r => matches(r) && inStat(r));
-  const yours = shown.filter(r => r.role === "owner" && r.status === "open");
-  const ongoing = shown.filter(r => !finished(r) && !yours.includes(r));
-  const old = shown.filter(finished);
 
-  // 1. Your open rooms, each with Invite + people; then + Add a room.
-  const s1 = section(t("db_yours"), yours.length || null);
-  const grid = el("div", "cards");
-  yours.forEach(r => {
-    const card = el("article", "rcard");
-    const a = el("a", "open"); a.href = roomHref(r);
-    const s = statusLine(r);
-    a.append(el("span", "meta", Rooms.typeName(r)), q(r), el("span", "st" + (s.go ? " go" : ""), s.text));
-    if (Number(r.invited) > 0) {
-      // People were invited one by one: their links live in the room.
-      const ppl = el("a", "btn invite", t("db_people", { n: r.invited })); ppl.href = roomHref(r);
-      card.append(a, ppl);
-    } else {
-      const inv = el("button", "btn invite", "+ " + t("db_invite")); inv.type = "button"; inv.setAttribute("aria-expanded", "false");
-      inv.onclick = () => togglePanel(r, card, inv);
-      card.append(a, inv);
-    }
-    grid.append(card);
-  });
-  const add = el("a", "addcard"); add.href = demo ? "/new.html?demo=1" : "/new.html";
-  add.append(el("b", null, "+"), el("span", null, t("db_add")));
-  grid.append(add);
-  s1.append(grid);
-  if (!yours.length) s1.append(el("p", "empty", t(query ? "db_no_match" : "db_none_yet")));
-
-  // 2. Ongoing and 3. Old: room, date, members.
-  const list = (title, items, emptyText, isOld) => {
-    const sec = section(title, items.length || null);
-    if (!items.length) { sec.append(el("p", "empty", emptyText)); return sec; }
-    const ul = el("ul", "rows");
-    items.forEach(r => {
-      const li = el("li", "rrow" + (isOld ? " old" : ""));
-      const a = el("a"); a.href = roomHref(r);
-      const who = el("span", "who"); who.append(el("b", null, t("db_members") + ": "), document.createTextNode(names(r.names)));
-      const s = statusLine(r);
-      a.append(q(r), el("span", "when", t("db_started", { date: Rooms.fmtDate(String(r.created_at).slice(0, 10)) })), who,
-        el("span", "st" + (s.go ? " go" : ""), (r.role === "owner" ? t("role_owner") + " · " : "") + s.text));
-      li.append(a);
-      ul.append(li);
-    });
-    sec.append(ul);
-    return sec;
-  };
-  // Rooms you help someone else with, as their assistant.
-  const help = helping.filter(matches);
-  let s4 = null;
-  if (help.length) {
-    s4 = section(t("db_helping"), help.length);
-    const ul = el("ul", "rows");
-    help.forEach(r => {
-      const li = el("li", "rrow"), a = el("a"); a.href = "/room.html?room=" + encodeURIComponent(r.id);
-      a.append(q(r), el("span", "when", t("db_helping_for", { owner: r.owner_name || "" })),
-        el("span", "st", r.status === "open" ? t("og_answered", { n: r.submitted, total: r.members }) : t("st_" + (r.status === "deciding" ? "deciding" : r.status))));
-      li.append(a); ul.append(li);
-    });
-    s4.append(ul);
-  }
-  // When a number card is chosen, say so and offer a way back to everything.
-  let bar = null;
-  if (statFilter) {
-    bar = el("div", "filterbar");
-    const all = el("button", "linkbtn", t("ds_show_all")); all.type = "button";
-    all.onclick = () => { statFilter = null; render(); };
-    bar.append(el("span", null, t("ds_showing", { title: t({ need: "ds_need_t", wait: "ds_wait_t", verdict: "ds_verdict_t", done: "ds_done_t" }[statFilter]), n: statSets[statFilter].length })), all);
-  }
-  results.replaceChildren(...[bar, s1, statFilter ? null : s4, statFilter ? null : researchSection(),
-    list(t("db_ongoing"), ongoing, t(query ? "db_no_match" : "db_empty_ongoing"), false),
-    list(t("db_old"), old, t(query ? "db_no_match" : "db_empty_old"), true)].filter(Boolean));
-}
-
-// Research rooms: the team researches one question; owners see how many submitted, members what's next.
+// Decision rooms, rooms you help with and research rooms, in one shape for the cards and the table.
 function researchStatus(r) {
   if (r.status === "done") return { text: t("rs_st_done"), go: true };
   if (r.status === "pooled") return { text: t("rs_st_pooled"), go: r.role === "owner" };
   if (r.role === "owner") return { text: t("rs_st_open_owner", { n: r.submitted, m: r.people }), go: r.people > 0 && r.submitted >= r.people };
   return r.i_submitted ? { text: t("rs_st_sent") } : { text: t("rs_st_find"), go: true };
 }
-function researchSection() {
-  const shown = research.filter(r => !query || r.question.toLowerCase().includes(query.toLowerCase()));
-  const sec = section(t("rs_db_t"), shown.length || null);
-  if (shown.length) {
-    const ul = el("ul", "rows");
-    shown.forEach(r => {
-      const li = el("li", "rrow" + (r.status === "done" ? " old" : "")), a = el("a");
-      a.href = demo ? "/research.html?demo=" + (r.status === "done" ? "brief" : r.role === "owner" ? "owner" : "find") : "/research.html?id=" + encodeURIComponent(r.id);
-      const s = researchStatus(r);
-      a.append(q(r), el("span", "when", t("db_started", { date: Rooms.fmtDate(String(r.created_at).slice(0, 10)) })),
-        el("span", "st" + (s.go ? " go" : ""), (r.role === "owner" ? t("rs_db_owner") + " · " : "") + s.text));
+const researchHref = r => demo ? "/research.html?demo=" + (r.status === "done" ? "brief" : r.role === "owner" ? "owner" : "find") : "/research.html?id=" + encodeURIComponent(r.id);
+function entries() {
+  const finished = r => ["decided", "reviewed"].includes(r.status);
+  const d = rooms.map(r => { const s = statusLine(r); return { kind: "decision", r, href: roomHref(r), s, people: r.members, mine: r.role === "owner",
+    open: r.role === "owner" && r.status === "open", done: finished(r), stage: (r.role === "owner" ? t("role_owner") + " · " : "") + s.text }; });
+  const h = helping.map(r => ({ kind: "decision", r, href: "/room.html?room=" + encodeURIComponent(r.id), s: {}, people: r.members, help: true, open: false, done: finished(r),
+    stage: t("db_helping_for", { owner: r.owner_name || "" }) + " · " + (r.status === "open" ? t("og_answered", { n: r.submitted, total: r.members }) : t("st_" + (r.status === "deciding" ? "deciding" : r.status))) }));
+  const rs = research.map(r => { const s = researchStatus(r); return { kind: "research", r, href: researchHref(r), s, people: r.people, mine: r.role === "owner",
+    open: r.role === "owner" && r.status !== "done", done: r.status === "done", stage: s.text }; });
+  return [...d, ...h, ...rs];
+}
+const kindTag = k => el("span", "kind" + (k === "research" ? " rs" : ""), t(k === "research" ? "dn_k_research" : "dn_k_decision"));
+const dateOf = x => Rooms.fmtDate(String(x.r.created_at).slice(0, 10));
+
+let showAllOpen = false, lastCols = 0;
+function drawResults() {
+  document.title = t("my_rooms") + " · " + t("product");
+  const inStat = x => !statFilter || (x.kind === "decision" && !x.help && (statSets[statFilter] || []).includes(x.r));
+  const inKind = x => !kindFilter || x.kind === kindFilter;
+  const all = entries().filter(x => matches(x.r) && inStat(x) && inKind(x));
+  // What needs you first, then the newest.
+  const order = (a, b) => (b.s.go ? 1 : 0) - (a.s.go ? 1 : 0) || String(b.r.created_at).localeCompare(String(a.r.created_at));
+  const open = all.filter(x => x.open).sort(order);
+  const ongoing = all.filter(x => !x.open && !x.done).sort(order);
+  const old = all.filter(x => x.done).sort(order);
+
+  // 1. Your open rooms, two rows of cards at most until See all.
+  const s1 = section(t("db_yours"), open.length || null);
+  const width = results.clientWidth || view.clientWidth || 900;
+  lastCols = Math.max(1, Math.floor((width + 12) / (230 + 12)));
+  const limit = lastCols * 2;
+  if (open.length > limit) {
+    const more = el("button", "linkbtn", showAllOpen ? t("dn_fewer") : t("dn_see_all", { n: open.length })); more.type = "button";
+    more.onclick = () => { showAllOpen = !showAllOpen; drawResults(); };
+    s1.firstChild.append(more);
+  }
+  const grid = el("div", "cards");
+  (showAllOpen ? open : open.slice(0, limit)).forEach(x => {
+    const r = x.r, card = el("article", "rcard");
+    const a = el("a", "open"); a.href = x.href;
+    const meta = el("span", "meta"); meta.append(el("span", null, x.kind === "research" ? t("rs_db_t") : Rooms.typeName(r)), kindTag(x.kind));
+    a.append(meta, q(r), el("span", "st" + (x.s.go ? " go" : ""), x.s.text));
+    card.append(a);
+    if (x.kind === "research") {
+      // Research invites live in the research room.
+      const go = el("a", "btn invite", t("na_open")); go.href = x.href;
+      card.append(go);
+    }
+    else if (Number(r.invited) > 0) {
+      // People were invited one by one: their links live in the room.
+      const ppl = el("a", "btn invite", t("db_people", { n: r.invited })); ppl.href = x.href;
+      card.append(ppl);
+    } else {
+      const inv = el("button", "btn invite", "+ " + t("db_invite")); inv.type = "button"; inv.setAttribute("aria-expanded", "false");
+      inv.onclick = () => togglePanel(r, card, inv);
+      card.append(inv);
+    }
+    grid.append(card);
+  });
+  if (open.length) s1.append(grid);
+  else {
+    s1.append(el("p", "empty", t(query ? "db_no_match" : kindFilter === "research" ? "rs_db_none" : "db_none_yet")));
+    if (!query) { const add = el("a", "btn soft", "+ " + t("db_add")); add.href = addHref(); add.style.cssText = "width:auto;align-self:flex-start"; s1.append(add); }
+  }
+
+  // 2. Everything else in one table: question, kind, stage, people, date. Old rooms fold away.
+  const table = items => {
+    const ul = el("ul", "dt");
+    const head = el("li", "dt-row dt-head"); head.setAttribute("aria-hidden", "true");
+    head.append(el("span", null, t("dn_c_q")), el("span", null, t("dn_c_kind")), el("span", null, t("dn_c_stage")), el("span", "c-ppl", t("dn_c_people")), el("span", "c-date", t("dn_c_date")));
+    ul.append(head);
+    items.forEach(x => {
+      const li = el("li"), a = el("a", "dt-row"); a.href = x.href;
+      if (x.r.status === "decided" && x.r.final_label) a.title = x.r.final_label;
+      a.append(q(x.r), kindTag(x.kind), el("span", "st" + (x.s.go ? " go" : ""), x.stage), el("span", "c-ppl dim", String(x.people ?? "")), el("span", "c-date dim", dateOf(x)));
       li.append(a); ul.append(li);
     });
-    sec.append(ul);
-  } else sec.append(el("p", "empty", t("rs_db_none")));
-  const start = el("a", "btn soft", "+ " + t("rs_db_start")); start.href = demo ? "/research.html?demo=1" : "/research.html";
-  start.style.width = "auto"; start.style.alignSelf = "flex-start";
-  sec.append(start);
-  return sec;
-}
+    return ul;
+  };
+  const s2 = section(t("db_ongoing"), ongoing.length || null);
+  s2.id = "dbList";
+  // Search and the kind switch sit with the table.
+  const tools = el("div", "tools");
+  const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", t("dn_c_kind"));
+  [[null, "dn_k_all"], ["decision", "dn_k_decision"], ["research", "dn_k_research"]].forEach(([k, key]) => {
+    const b = el("button", null, t(key)); b.type = "button"; b.setAttribute("aria-pressed", String(kindFilter === k));
+    b.onclick = () => { kindFilter = k; drawNav(); drawResults(); };
+    seg.append(b);
+  });
+  tools.append(searchIn, seg);
+  s2.append(tools, ongoing.length ? table(ongoing) : el("p", "empty", t(query ? "db_no_match" : "db_empty_ongoing")));
+  const s3 = el("details", "old");
+  if (query || statFilter === "done") s3.open = true;
+  const sum = el("summary"); sum.append(el("span", null, t("db_old")), el("span", "n", old.length ? String(old.length) : ""));
+  s3.append(sum, old.length ? table(old) : el("p", "empty", t(query ? "db_no_match" : "db_empty_old")));
 
+  // When a number card is chosen, say so and offer a way back to everything.
+  let bar = null;
+  if (statFilter) {
+    bar = el("div", "filterbar");
+    const back = el("button", "linkbtn", t("ds_show_all")); back.type = "button";
+    back.onclick = () => { statFilter = null; render(); };
+    bar.append(el("span", null, t("ds_showing", { title: t({ need: "ds_need_t", wait: "ds_wait_t", verdict: "ds_verdict_t", done: "ds_done_t" }[statFilter]), n: statSets[statFilter].length })), back);
+  }
+  const hadFocus = document.activeElement === searchIn;
+  results.replaceChildren(...[bar, s1, s2, s3].filter(Boolean));
+  if (hadFocus) searchIn.focus();
+}
+// Two rows of cards follow the width: redraw when the number of columns changes.
+let resizeT = 0;
+addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => {
+  if (!rooms || showAllOpen) return;
+  const cols = Math.max(1, Math.floor(((results.clientWidth || 900) + 12) / 242));
+  if (cols !== lastCols) drawResults();
+}, 150); });
 // No account in this browser yet (trial accounts live in the browser that made them).
 // Not signed in: sign in or sign up (Google, Microsoft or an email code), then the short profile.
 function noRooms() {
@@ -411,7 +527,8 @@ function noRooms() {
 async function load() {
   if (demo) {
     rooms = DEMO; myName = "Islam";
-    research = [{ id: "r1", question: t("rs_demo_q"), status: "open", role: "owner", people: 4, submitted: 2, i_submitted: false, language: Rooms.lang, created_at: new Date().toISOString() }];
+    research = [{ id: "s1", question: t("rs_demo_q"), status: "open", role: "owner", people: 4, submitted: 2, i_submitted: false, language: Rooms.lang, created_at: new Date().toISOString() },
+      { id: "s2", question: t("dn_demo_rq"), status: "done", role: "member", people: 3, submitted: 3, i_submitted: true, language: Rooms.lang, created_at: "2026-10-02" }];
     return render();
   }
   const sb = Rooms.sb;
@@ -419,6 +536,7 @@ async function load() {
   await sb.rpc("claim_org_invites").then(() => {}, () => {});
   sb.rpc("my_orgs").then(({ data: os }) => {
     if (!os?.length || $("orgLink")) return;
+    myOrgs = os; if (rooms) drawNav();
     const a = el("a", "navlink", os.length === 1 ? os[0].name : t("og_link")); a.id = "orgLink"; a.href = "/org.html";
     document.querySelector(".top-acts").prepend(a);
   }, () => {});
