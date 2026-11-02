@@ -86,6 +86,14 @@ All seven ideas ship before launch, in this order, no mock-ups; launch date to b
 7. Organisation document library
 8. At launch: switch on the world library ($20 a month to start)
 
+## Research room (idea, decided 2026-11-02, sketched, not built)
+A room where a team gets one piece of research done, using the same thinking models. Chosen over a general collaboration space (that would compete with Notion, Asana and Docs, and blur what DXRooms is); widen later only if customers ask.
+- **Flow:** frame (the question; MECE branches; Cynefin says look it up or test it) → split (branches to people or roles, deadline, nudges) → find (findings with source, date and how sure; files and links) → pool (agree, conflict, thin branches, old facts; the owner can send a branch back) → brief (dated, sourced, confidence per finding, gaps).
+- **Visibility:** the owner chooses; hidden until submitted by default (no anchoring), open for simple fact-gathering. Once pooled, everyone sees findings with names.
+- **Endings, any or all, the owner picks:** share the brief, turn it into a decision room (the brief becomes "what everyone should know"), slides, next steps (a new research round).
+- **Reuses:** people and invites, nudges, phone notifications, talk, document library, organisation memory, reports. Not live co-editing or chat.
+- **Sketch:** https://claude.ai/artifact/XacfPGo5Png8w9rqreNpGF
+
 ## Rename to DXRooms (decided 2026-11-02, waiting for the domain)
 The product becomes **DXRooms** at dxrooms.com. Nothing changes until the domain transfer is done.
 - **Decided:** written "DXRooms"; a room is still a "decision room"; Arabic text also says "DXRooms" in Latin letters (replaces غرف القرار); clarvy.tejarra.com redirects forever to the same path and query on dxrooms.com, so old invites, reports and room links keep working.
