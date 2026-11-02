@@ -261,6 +261,11 @@ ul.tree li:last-child{border-bottom:0}
 .dr-pop-close:hover{border-color:var(--fg)}
 .dr-pop-close:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
 body.dr-pop-open{overflow:hidden}
+/* Add a room: decision or research, asked first */
+.dr-kind{justify-content:center;align-items:center;padding:16px}
+.dr-kind-panel{position:relative;width:min(520px,100%);background:var(--ink);padding:28px 24px 24px;display:flex;flex-direction:column;gap:12px}
+.dr-kind-panel h2{margin:0 48px 6px 0;font-size:var(--t-h5);font-weight:400}
+[dir=rtl] .dr-kind-panel h2{margin:0 0 6px 48px}
 /* inside the pop-up, the setup page drops its own header */
 html.embed .top{display:none}
 html.embed main{margin-inline-start:0;padding-top:68px}

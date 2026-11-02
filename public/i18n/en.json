@@ -1983,5 +1983,10 @@
   "ft_x_docs": "Library documents",
   "ft_x_docs_how": "in {o} organisations, used in {c} calls",
   "ft_x_memory": "Organisations with memory on",
-  "ft_x_memory_how": "used in {c} calls"
+  "ft_x_memory_how": "used in {c} calls",
+  "kd_title": "What kind of room?",
+  "kd_decide": "Decision room",
+  "kd_decide_h": "Decide one question together: everyone gives their view in private, you get one recommended call, people sign off.",
+  "kd_research": "Research room",
+  "kd_research_h": "Find something out together: split the question into parts, pool what everyone finds, get one brief."
 }

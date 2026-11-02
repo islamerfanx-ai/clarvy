@@ -596,11 +596,29 @@ addEventListener("message", e => {
   location.href = e.data.url;
 });
 // Any link to the setup page opens the pop-up instead (landing CTAs, Add a room, empty states).
+// First it asks which kind: a decision room (the setup pop-up) or a research room (research.html).
 if (!embedded) document.addEventListener("click", e => {
   const a = e.target.closest?.('a[href^="/new.html"]');
   if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
-  e.preventDefault(); openNewRoom(a.getAttribute("href"));
+  e.preventDefault(); chooseRoomKind(a.getAttribute("href"));
 });
+function chooseRoomKind(href = "/new.html") {
+  if (document.querySelector(".dr-pop")) return;
+  const demo = /[?&]demo=/.test(href);
+  const pop = el("div", "dr-pop dr-kind"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-modal", "true");
+  const panel = el("div", "dr-kind-panel"), title = el("h2", null, t("kd_title"));
+  title.id = "drKindT"; pop.setAttribute("aria-labelledby", "drKindT");
+  const close = el("button", "dr-pop-close", "×"); close.type = "button"; close.setAttribute("aria-label", t("close") || "Close");
+  const shut = () => { pop.remove(); document.body.classList.remove("dr-pop-open"); removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") shut(); };
+  const decide = choice(t("kd_decide"), t("kd_decide_h"), false, () => { shut(); openNewRoom(href); });
+  const research = choice(t("kd_research"), t("kd_research_h"), false, () => { shut(); location.href = demo ? "/research.html?demo=1" : "/research.html"; });
+  panel.append(close, title, decide, research); pop.append(panel); document.body.append(pop);
+  document.body.classList.add("dr-pop-open");
+  close.onclick = shut; pop.addEventListener("click", e => { if (e.target === pop) shut(); });
+  addEventListener("keydown", onKey);
+  decide.focus();
+}
 // Inside the pop-up, finishing hands the room's address to the page behind it.
 function goToRoom(url) {
   if (embedded && window.parent !== window) window.parent.postMessage({ type: "dr-open", url }, location.origin);
