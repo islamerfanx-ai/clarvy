@@ -94,7 +94,7 @@ main{--content:1120px}
     <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
   </header>
-  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+  <div id="view" aria-live="polite"><div class="ld" data-load="admin"></div></div>
 </main>
 
 <script src="/rooms/rooms.js"></script>
@@ -112,9 +112,9 @@ function csv(rows) {
   return [cols.join(","), ...rows.map(r => cols.map(c => q(r[c])).join(","))].join("\n");
 }
 /* ---------- Growth (2026-10-22): one tab per growth question, from admin_growth() ---------- */
-const TABS = ["overview", "ask", "revenue", "acquisition", "activation", "loop", "rooms", "retention", "quality", "money", "orgs", "health", "people"];
+const TABS = ["overview", "ask", "revenue", "acquisition", "activation", "loop", "rooms", "features", "retention", "quality", "money", "orgs", "health", "people"];
 let tab = (() => { try { const x = localStorage.getItem("dr-admin-tab"); return TABS.includes(x) ? x : "overview"; } catch { return "overview"; } })();
-let growth = null, revenue = null;
+let growth = null, revenue = null, features = null;
 const num = n => n == null ? "·" : Number(n).toLocaleString(Rooms.lang === "ar" ? "ar" : "en");
 const pct = (a, b) => b ? Math.round(100 * a / b) + "%" : "·";
 function stat(n, l, how, cls) {
@@ -245,6 +245,38 @@ const panels = {
       card(num(h.stuck_open ?? 0), t("gr_h_stuck"), !h.stuck_open, t("gr_h_stuck_how")))];
   }
 };
+/* ---------- Features (2026-11-02): research, the phone app, simulations and the 1.5 features, counts only ---------- */
+function featuresPanel(f) {
+  const r = f.research || {}, a = f.app || {}, s = f.simulations || {}, x = f.features || {};
+  const pushEvent = k => t("ft_ev_" + k) === "ft_ev_" + k ? k : t("ft_ev_" + k);
+  return [
+    box(t("ft_research"),
+      grid("ad-stats", stat(num(r.started), t("ft_r_started"), t("ft_r_started_how", { n: num(r.started_30d), o: num(r.owners) })),
+        stat(num(r.findings), t("ft_r_findings"), t("ft_r_sourced", { p: pct(r.sourced, r.findings) })),
+        stat(num(r.briefs), t("ft_r_briefs"), t("ft_r_briefs_how", { n: num(r.to_room), m: num(r.next_rounds) })),
+        stat(money(r.cost_30d), t("ft_cost30"), r.briefs ? t("ft_per_brief", { c: money(r.cost_30d / Math.max(1, r.briefs)) }) : null)),
+      funnel([[t("ft_r_f_started"), r.started], [t("ft_r_f_pooled"), r.pooled], [t("ft_r_f_briefs"), r.briefs], [t("ft_r_f_room"), r.to_room]]),
+      funnel([[t("ft_r_f_invited"), r.invited], [t("ft_r_f_joined"), r.joined], [t("ft_r_f_submitted"), r.submitted]]),
+      el("p", "small", t("ft_r_hidden", { p: pct(r.hidden, r.started) }))),
+    grid("ad-two",
+      box(t("ft_app"),
+        grid("ad-stats", stat(num(a.people), t("ft_a_people"), t("ft_a_devices", { n: num(a.devices), u: num(a.used_7d) })),
+          stat(num(a.sent_7d), t("ft_a_sent7"), t("ft_a_sent30", { n: num(a.sent_30d), w: num(a.waiting) }))),
+        list(a.by_device, x => t("ft_dev_" + x.k)), el("p", "small", t("ft_a_off")), list(a.kinds_off, x => t("ap_k_" + x.k))),
+      box(t("ft_a_events"), list(a.by_event, x => pushEvent(x.k)))),
+    box(t("ft_sims"),
+      grid("ad-stats", stat(num(s.drafted), t("ft_s_drafted"), t("ft_s_rooms", { n: num(s.rooms) })), stat(num(s.run), t("ft_s_run"), t("ft_s_failed", { n: num(s.failed) })),
+        stat(num(s.added), t("ft_s_added"), pct(s.added, s.run)), stat(s.seconds == null ? "·" : s.seconds + "s", t("ft_s_time")), stat(money(s.cost_30d), t("ft_cost30")))),
+    box(t("ft_v15"),
+      grid("ad-stats", stat(num(x.notes), t("ft_x_notes"), t("ft_x_notes_how", { n: num(x.note_authors), c: money(x.notes_cost_30d) })),
+        stat(num(x.assistants), t("ft_x_assistants"), t("ft_x_assistants_how", { n: num(x.assistant_actions_30d) })),
+        stat(num(x.messages_30d), t("ft_x_talk"), t("ft_x_talk_how", { n: num(x.talk_rooms_30d) })),
+        stat(num((x.reopen_open || 0) + (x.reopened || 0) + (x.reopen_declined || 0)), t("ft_x_reopen"), t("ft_x_reopen_how", { o: num(x.reopen_open), r: num(x.reopened), d: num(x.reopen_declined) })),
+        stat(num(x.documents), t("ft_x_docs"), t("ft_x_docs_how", { o: num(x.document_orgs), c: num(x.calls_with_docs) })),
+        stat(num(x.memory_orgs), t("ft_x_memory"), t("ft_x_memory_how", { c: num(x.calls_with_memory) }))))
+  ];
+}
+
 /* ---------- Revenue (2026-10-23): recorded by hand on this tab, Stripe later ---------- */
 const usd = n => n == null ? "·" : (n < 0 ? "-$" : "$") + Math.abs(Number(n)).toLocaleString("en", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 const pctv = v => v == null ? "·" : v + "%";
@@ -408,6 +440,7 @@ function render() {
   let body;
   if (tab === "people") body = [accessBox(), ...peoplePanel()];
   else if (tab === "ask") body = [el("p", "gr-q", t("gr_q_ask")), ...askPanel()];
+  else if (tab === "features") body = features ? [el("p", "gr-q", t("gr_q_features")), ...featuresPanel(features)] : [el("p", "gr-empty", t("gr_unavailable"))];
   else if (tab === "revenue") body = revenue ? [el("p", "gr-q", t("gr_q_revenue")), ...panels.revenue(revenue)] : [el("p", "gr-empty", t("gr_unavailable"))];
   else if (!growth) body = [el("p", "gr-empty", t("gr_unavailable"))];
   else body = [el("p", "gr-q", t("gr_q_" + tab)), ...panels[tab](growth)];
@@ -563,7 +596,7 @@ async function noAccess() {
 async function load() {
   try {
     data = await Rooms.post("/api/admin/overview", {});
-    [growth, revenue] = await Promise.all([Rooms.post("/api/admin/growth", {}).catch(() => null), Rooms.post("/api/admin/revenue", { action: "summary" }).catch(() => null), loadOrgs(), loadAccess()]);
+    [growth, revenue, features] = await Promise.all([Rooms.post("/api/admin/growth", {}).catch(() => null), Rooms.post("/api/admin/revenue", { action: "summary" }).catch(() => null), Rooms.post("/api/admin/features", {}).catch(() => null), loadOrgs(), loadAccess()]);
     render();
   }
   catch (e) {

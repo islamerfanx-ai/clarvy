@@ -27,7 +27,6 @@ main{--content:none}
 .db-hello .db-line{margin:0;font-size:var(--t-h5);max-width:46ch}
 .db-app{background:#fff;padding:20px;margin:8px 0 0;display:flex;flex-direction:column;gap:6px;max-width:640px}
 .db-app h2{margin:0;font-size:var(--t-h5);font-weight:400}
-.db-app .linkbtn{align-self:flex-start;margin-top:6px}
 .db-sec{display:flex;flex-direction:column;gap:12px;margin-top:40px}
 .db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
 .db-head h2{margin:0;font-size:var(--t-h4);font-weight:400;letter-spacing:-.02em}
@@ -90,7 +89,7 @@ button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
     <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
   </header>
-  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking">One moment</p></article></div>
+  <div id="view" aria-live="polite"><div class="ld" data-load="rooms"></div></div>
   <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
 </main>
 
@@ -236,10 +235,9 @@ function appCard() {
   Rooms.app.pushState().then(st => {
     if (st === "unsupported" || (st === "on" && Rooms.app.standalone())) return;
     const inner = el("div");
-    const no = el("button", "linkbtn", t("ap_later")); no.type = "button";
-    no.onclick = () => { try { localStorage.setItem("dr-app-later", String(Date.now())); } catch {} appEl.remove(); };
-    appEl.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner, no);
-    Rooms.appBox(inner, { onDone: () => appEl.remove() });
+    const later = () => { try { localStorage.setItem("dr-app-later", String(Date.now())); } catch {} appEl.remove(); };
+    appEl.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner);
+    Rooms.appBox(inner, { onDone: () => appEl.remove(), later });
     appEl.hidden = false;
   });
   return appEl;

@@ -95,7 +95,7 @@ body.slides main{--content:1100px}
     <a class="wm" href="/">Decision Rooms</a>
     <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
   </header>
-  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+  <div id="view" aria-live="polite"><div class="ld" data-load="research"></div></div>
 </main>
 
 <script src="/rooms/rooms.js"></script>
@@ -581,6 +581,7 @@ function whatNext(B) {
         crits: B.decision?.criteria?.length ? B.decision.criteria.map(label => ({ label, on: true })) : null, critsDraft: null,
         context: ctx.slice(0, 3000), brief: null, briefFor: "", briefPicked: [] });
       try { localStorage.setItem(ROOM_DRAFT, JSON.stringify(d)); } catch {}
+      if (!demo) Rooms.sb.rpc("research_to_room", { rid: R.id }).then(() => {}, () => {});
       Rooms.openNewRoom(demo ? "/new.html?demo=1" : "/new.html");
     });
     const round = Rooms.choice(t("rs_round"), t("rs_round_h"), false, () => {

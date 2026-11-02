@@ -38,11 +38,34 @@ async function loadLang(l) {
   document.documentElement.lang = l;
   document.documentElement.dir = words.dir;
   document.querySelectorAll("[data-t]").forEach(e => { e.textContent = t(e.dataset.t); });
+  document.querySelectorAll(".ld[data-load]").forEach(b => b._say && b._say());
   document.querySelectorAll(".ap-back").forEach(e => e.setAttribute("aria-label", t("ap_back")));
   document.querySelectorAll("[data-t-ph]").forEach(e => { e.placeholder = t(e.dataset.tPh); });
   const b = $("langBtn");
   if (b) { b.textContent = t("lang_other"); b.setAttribute("aria-label", t("lang_other_label")); }
 }
+/* ---------- Loading: a bar that fills and short lines about what's happening ---------- */
+// Pages start with <div class="ld" data-load="room"></div>. Its lines are the words ld_<kind>_1..3: they move on by
+// themselves, and loadStep(n) moves to line n when that part has really started. The page replaces the box when it's ready.
+function mountLoader(box) {
+  if (box.dataset.on) return; box.dataset.on = "1";
+  box.setAttribute("role", "status");
+  const bar = el("div", "ld-bar"), fill = el("i"), line = el("p", "ld-line");
+  bar.append(fill); box.append(bar, line);
+  let pct = 6, at = 1, since = Date.now();
+  const say = () => { const w = words["ld_" + box.dataset.load + "_" + at]; if (w && line.textContent !== w) { line.classList.remove("in"); line.textContent = w; void line.offsetWidth; line.classList.add("in"); } };
+  box._step = n => { if (n > at) { at = Math.min(3, n); since = Date.now(); pct = Math.max(pct, (at - 1) * 30 + 6); say(); } };
+  box._say = say;
+  const tick = setInterval(() => {
+    if (!box.isConnected) return clearInterval(tick);
+    pct += (94 - pct) * 0.06; fill.style.width = pct.toFixed(1) + "%";
+    if (Date.now() - since > 1800 && at < 3) box._step(at + 1);
+  }, 120);
+  say();
+}
+function loadStep(n) { document.querySelectorAll(".ld[data-load]").forEach(b => b._step && b._step(n)); }
+document.querySelectorAll(".ld[data-load]").forEach(mountLoader);
+
 function savedLang() { try { return localStorage.getItem("clarvy-lang"); } catch { return null; } }
 function firstLang(hint) { return savedLang() || hint || ((navigator.language || "").startsWith("ar") ? "ar" : "en"); }
 // Wire the EN/عربي button. onChange runs after the new words load.
@@ -61,6 +84,21 @@ const fmtDate = d => new Date(d + (String(d).length === 10 ? "T00:00:00" : "")).
 
 /* ---------- Supabase ---------- */
 let sb = null, user = null, emailCodes = false, providers = [];
+// Last time someone used the site in this browser (any tap, key or return to the tab), kept for the 24-hour rule.
+const IDLE_LIMIT = 24 * 3600e3, ACTIVE_KEY = "dr-last-active";
+function lastActive() { try { return Number(localStorage.getItem(ACTIVE_KEY)) || Date.now(); } catch { return Date.now(); } }
+let activeAt = 0;
+function markActive(now) {
+  if (!now && Date.now() - activeAt < 60e3) return;   // at most once a minute
+  activeAt = Date.now(); try { localStorage.setItem(ACTIVE_KEY, String(activeAt)); } catch {}
+}
+["pointerdown", "keydown"].forEach(ev => addEventListener(ev, () => markActive(), { passive: true }));
+// Coming back to a tab that sat open for a day: sign out there too, then reload to the sign-in.
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) return;
+  if (sb && user && !standalone() && Date.now() - lastActive() > IDLE_LIMIT) { await sb.auth.signOut({ scope: "local" }).catch(() => {}); location.reload(); return; }
+  markActive();
+});
 async function connect() {
   const cfg = await fetch("/api/config").then(r => r.ok ? r.json() : {}).catch(() => ({}));
   if (!cfg.supabase) return false;
@@ -71,7 +109,10 @@ async function connect() {
   await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js");
   sb = window.supabase.createClient(cfg.supabase.url, cfg.supabase.anonKey);
   user = (await sb.auth.getSession()).data.session?.user || null;
-  sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; });
+  // On the website, a day with no activity signs you out and you sign in again. The installed app stays signed in.
+  if (user && !standalone() && Date.now() - lastActive() > IDLE_LIMIT) { await sb.auth.signOut({ scope: "local" }).catch(() => {}); user = null; }
+  markActive(true);
+  sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; if (user) markActive(true); });
   showMyRooms();
   syncPush();
   return true;
@@ -316,18 +357,23 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
   emailStep.addEventListener("submit", e => { e.preventDefault(); email = eIn.value.trim(); if (email) send(); });
   resend.addEventListener("click", send);
   change.addEventListener("click", () => { codeStep.hidden = true; emailStep.hidden = false; say(""); eIn.focus(); });
-  codeStep.addEventListener("submit", async e => {
-    e.preventDefault();
+  let checking = false;
+  async function verify() {
     const token = cIn.value.replace(/\D/g, "");
     if (token.length < 6 || token.length > 10) return say(t("code_wrong"));   // Supabase sends 6 or 8 digits, depending on the project
-    cBtn.disabled = true;
+    if (checking) return;
+    checking = true; cBtn.disabled = true; cIn.readOnly = true; say(t("code_checking"), "ok");
     const { data, error } = await sb.auth.verifyOtp({ email, token, type: mode });
-    cBtn.disabled = false;
-    if (error) return say(t("code_wrong"));
+    checking = false; cBtn.disabled = false; cIn.readOnly = false;
+    if (error) { cIn.value = ""; cIn.focus(); return say(t("code_wrong")); }
+    say("");
     user = data.user || (await sb.auth.getUser()).data.user;
     showMyRooms();
     onDone && onDone(email);
-  });
+  }
+  codeStep.addEventListener("submit", e => { e.preventDefault(); verify(); });
+  // The 6th digit signs in by itself, whether typed, pasted or filled in by the phone from the email.
+  cIn.addEventListener("input", () => { const d = cIn.value.replace(/\D/g, ""); if (d !== cIn.value) cIn.value = d; if (d.length === 6) verify(); });
   setTimeout(() => (preset ? eBtn : eIn).focus(), 50);
 }
 
@@ -687,7 +733,8 @@ const app = {
 };
 // The install and notifications box. full: also the four kinds (profile page). onDone: called once
 // notifications are on and the app is installed, so a page can hide a reminder card.
-async function appBox(box, { full = false, onDone } = {}) {
+// later: a "Not now" handler; its button sits in the same row as the others, so every button lines up.
+async function appBox(box, { full = false, onDone, later } = {}) {
   const draw = async () => {
     box.replaceChildren();
     const state = await app.pushState().catch(() => "unsupported");
@@ -701,6 +748,7 @@ async function appBox(box, { full = false, onDone } = {}) {
     if (state === "off") row.append(btn(t("ap_push_on_btn"), standalone() || !app.canInstall() ? "" : "ghost", async () => { const r = await app.enablePush(); if (r !== "on") note.textContent = t(r === "denied" ? "ap_push_denied" : "ap_push_fail"); else draw(); }));
     else if (state === "on") { box.append(el("p", "small ap-on", t("ap_push_on"))); if (full) row.append(btn(t("ap_push_off_btn"), "ghost", async () => { await app.disablePush(); draw(); })); }
     else if (state === "denied") note.textContent = t("ap_push_denied");
+    if (later) row.append(btn(t("ap_later"), "ghost", async () => later()));
     if (row.children.length) box.append(row);
     box.append(note);
     if (state === "on" && full) {
@@ -739,6 +787,6 @@ window.Rooms = {
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
-  openNewRoom, goToRoom, embedded, validUrl, linksEditor, app, appBox
+  openNewRoom, goToRoom, embedded, validUrl, linksEditor, app, appBox, loadStep
 };
 })();

@@ -27,7 +27,7 @@
     </div>
   </header>
   <div id="view" style="display:flex;flex-direction:column;gap:8px" aria-live="polite">
-    <article class="msg"><p class="text thinking">One moment</p></article>
+    <div class="ld" data-load="room"></div>
   </div>
   <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:8px"></p>
 </main>
@@ -750,10 +750,9 @@ function pingCard() {
   Rooms.app.pushState().then(st => {
     if (!["off", "install-first"].includes(st)) return;
     const inner = el("div");
-    const no = el("button", "linkbtn", t("ap_later")); no.type = "button";
-    no.onclick = () => { try { localStorage.setItem("dr-ping-later", String(Date.now())); } catch {} pingEl.remove(); };
-    pingEl.append(el("p", "text sm", t("ap_room_ping")), inner, no);
-    Rooms.appBox(inner, { onDone: () => pingEl.remove() });
+    const later = () => { try { localStorage.setItem("dr-ping-later", String(Date.now())); } catch {} pingEl.remove(); };
+    pingEl.append(el("p", "text sm", t("ap_room_ping")), inner);
+    Rooms.appBox(inner, { onDone: () => pingEl.remove(), later });
     pingEl.hidden = false;
   });
   return pingEl;
@@ -1770,11 +1769,11 @@ async function start() {
   await Rooms.loadLang(Rooms.firstLang(demo === "ar" ? "ar" : null));
   try { MODELS = (await import("/rooms/models.js")).MODELS; } catch {}
   try { MATH = await import("/rooms/math.js"); } catch {}
-  notice(t("loading"), true);
   $("demoNote").hidden = !demo;
   if (demo) return demo === "join" ? vJoin() : refresh();
   if (!roomId && !joinToken) return notice(t("no_room"));
   if (!(await Rooms.connect())) return notice(t("not_setup"));
+  Rooms.loadStep(2);
   if (Rooms.user) {
     const p = await Rooms.profile();
     if (p?.language && !Rooms.savedLang() && p.language !== Rooms.lang) await Rooms.loadLang(p.language);
@@ -1782,6 +1781,7 @@ async function start() {
   if (joinToken && !roomId) return vJoin();
   // Old guest sessions start fresh: anyone without a real account signs in first.
   if (!Rooms.hasAccount()) return vSignIn();
+  Rooms.loadStep(3);
   refresh();
 }
 start();

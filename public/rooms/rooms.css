@@ -182,6 +182,13 @@ input[type=date].line{max-width:240px}
 .status{margin:0;min-height:1.2em;font-size:13px;line-height:1.4}
 .status.err{color:var(--err)}.status.ok{color:var(--ok)}
 .thinking::after{content:"_";animation:blink 1s steps(1) infinite}
+/* Loading: a thin bar that fills, with a short line about what's happening */
+.ld{display:flex;flex-direction:column;gap:14px;padding:28px 0;max-width:420px}
+.ld-bar{height:4px;border-radius:4px;background:var(--accent-soft);overflow:hidden}
+.ld-bar i{display:block;height:100%;width:6%;background:var(--accent);border-radius:4px;transition:width .3s ease-out}
+.ld-line{margin:0;font-size:15px;color:var(--dim);min-height:1.4em}
+.ld-line.in{animation:ldin .45s ease-out}
+@keyframes ldin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes blink{50%{opacity:0}}
 details.more>summary{cursor:pointer;list-style:none;font-family:var(--mono);font-stretch:75%;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);padding-block:4px}
 details.more>summary::-webkit-details-marker{display:none}
@@ -205,7 +212,7 @@ details.more .field{margin-top:16px}
 .lang{font-family:var(--mono)!important}
 
 @media (max-width:480px){.msg{padding:18px 16px 20px}.scale button{font-size:11px}}
-@media (prefers-reduced-motion:reduce){.meter i{transition:none}.thinking::after{animation:none}}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}.thinking::after{animation:none}.ld-bar i{transition:none}.ld-line.in{animation:none}}
 
 /* ---------- Editorial type (after the base rules so it wins; Arabic rules above still win by specificity) ---------- */
 body::before{display:none}
@@ -479,7 +486,10 @@ ul.live-done li.in{animation:thinkIn .45s ease both}
 
 
 /* ================= The app: install and notifications box, back arrow, safe areas in the installed app ================= */
-.ap-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+.ap-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;align-items:stretch}
+/* Every button in the row the same height and width, side by side; stacked full width on a phone. */
+.ap-row .btn,.ap-row .btn.ghost{flex:1 1 0;min-width:0;width:auto;padding:16px 20px;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+@media (max-width:560px){.ap-row{flex-direction:column}.ap-row .btn,.ap-row .btn.ghost{flex:none;width:100%}}
 .ap-note:empty{display:none}
 .ap-on{color:var(--accent)}
 .ap-kinds{border:0;padding:0;margin:16px 0 0;display:flex;flex-direction:column;gap:10px}

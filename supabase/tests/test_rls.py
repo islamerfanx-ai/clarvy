@@ -643,6 +643,12 @@ server(f"update research set status='done', brief='{{\"answer\":\"Yes\"}}', brie
 check("the brief reaches members", server(f"select count(*) from push_outbox where user_id='{B}' and event='research_brief'"), "\n1\n")
 check("a next round builds on the owner's research", as_user(A, f"insert into research (question, parent_id) values ('Close the gaps', '{RS}')"), "INSERT 0 1")
 check("but not on someone else's", as_user(B, f"insert into research (question, parent_id) values ('Close the gaps', '{RS}')"), "row-level security")
+check("only the owner marks it turned into a room", as_user(B, f"select research_to_room('{RS}')") + server(f"select to_room_at is null from research where id='{RS}'"), "True")
+check("the owner marks it turned into a room", as_user(A, f"select research_to_room('{RS}')") + server(f"select to_room_at is null from research where id='{RS}'"), "False")
+
+# ---------- Admin: features tab (20261111000000_admin_features.sql) ----------
+check("the features numbers add up", server("select admin_features()->'research'->>'briefs', admin_features()->'research'->>'to_room', admin_features()->'app'->>'people'"), "1 | 1 | ")
+check("people can't read the features numbers", as_user(A, "select admin_features()"), "permission denied")
 check("a member leaves", as_user(C, f"delete from research_people where research_id='{RS}' and user_id='{C}'"), "DELETE 1")
 check("the owner can't be removed", as_user(A, f"delete from research_people where research_id='{RS}' and user_id='{A}'"), "DELETE 0")
 check("people can't use the server's push", as_user(A, f"select push_on_research_brief()"), "permission denied")

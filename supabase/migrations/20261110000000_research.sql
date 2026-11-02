@@ -17,6 +17,7 @@ create table research (
   brief      jsonb,
   brief_at   timestamptz,
   parent_id  uuid references research (id) on delete set null,
+  to_room_at timestamptz,   -- the owner turned the brief into a decision room (for the admin numbers)
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
