@@ -86,6 +86,19 @@ All seven ideas ship before launch, in this order, no mock-ups; launch date to b
 7. Organisation document library
 8. At launch: switch on the world library ($20 a month to start)
 
+## Rename to DXRooms (decided 2026-11-02, waiting for the domain)
+The product becomes **DXRooms** at dxrooms.com. Nothing changes until the domain transfer is done.
+- **Decided:** written "DXRooms"; a room is still a "decision room"; Arabic text also says "DXRooms" in Latin letters (replaces غرف القرار); clarvy.tejarra.com redirects forever to the same path and query on dxrooms.com, so old invites, reports and room links keep working.
+- **Still open:** the registrar (for the DNS records), the sending email address (mail.dxrooms.com, dxrooms.com, or stay on mail.tejarra.com for now), the logo, wordmark and icon.
+- **Steps when ready:**
+  1. Domain: DNS to the server (62.171.184.161), HTTPS certificate, both dxrooms.com and www.
+  2. Email: Resend domain records, then switch the sign-in code emails and reminders (`NUDGE_FROM`).
+  3. Outside services: Supabase site URL and redirect URLs, Google and Microsoft sign-in redirect URLs, Turnstile allowed hostnames, `PUBLIC_URL` in /etc/clarvy.env, the health check in .github/workflows/deploy.yml, the push subject in lib/push.js.
+  4. Words: "Decision Rooms" (about 95 places) and غرف القرار (about 19) in pages, i18n, emails, reminders, notifications, reports, the manifest and app name, the FAQ, the AI prompts, privacy and terms.
+  5. Switch: go live on dxrooms.com, then the permanent redirect from clarvy.tejarra.com.
+  6. After: test sign-in codes, invites, notifications and reports on the new address; update CLAUDE.md, docs and memory; optionally rename the GitHub repo.
+- **Note:** a new address is a new app to phones. Installed apps and notifications need setting up again, and drafts saved in the browser stay on the old address. Fine before launch.
+
 ## Mobile app (decided 2026-10-28, before launch)
 Why: notifications, faster answering, store presence, owners on the go. Everything the website does, laid out for the phone.
 1. **Installable web app with phone notifications: built (version 1.7.0).** `manifest.webmanifest`, `sw.js` (pages network-first with an offline copy; never `/api/` or Supabase), the door icon in `public/app/`. Install from Your rooms, the profile or the room after answering; on iPhone people add it to the home screen first (iOS 16.4+), then turn notifications on. Notifications: invites and reminders, room progress for the owner (joined, new answers as a count, everyone in, objections), the call (ready, made), after the call (talk at most every 10 minutes, tasks handed over, due today, review day, reopen requests). People choose the four kinds on their profile.
