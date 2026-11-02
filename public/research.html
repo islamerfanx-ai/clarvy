@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Research · Decision Rooms</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#F6F4E9">
+<link rel="icon" type="image/png" href="/app/favicon-48.png">
+<link rel="apple-touch-icon" href="/app/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Decision Rooms">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/rooms/rooms.css">
+<style>
+/* The research room: a team gets one piece of research done.
+   Frame (question → branches) → split (who looks into what) → find (findings with source, date, how sure; hidden
+   until each person submits, unless the owner opens them) → pool (agree, conflict, thin, old) → brief → what next. */
+main{--content:860px}
+.rs-head{margin:20px 0 16px;display:flex;flex-direction:column;gap:6px}
+.rs-head h1{margin:0;font-size:var(--t-h3);line-height:1.1;font-weight:400;letter-spacing:-.02em;text-wrap:balance}
+.rs-meta{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:13px;color:var(--dim)}
+.rs-card{background:#fff;padding:18px 20px;display:flex;flex-direction:column;gap:12px;margin-bottom:14px;min-width:0}
+.rs-card h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.rs-card.yellow{background:var(--yellow)}
+.rs-band{background:var(--accent);color:#fff;padding:18px 20px;margin-bottom:14px;display:flex;flex-direction:column;gap:6px}
+.rs-band .small{color:#fff;opacity:.85}
+.rs-band p.answer{margin:0;font-size:20px;line-height:1.35}
+.rs-steps{font:500 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);margin:18px 0 4px}
+.br{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.br:first-of-type{border-top:0;padding-top:0}
+.br-top{display:flex;gap:10px;align-items:center}
+.br-top .n{font:500 14px var(--mono);color:var(--accent);width:20px;flex:none}
+.br-top input{flex:1}
+.br .chips{margin-inline-start:30px}
+.br textarea,.br .ask{margin-inline-start:30px;width:calc(100% - 30px)}
+.br-sum{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.br-sum b{font-weight:500}
+.cert{font:500 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase;padding:5px 8px;border:1px solid var(--line)}
+.cert.sure{border-color:var(--accent);color:var(--accent)}
+.cert.thin,.cert.unsure{background:var(--yellow);border-color:transparent}
+.f{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:4px}
+.f p{margin:0;font-size:15px;line-height:1.45}
+.f .src{font-size:13px;color:var(--dim);display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.f .src a{color:var(--accent)}
+.f .x{width:34px;height:34px;font-size:16px;margin-inline-start:auto}
+.f-row{display:flex;gap:8px;align-items:flex-start}
+.f-row p{flex:1}
+.addf{display:flex;flex-direction:column;gap:8px;background:var(--accent-soft);padding:12px}
+.addf .two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+@media (max-width:620px){.addf .two{grid-template-columns:1fr}}
+.prog{height:10px;background:var(--accent-soft);border-radius:10px;overflow:hidden}
+.prog i{display:block;height:100%;background:var(--accent);transition:width .4s}
+.who{display:flex;flex-direction:column;gap:8px}
+.who .p{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 44px;gap:8px;align-items:center}
+.who .p .chips{grid-column:1/-1}
+@media (max-width:620px){.who .p{grid-template-columns:1fr 44px}.who .p input:nth-child(2){grid-column:1}}
+.send li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)}
+.send li b{font-weight:500;flex:1;min-width:120px}
+.send .btn{width:auto;padding:10px 14px}
+.pool{display:flex;flex-direction:column;gap:10px}
+.pool .it{background:#fff;padding:12px 14px;font-size:15px}
+.pool .it.warn{background:var(--yellow)}
+.pool .it b{font-weight:500}
+.acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.acts .btn{width:auto}
+.next{display:flex;flex-direction:column;gap:8px}
+.next .choice-t{font-weight:500}
+ul.plain{list-style:none;margin:0;padding:0}
+ul.dots{margin:0;padding-inline-start:20px;display:flex;flex-direction:column;gap:4px}
+details summary{cursor:pointer;color:var(--accent)}
+/* Slides: one 16:9 page each, printed one per page. */
+body.slides main{--content:1100px}
+.slide{aspect-ratio:16/9;background:#fff;padding:5% 6%;display:flex;flex-direction:column;justify-content:center;gap:18px;margin-bottom:18px;break-after:page;overflow:hidden}
+.slide .k{font:500 13px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+.slide h2{margin:0;font-size:clamp(22px,3.6vw,40px);line-height:1.15;font-weight:400;letter-spacing:-.02em}
+.slide p,.slide li{font-size:clamp(14px,1.8vw,20px);line-height:1.45;margin:0}
+.slide.teal{background:var(--accent);color:#fff}.slide.teal .k{color:#fff;opacity:.8}
+.slide.yellow{background:var(--yellow)}
+@media print{
+  .top,.no-print,.helper-btn{display:none!important}
+  body{background:#fff}
+  .rs-card,.rs-band{break-inside:avoid}
+  body.slides .slide{margin:0;height:100vh;aspect-ratio:auto}
+}
+</style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <a class="wm" href="/">Decision Rooms</a>
+    <div class="top-acts"><a class="navlink" href="/dashboard.html" data-t="my_rooms">Your rooms</a><button class="lang" type="button" id="langBtn"></button></div>
+  </header>
+  <div id="view" aria-live="polite"><article class="msg"><p class="text thinking" data-t="loading">One moment</p></article></div>
+</main>
+
+<script src="/rooms/rooms.js"></script>
+<script>
+(() => {
+const { $, el, t } = Rooms;
+const view = $("view");
+const params = new URLSearchParams(location.search);
+const demo = params.get("demo");
+const id = params.get("id"), join = params.get("join"), slides = params.has("slides");
+const joining = !!join || demo === "join";
+const DRAFT = "dr-research-draft";   // the new research being set up, kept in this browser
+const ROOM_DRAFT = "dr-new-room-3";  // the decision room setup's draft (new.html)
+let R = null, branches = [], roster = [], findings = [], me = null, preview = null;
+let step = 0, sent = null;
+
+/* ---------- Draft (setup), kept in this browser ---------- */
+const blank = () => ({ question: "", context: "", branches: [], note: "", better: "", visibility: "hidden", due: "", people: [{ name: "", contact: "", picks: [] }], parent: null });
+let draft = (() => { try { return { ...blank(), ...JSON.parse(localStorage.getItem(DRAFT)) }; } catch { return blank(); } })();
+const keep = () => { try { localStorage.setItem(DRAFT, JSON.stringify(draft)); } catch {} };
+
+/* ---------- Demo: a lunch delivery idea, every finding an example ---------- */
+const DAY = 864e5, iso = n => new Date(Date.now() + n * DAY).toISOString().slice(0, 10);
+const DEMO = () => {
+  const b = [["b1", "Demand", "Call 5 offices: what do they spend on lunch a month?", "test"], ["b2", "Competitors and prices", "List the big players and their prices.", "lookup"],
+    ["b3", "Licences, rules and costs", "What licence do we need and what does it cost?", "lookup"], ["b4", "Suppliers and delivery", "Get two kitchen quotes.", "test"]]
+    .map(([id, title, ask, method], position) => ({ id, title, ask, method, position }));
+  const f = (id, branch_id, user_id, body, source_label, source_url, source_date, sure) => ({ id, branch_id, user_id, body, source_label, source_url, source_date, sure });
+  return {
+    R: { id: "demo", owner_id: "u1", question: t("rs_demo_q"), context: "", language: Rooms.lang, visibility: "hidden", due_by: iso(9), status: "open", pool: null, brief: null, created_at: new Date().toISOString() },
+    branches: b,
+    roster: [{ user_id: "u1", name: "Islam", role: "owner", branch_ids: [], submitted_at: null }, { user_id: "u2", name: "Sara", role: "member", branch_ids: ["b1"], submitted_at: iso(-1) },
+      { user_id: "u3", name: "Lina", role: "member", branch_ids: ["b2"], submitted_at: null }, { user_id: "u4", name: "Khalid", role: "member", branch_ids: ["b3"], submitted_at: iso(-1) },
+      { user_id: null, name: "Omar", role: "invited", branch_ids: ["b4"], invite_token: "demo-omar", opened_at: null }],
+    findings: [
+      f("f1", "b1", "u2", t("rs_demo_f1"), t("rs_demo_s1"), null, iso(-6), "sure"),
+      f("f2", "b1", "u2", t("rs_demo_f2"), t("rs_demo_s1"), null, iso(-5), "fairly"),
+      f("f3", "b2", "u3", t("rs_demo_f3"), t("rs_demo_s3"), "https://example.com/prices", iso(-5), "sure"),
+      f("f4", "b2", "u3", t("rs_demo_f4"), t("rs_demo_s4"), "https://example.com/news", iso(-18), "fairly"),
+      f("f5", "b3", "u4", t("rs_demo_f5"), t("rs_demo_s5"), "https://example.com/rules", "2024-09-01", "fairly"),
+      f("f6", "b3", "u4", t("rs_demo_f6"), t("rs_demo_s6"), null, iso(-3), "guess")]
+  };
+};
+function demoPool() {
+  return { agree: [{ text: t("rs_demo_agree"), ids: ["f1", "f3"] }], conflict: [{ text: t("rs_demo_conflict"), check: t("rs_demo_check"), ids: ["f5", "f6"] }], weak: [{ text: t("rs_demo_weak"), ids: ["f6"] }],
+    thin: [{ id: "b4", title: "Suppliers and delivery", n: 0 }], old: [{ id: "f5", branch_id: "b3", body: t("rs_demo_f5"), date: "2024-09-01" }], counts: { findings: 6, sources: 5, unsourced: 0, guesses: 1 } };
+}
+function demoBrief() {
+  return { answer: t("rs_demo_answer"), confidence: "medium", sources: 5, findings: 6,
+    branches: [{ id: "b1", summary: t("rs_demo_b1"), certainty: "sure" }, { id: "b2", summary: t("rs_demo_b2"), certainty: "sure" }, { id: "b3", summary: t("rs_demo_b3"), certainty: "unsure" }, { id: "b4", summary: t("rs_demo_b4"), certainty: "thin" }],
+    gaps: [t("rs_demo_gap1"), t("rs_demo_gap2")], next: [t("rs_demo_next1"), t("rs_demo_next2")],
+    decision: { question: t("rs_demo_dq"), options: [t("rs_demo_do1"), t("rs_demo_do2"), t("rs_demo_do3")], criteria: [t("rs_demo_dc1"), t("rs_demo_dc2"), t("rs_demo_dc3")] } };
+}
+
+/* ---------- Store: the database, or the demo in memory ---------- */
+const myId = () => demo ? (demo === "find" ? "u3" : "u1") : Rooms.user?.id;
+const store = demo ? {
+  async load() {
+    if (!R) {
+      const d = DEMO(); ({ R, branches, roster, findings } = d);
+      if (demo === "pooled" || demo === "brief") { R.status = "pooled"; R.pool = demoPool(); roster.forEach(p => { if (p.role === "member") p.submitted_at = iso(-1); }); }
+      if (demo === "brief") { R.status = "done"; R.brief = demoBrief(); R.brief_at = new Date().toISOString(); }
+    }
+    roster.forEach(p => p.me = p.user_id === myId());
+    me = roster.find(p => p.me) || null;
+  },
+  async frame() {
+    await new Promise(r => setTimeout(r, 500));
+    return { branches: DEMO().branches.map(({ title, ask, method }) => ({ title, ask, method })), note: t("rs_demo_note"), better: "" };
+  },
+  async create() { return { id: "demo", tokens: draft.people.filter(p => p.name.trim()).map((p, i) => "demo-" + i) }; },
+  async addFinding(x) { findings.push({ id: "f" + Date.now(), user_id: myId(), ...x }); },
+  async removeFinding(fid) { findings = findings.filter(f => f.id !== fid); },
+  async submit(undo) { me.submitted_at = undo ? null : new Date().toISOString(); },
+  async pool() { R.status = "pooled"; R.pool = demoPool(); },
+  async back(bid) { branches.find(b => b.id === bid).returned_at = new Date().toISOString(); roster.forEach(p => { if (p.branch_ids.includes(bid)) p.submitted_at = null; }); R.status = "open"; },
+  async brief() { R.status = "done"; R.brief = demoBrief(); R.brief_at = new Date().toISOString(); },
+  async invite(p) { roster.push({ user_id: null, name: p.name, role: "invited", branch_ids: p.branch_ids, invite_token: "demo-" + Date.now() }); return roster.at(-1).invite_token; },
+  async preview() { return { question: t("rs_demo_q"), person_name: "Lina", owner_name: "Islam", branches: ["Competitors and prices"], due_by: iso(9), language: Rooms.lang }; },
+  async join() { location.href = "/research.html?demo=find"; }
+} : {
+  async load() {
+    const sb = Rooms.sb;
+    const { data: r } = await sb.from("research").select("*").eq("id", id).maybeSingle();
+    R = r; if (!R) return;
+    const [b, ro, f] = await Promise.all([
+      sb.from("research_branches").select("id,position,title,ask,method,returned_at").eq("research_id", id).order("position"),
+      sb.rpc("research_roster", { rid: id }),
+      sb.from("research_findings").select("id,branch_id,user_id,body,source_url,source_label,source_date,sure,created_at").eq("research_id", id).order("created_at")]);
+    branches = b.data || []; roster = ro.data || []; findings = f.data || [];
+    me = roster.find(p => p.me) || null;
+  },
+  async frame() { return Rooms.post("/api/research", { action: "frame", question: draft.question, context: draft.context, lang: Rooms.lang }); },
+  async create() {
+    const sb = Rooms.sb;
+    const { data: r, error } = await sb.from("research").insert({ question: draft.question.trim(), context: draft.context.trim(), language: Rooms.lang,
+      visibility: draft.visibility, due_by: draft.due || null, parent_id: draft.parent || null }).select("id").single();
+    if (error) throw error;
+    const { data: bs, error: e2 } = await sb.from("research_branches").insert(draft.branches.filter(b => b.title.trim())
+      .map((b, position) => ({ research_id: r.id, position, title: b.title.trim(), ask: (b.ask || "").trim(), method: b.method }))).select("id,position").order("position");
+    if (e2) throw e2;
+    const tokens = [];
+    for (const p of draft.people.filter(p => p.name.trim())) {
+      const { data: inv, error: e3 } = await sb.from("research_invites").insert({ research_id: r.id, person_name: p.name.trim(), person_contact: p.contact.trim() || null,
+        branch_ids: p.picks.map(i => bs[i]?.id).filter(Boolean) }).select("token").single();
+      if (e3) throw e3;
+      tokens.push(inv.token);
+    }
+    return { id: r.id, tokens };
+  },
+  async addFinding(x) { const { error } = await Rooms.sb.from("research_findings").insert({ research_id: id, ...x }); if (error) throw error; },
+  async removeFinding(fid) { const { error } = await Rooms.sb.from("research_findings").delete().eq("id", fid); if (error) throw error; },
+  async submit(undo) { const { error } = await Rooms.sb.rpc("submit_research", { rid: id, undo: !!undo }); if (error) throw error; },
+  async pool() { await Rooms.post("/api/research", { action: "pool", research_id: id }); },
+  async back(bid) { const { error } = await Rooms.sb.rpc("return_branch", { rid: id, bid }); if (error) throw error; },
+  async brief() { await Rooms.post("/api/research", { action: "brief", research_id: id, lang: Rooms.lang }); },
+  async invite(p) {
+    const { data, error } = await Rooms.sb.from("research_invites").insert({ research_id: id, person_name: p.name, person_contact: p.contact || null, branch_ids: p.branch_ids }).select("token").single();
+    if (error) throw error; return data.token;
+  },
+  async preview() { const { data } = await Rooms.sb.rpc("research_invite_preview", { invite_token: join }); Rooms.sb.rpc("research_invite_opened", { invite_token: join }).then(() => {}, () => {}); return data?.[0] || null; },
+  async join() { const { data, error } = await Rooms.sb.rpc("join_research", { invite_token: join }); if (error) throw error; location.href = "/research.html?id=" + data; }
+};
+
+/* ---------- Small pieces ---------- */
+const btn = (label, cls = "btn") => { const b = el("button", cls, label); b.type = "button"; return b; };
+const card = (title, ...kids) => { const c = el("section", "rs-card"); if (title) c.append(el("h2", null, title)); c.append(...kids.filter(Boolean)); return c; };
+const errText = e => t(e?.message === "quota" ? "err_quota" : e?.message === "no_findings" ? "rs_err_none" : "err_generic");
+const roomLang = node => { if (R) { node.lang = R.language; node.dir = R.language === "ar" ? "rtl" : "ltr"; } return node; };
+const nameOf = uid => roster.find(p => p.user_id === uid)?.name || t("rs_someone");
+const isOwner = () => !!me && me.role === "owner";
+const linkFor = token => location.origin + "/research.html?join=" + encodeURIComponent(token);
+// Run an async action from a button: disable it, show what went wrong under it, re-render on success.
+function act(b, fn, status) {
+  b.onclick = async () => {
+    b.disabled = true; if (status) status.textContent = "";
+    try { await fn(); } catch (e) { b.disabled = false; if (status) status.textContent = errText(e); return; }
+    render();
+  };
+  return b;
+}
+function head(eyebrow) {
+  const h = el("div", "rs-head");
+  h.append(el("p", "small", eyebrow), roomLang(el("h1", null, R.question)));
+  const meta = el("div", "rs-meta");
+  if (R.due_by && R.status === "open") meta.append(el("span", null, t("rs_due", { date: Rooms.fmtDate(R.due_by) })));
+  meta.append(el("span", null, t(R.visibility === "open" ? "rs_vis_open_s" : "rs_vis_hidden_s")));
+  h.append(meta);
+  return h;
+}
+function shell(...nodes) {
+  document.title = t("rs_title") + " · " + t("product");
+  const back = el("a", "linkbtn no-print", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
+  view.replaceChildren(back, ...nodes.filter(Boolean));
+}
+function findingNode(f, { names = false, mine = false } = {}) {
+  const d = el("div", "f"), row = el("div", "f-row");
+  row.append(roomLang(el("p", null, f.body)));
+  if (mine && R.status === "open") {
+    const x = btn("×", "x"); x.setAttribute("aria-label", t("rs_remove_f"));
+    x.onclick = async () => { x.disabled = true; try { await store.removeFinding(f.id); await store.load(); render(); } catch { x.disabled = false; } };
+    row.append(x);
+  }
+  const src = el("div", "src");
+  if (f.source_url) { const a = el("a", null, f.source_label || new URL(f.source_url).hostname); a.href = f.source_url; a.target = "_blank"; a.rel = "noopener noreferrer"; src.append(a); }
+  else src.append(el("span", null, f.source_label || t("rs_no_source")));
+  if (f.source_date) src.append(el("span", null, "· " + Rooms.fmtDate(f.source_date)));
+  src.append(el("span", null, "· " + t("rs_sure_" + f.sure)));
+  if (names) src.append(el("span", null, "· " + nameOf(f.user_id)));
+  d.append(row, src);
+  return d;
+}
+function sureChips(value, onPick) {
+  const box = el("div", "chips");
+  const draw = () => box.replaceChildren(...["sure", "fairly", "guess"].map(k => Rooms.chip(t("rs_sure_" + k), value === k, () => { value = k; onPick(k); draw(); })));
+  draw(); return box;
+}
+
+/* ---------- 1. Set up: question → branches → people ---------- */
+function vNew() {
+  document.title = t("rs_new") + " · " + t("product");
+  const h = el("div", "rs-head"); h.append(el("p", "small", t("rs_eyebrow")), el("h1", null, t(["rs_s1_t", "rs_s2_t", "rs_s3_t"][step])));
+  const steps = el("p", "rs-steps", t("rs_step", { n: step + 1 }));
+  const st = el("p", "status err");
+  const back = el("a", "linkbtn no-print", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
+  if (step === 0) {
+    const q = el("textarea"); Object.assign(q, { rows: 3, maxLength: 400, value: draft.question, placeholder: t("rs_q_ph") }); q.setAttribute("aria-label", t("rs_q_lbl"));
+    q.oninput = () => { draft.question = q.value; keep(); };
+    const c = el("textarea"); Object.assign(c, { rows: 4, maxLength: 4000, value: draft.context, placeholder: t("rs_ctx_ph") }); c.setAttribute("aria-label", t("rs_ctx_lbl"));
+    c.oninput = () => { draft.context = c.value; keep(); };
+    const go = btn(t("rs_split"));
+    go.onclick = async () => {
+      if (draft.question.trim().length < 3) { st.textContent = t("rs_need_q"); return q.focus(); }
+      go.disabled = true; go.textContent = t("rs_splitting");
+      try { const r = await store.frame(); Object.assign(draft, { branches: r.branches, note: r.note || "", better: r.better || "" }); keep(); step = 1; render(); }
+      catch (e) { go.disabled = false; go.textContent = t("rs_split"); st.textContent = errText(e); }
+    };
+    const own = btn(t("rs_own_branches"), "linkbtn");
+    own.onclick = () => { if (draft.question.trim().length < 3) { st.textContent = t("rs_need_q"); return q.focus(); } if (!draft.branches.length) draft.branches = [{ title: "", ask: "", method: "lookup" }, { title: "", ask: "", method: "lookup" }]; keep(); step = 1; render(); };
+    return view.replaceChildren(back, h, steps, card(null, el("label", "lbl", t("rs_q_lbl")), q, el("label", "lbl", t("rs_ctx_lbl")), c, el("p", "small", t("rs_split_h")), go, own, st));
+  }
+  if (step === 1) {
+    const list = el("div");
+    const draw = () => list.replaceChildren(...draft.branches.map((b, i) => {
+      const box = el("div", "br"), top = el("div", "br-top");
+      const ti = el("input", "line"); Object.assign(ti, { value: b.title, maxLength: 120, placeholder: t("rs_br_ph") }); ti.setAttribute("aria-label", t("rs_br_n", { n: i + 1 }));
+      ti.oninput = () => { b.title = ti.value; keep(); };
+      const x = btn("×", "x"); x.setAttribute("aria-label", t("rs_br_remove", { n: i + 1 }));
+      x.onclick = () => { if (draft.branches.length <= 1) return; draft.branches.splice(i, 1); draft.people.forEach(p => p.picks = p.picks.filter(k => k !== i).map(k => k > i ? k - 1 : k)); keep(); draw(); };
+      top.append(el("span", "n", String(i + 1)), ti, x);
+      const ask = el("textarea", "ask"); Object.assign(ask, { rows: 2, maxLength: 300, value: b.ask || "", placeholder: t("rs_ask_ph") }); ask.setAttribute("aria-label", t("rs_ask_lbl", { n: i + 1 }));
+      ask.oninput = () => { b.ask = ask.value; keep(); };
+      const m = el("div", "chips");
+      const drawM = () => m.replaceChildren(...["lookup", "test"].map(k => Rooms.chip(t("rs_m_" + k), b.method === k, () => { b.method = k; keep(); drawM(); })));
+      drawM();
+      box.append(top, ask, m);
+      return box;
+    }));
+    draw();
+    const add = btn("+ " + t("rs_br_add"), "btn soft"); add.onclick = () => { if (draft.branches.length >= 8) return; draft.branches.push({ title: "", ask: "", method: "lookup" }); keep(); draw(); };
+    const vis = el("div", "choices");
+    const drawV = () => vis.replaceChildren(...["hidden", "open"].map(k => Rooms.choice(t("rs_vis_" + k), t("rs_vis_" + k + "_h"), draft.visibility === k, () => { draft.visibility = k; keep(); drawV(); })));
+    drawV();
+    const note = draft.note ? el("div", "note", draft.note) : null;
+    let better = null;
+    if (draft.better && draft.better !== draft.question) {
+      better = el("div", "note"); const use = btn(t("rs_use_better"), "linkbtn");
+      use.onclick = () => { draft.question = draft.better; draft.better = ""; keep(); render(); };
+      better.append(el("span", null, t("rs_better", { q: draft.better })), use);
+    }
+    const prev = btn(t("back"), "btn ghost"); prev.onclick = () => { step = 0; render(); };
+    const go = btn(t("next"));
+    go.onclick = () => { if (draft.branches.filter(b => b.title.trim()).length < 1) { st.textContent = t("rs_need_br"); return; } draft.branches = draft.branches.filter(b => b.title.trim()); keep(); step = 2; render(); };
+    const acts = el("div", "acts"); acts.append(prev, go);
+    return view.replaceChildren(...[back, h, steps, roomQ(draft.question), note, better,
+      card(t("rs_br_t"), el("p", "small", t("rs_br_h")), list, add), card(t("rs_vis_t"), vis), acts, st].filter(Boolean));
+  }
+  // step 2: who looks into what, and by when
+  const who = el("div", "who");
+  const drawP = () => who.replaceChildren(...draft.people.map((p, i) => {
+    const row = el("div", "p");
+    const n = el("input", "line"); Object.assign(n, { value: p.name, maxLength: 80, placeholder: t("rs_p_name") }); n.setAttribute("aria-label", t("rs_p_name"));
+    n.oninput = () => { p.name = n.value; keep(); };
+    const c = el("input", "line"); Object.assign(c, { value: p.contact, maxLength: 120, placeholder: t("rs_p_contact") }); c.setAttribute("aria-label", t("rs_p_contact"));
+    c.oninput = () => { p.contact = c.value; keep(); };
+    const x = btn("×", "x"); x.setAttribute("aria-label", t("rs_p_remove"));
+    x.onclick = () => { draft.people.splice(i, 1); if (!draft.people.length) draft.people.push({ name: "", contact: "", picks: [] }); keep(); drawP(); };
+    const chips = el("div", "chips");
+    const drawC = () => chips.replaceChildren(...draft.branches.map((b, k) => Rooms.chip(b.title, p.picks.includes(k), () => { p.picks = p.picks.includes(k) ? p.picks.filter(z => z !== k) : [...p.picks, k]; keep(); drawC(); })));
+    drawC();
+    row.append(n, c, x, chips);
+    return row;
+  }));
+  drawP();
+  const add = btn("+ " + t("rs_p_add"), "btn soft"); add.onclick = () => { if (draft.people.length >= 30) return; draft.people.push({ name: "", contact: "", picks: [] }); keep(); drawP(); };
+  const due = el("input", "line"); Object.assign(due, { type: "date", value: draft.due, min: iso(0) }); due.setAttribute("aria-label", t("rs_due_lbl"));
+  due.oninput = () => { draft.due = due.value; keep(); };
+  const prev = btn(t("back"), "btn ghost"); prev.onclick = () => { step = 1; render(); };
+  const go = btn(t("rs_open"));
+  go.onclick = async () => {
+    const people = draft.people.filter(p => p.name.trim());
+    if (!people.length) { st.textContent = t("rs_need_p"); return; }
+    go.disabled = true;
+    try { const r = await store.create(); sent = { id: r.id, question: draft.question.trim(), due: draft.due, people: people.map((p, i) => ({ ...p, token: r.tokens[i] })) }; draft = blank(); keep(); render(); }
+    catch (e) { go.disabled = false; st.textContent = errText(e); }
+  };
+  const acts = el("div", "acts"); acts.append(prev, go);
+  view.replaceChildren(back, h, steps, roomQ(draft.question), card(t("rs_p_t"), el("p", "small", t("rs_p_h")), who, add),
+    card(t("rs_due_lbl"), due, el("p", "small", t("rs_due_h"))), acts, st);
+}
+function roomQ(q) { const b = el("div", "rs-band"); b.append(el("span", "small", t("rs_q_lbl")), el("p", "answer", q)); return b; }
+
+/* ---------- 2. Send: one tap per person ---------- */
+function inviteMsg(name, token, question, due) {
+  return t("rs_invite_msg", { name, q: question, link: linkFor(token), due: due ? t("rs_invite_due", { date: Rooms.fmtDate(due) }) : "" });
+}
+function sendRow(name, contact, token, question, due) {
+  const li = el("li"); li.append(el("b", null, name));
+  const msg = inviteMsg(name, token, question, due), L = Rooms.personLinks(contact, msg, t("rs_invite_subject"));
+  if (L.phone || !L.mail) { const w = el("a", "btn soft", "WhatsApp"); w.href = L.whatsapp; w.target = "_blank"; w.rel = "noopener"; li.append(w); }
+  if (L.mail || !L.phone) { const m = el("a", "btn soft", t("rs_email")); m.href = L.email; li.append(m); }
+  const c = btn(t("rs_copy"), "btn ghost"); c.onclick = async () => { await Rooms.copyText(linkFor(token)); c.textContent = t("rs_copied"); };
+  li.append(c);
+  return li;
+}
+function vSent() {
+  const ul = el("ul", "plain send");
+  sent.people.forEach(p => ul.append(sendRow(p.name, p.contact, p.token, sent.question, sent.due)));
+  const open = el("a", "btn", t("rs_go_room")); open.href = demo ? "/research.html?demo=owner" : "/research.html?id=" + sent.id;
+  const h = el("div", "rs-head"); h.append(el("p", "small", t("rs_eyebrow")), el("h1", null, t("rs_sent_t")));
+  shell(h, card(null, el("p", "body", t("rs_sent_h")), ul), open);
+}
+
+/* ---------- 3. Join ---------- */
+async function vJoin() {
+  preview = await store.preview();
+  if (!preview) return shell(card(null, el("p", "body", t("rs_join_gone"))));
+  document.title = t("rs_title") + " · " + t("product");
+  const h = el("div", "rs-head"); h.append(el("p", "small", t("rs_join_hi", { name: preview.person_name, owner: preview.owner_name || t("rs_someone") })));
+  const q = el("h1", null, preview.question); q.lang = preview.language; q.dir = preview.language === "ar" ? "rtl" : "ltr"; h.append(q);
+  const what = card(null, preview.branches?.length ? el("p", "body", t("rs_join_yours", { list: preview.branches.join(" · ") })) : null,
+    preview.due_by ? el("p", "small", t("rs_due", { date: Rooms.fmtDate(preview.due_by) })) : null, el("p", "small", t("rs_join_h")));
+  const box = el("div", "stack-sm"), st = el("p", "status err");
+  const go = btn(t("rs_join_go"));
+  go.onclick = async () => { go.disabled = true; try { await store.join(); } catch (e) { go.disabled = false; st.textContent = t(/invite_used|invite_not_found/.test(e?.message) ? "rs_join_used" : "err_generic"); } };
+  shell(h, what, box, st);
+  if (demo || Rooms.hasAccount()) box.append(go);
+  else Rooms.ensureAccount(box, { onDone: () => { box.replaceChildren(go); go.click(); } });
+}
+
+/* ---------- 4. Find: add findings, submit ---------- */
+function addForm(branchId) {
+  const f = el("div", "addf"), x = { sure: "fairly" };
+  const body = el("textarea"); Object.assign(body, { rows: 2, maxLength: 1000, placeholder: t("rs_f_ph") }); body.setAttribute("aria-label", t("rs_f_lbl"));
+  const url = el("input", "line"); Object.assign(url, { type: "url", inputMode: "url", maxLength: 500, placeholder: t("rs_f_url") }); url.setAttribute("aria-label", t("rs_f_url"));
+  const lab = el("input", "line"); Object.assign(lab, { maxLength: 120, placeholder: t("rs_f_src") }); lab.setAttribute("aria-label", t("rs_f_src"));
+  const date = el("input", "line"); Object.assign(date, { type: "date", max: iso(0) }); date.setAttribute("aria-label", t("rs_f_date"));
+  const two = el("div", "two"); two.append(url, lab);
+  const st = el("p", "status err");
+  const add = btn(t("rs_f_add"), "btn soft");
+  add.onclick = async () => {
+    if (!body.value.trim()) return body.focus();
+    if (url.value.trim() && !Rooms.validUrl(url.value)) { st.textContent = t("rs_f_bad_url"); return url.focus(); }
+    add.disabled = true;
+    try {
+      await store.addFinding({ branch_id: branchId, body: body.value.trim(), source_url: url.value.trim() || null, source_label: lab.value.trim() || null, source_date: date.value || null, sure: x.sure });
+      await store.load(); render();
+    } catch (e) { add.disabled = false; st.textContent = errText(e); }
+  };
+  const dl = el("label", "small", t("rs_f_date"));
+  f.append(el("span", "lbl", t("rs_f_lbl")), body, two, dl, date, sureChips(x.sure, k => x.sure = k), add, st);
+  return f;
+}
+function branchBlock(b, { form, names }) {
+  const c = card(null);
+  const top = el("div", "br-sum"); top.append(roomLang(el("b", null, b.title)), el("span", "small", t("rs_m_" + b.method)));
+  c.append(top);
+  if (b.ask) c.append(roomLang(el("p", "small", t("rs_ask", { ask: b.ask }))));
+  if (b.returned_at && R.status === "open") c.append(el("div", "note", t("rs_returned")));
+  const list = findings.filter(f => f.branch_id === b.id);
+  list.forEach(f => c.append(findingNode(f, { names, mine: f.user_id === myId() })));
+  if (!list.length && !form) c.append(el("p", "small", t("rs_none_yet")));
+  if (form) c.append(addForm(b.id));
+  return c;
+}
+function submitCard() {
+  const st = el("p", "status err");
+  const mine = findings.filter(f => f.user_id === myId()).length;
+  if (me.submitted_at) {
+    const undo = act(btn(t("rs_unsubmit"), "btn ghost"), async () => { await store.submit(true); await store.load(); }, st);
+    return card(null, el("p", "status ok", t("rs_submitted")), el("p", "small", t("rs_submitted_h")), undo, st);
+  }
+  const go = act(btn(t("rs_submit")), async () => { if (!mine) throw new Error("no_findings"); await store.submit(false); await store.load(); }, st);
+  return card(null, el("p", "small", t("rs_submit_h")), go, st);
+}
+function vFind() {
+  const mine = me.branch_ids?.length ? branches.filter(b => me.branch_ids.includes(b.id)) : branches;
+  const others = branches.filter(b => !mine.includes(b));
+  const hiddenNote = R.visibility === "hidden" && !me.submitted_at ? el("div", "note", t("rs_hidden_note")) : null;
+  const seeAll = R.visibility === "open" || me.submitted_at;
+  shell(head(t(me.branch_ids?.length > 1 ? "rs_your_branches" : "rs_your_branch")), hiddenNote,
+    ...mine.map(b => branchBlock(b, { form: true, names: seeAll })),
+    submitCard(),
+    others.length && seeAll ? el("p", "rs-steps", t("rs_others")) : null,
+    ...(seeAll ? others.map(b => branchBlock(b, { names: true })) : []));
+}
+
+/* ---------- 5. Owner: progress, pool ---------- */
+function vOwnerOpen() {
+  const members = roster.filter(p => p.role === "member"), done = members.filter(p => p.submitted_at), invited = roster.filter(p => p.role === "invited");
+  const total = members.length + invited.length;
+  const bar = el("div", "prog"); const fill = el("i"); fill.style.width = (total ? 100 * done.length / total : 0) + "%"; bar.append(fill);
+  const per = el("ul", "plain");
+  branches.forEach((b, i) => {
+    const on = roster.filter(p => p.branch_ids?.includes(b.id) && p.role !== "owner");
+    const li = el("li", "f"); const row = el("div", "br-sum");
+    const names = on.map(p => p.name + (p.role === "invited" ? " (" + t(p.opened_at ? "rs_opened" : "rs_not_opened") + ")" : p.submitted_at ? " ✓" : "")).join(", ");
+    row.append(roomLang(el("b", null, `${i + 1}. ${b.title}`)), el("span", "small", t("rs_br_count", { n: findings.filter(f => f.branch_id === b.id).length })));
+    li.append(row, el("span", "small", names || t("rs_nobody")));
+    per.append(li);
+  });
+  const progress = card(t("rs_progress", { n: done.length, m: total }), bar, per, el("p", "small", t(R.visibility === "hidden" ? "rs_owner_hidden" : "rs_owner_open")));
+  // People not in yet: their links again, and add someone
+  let links = null;
+  if (invited.length) { const ul = el("ul", "plain send"); invited.forEach(p => ul.append(sendRow(p.name, "", p.invite_token, R.question, R.due_by))); links = card(t("rs_waiting_t"), ul); }
+  const addP = addPersonCard();
+  const st = el("p", "status err");
+  const pool = act(btn(t("rs_pool")), async () => { await store.pool(); await store.load(); }, st);
+  pool.disabled = !findings.length && !demo;
+  const poolCard = card(t("rs_pool_t"), el("p", "small", t("rs_pool_h")), pool, st);
+  // The owner can add findings too (to any branch)
+  const own = el("details"); own.append(el("summary", null, t("rs_owner_add")), ...branches.map(b => branchBlock(b, { form: true, names: true })));
+  shell(head(t("rs_owner_view")), progress, poolCard, links, addP, card(null, own));
+}
+function addPersonCard() {
+  const p = { name: "", contact: "", picks: [] }, st = el("p", "status err"), out = el("ul", "plain send");
+  const n = el("input", "line"); Object.assign(n, { maxLength: 80, placeholder: t("rs_p_name") }); n.setAttribute("aria-label", t("rs_p_name")); n.oninput = () => p.name = n.value;
+  const c = el("input", "line"); Object.assign(c, { maxLength: 120, placeholder: t("rs_p_contact") }); c.setAttribute("aria-label", t("rs_p_contact")); c.oninput = () => p.contact = c.value;
+  const chips = el("div", "chips");
+  const drawC = () => chips.replaceChildren(...branches.map(b => Rooms.chip(b.title, p.picks.includes(b.id), () => { p.picks = p.picks.includes(b.id) ? p.picks.filter(z => z !== b.id) : [...p.picks, b.id]; drawC(); })));
+  drawC();
+  const add = btn(t("rs_p_invite"), "btn soft");
+  add.onclick = async () => {
+    if (!p.name.trim()) return n.focus();
+    add.disabled = true;
+    try { const token = await store.invite({ name: p.name.trim(), contact: p.contact.trim(), branch_ids: p.picks }); out.append(sendRow(p.name.trim(), p.contact.trim(), token, R.question, R.due_by)); n.value = c.value = ""; p.name = p.contact = ""; p.picks = []; drawC(); }
+    catch (e) { st.textContent = errText(e); }
+    add.disabled = false;
+  };
+  const d = el("details"); d.append(el("summary", null, "+ " + t("rs_p_add")), n, c, chips, add, out, st);
+  return card(null, d);
+}
+
+/* ---------- 6. Pooled: what the analysis sees ---------- */
+function poolView() {
+  const P = R.pool || {}, box = el("div", "pool");
+  const item = (label, text, warn, extra) => { const d = el("div", "it" + (warn ? " warn" : "")); d.append(el("b", null, label + " "), roomLang(el("span", null, text))); if (extra) d.append(el("br"), el("span", "small", extra)); return d; };
+  (P.agree || []).forEach(x => box.append(item(t("rs_agree"), x.text)));
+  (P.conflict || []).forEach(x => box.append(item(t("rs_conflict"), x.text, true, x.check ? t("rs_check", { check: x.check }) : "")));
+  (P.weak || []).forEach(x => box.append(item(t("rs_weak"), x.text)));
+  (P.thin || []).forEach(x => box.append(item(t("rs_thin"), t(x.n ? "rs_thin_one" : "rs_thin_none", { title: x.title }), true)));
+  if ((P.old || []).length) box.append(item(t("rs_old"), t("rs_old_n", { n: P.old.length, months: 18 })));
+  if (!box.children.length) box.append(el("p", "small", t("rs_pool_empty")));
+  return box;
+}
+function allFindings(open = true) {
+  const d = el("details"); d.open = open;
+  d.append(el("summary", null, t("rs_all_f", { n: findings.length })));
+  branches.forEach(b => { const list = findings.filter(f => f.branch_id === b.id); d.append(roomLang(el("p", "rs-steps", b.title)), ...list.map(f => findingNode(f, { names: true }))); if (!list.length) d.append(el("p", "small", t("rs_none_yet"))); });
+  return card(null, d);
+}
+function vPooled() {
+  const nodes = [head(t("rs_pooled_eyebrow")), card(t("rs_sees"), poolView())];
+  if (isOwner()) {
+    const st = el("p", "status err");
+    const write = act(btn(t("rs_write")), async () => { write.textContent = t("rs_writing"); await store.brief(); await store.load(); }, st);
+    const backs = el("div", "chips");
+    branches.forEach(b => { const c = Rooms.chip(b.title, false, async () => { if (!confirm(t("rs_back_confirm", { title: b.title }))) return; try { await store.back(b.id); await store.load(); render(); } catch (e) { st.textContent = errText(e); } }); backs.append(c); });
+    nodes.push(card(t("rs_next_t"), el("p", "small", t("rs_back_h")), backs, write, st));
+  } else nodes.push(card(null, el("p", "body", t("rs_pooled_member"))));
+  nodes.push(allFindings(true));
+  shell(...nodes);
+}
+
+/* ---------- 7. The brief and what next ---------- */
+function vBrief() {
+  const B = R.brief || {};
+  const band = el("div", "rs-band");
+  band.append(el("span", "small", t("rs_short", { conf: t("rs_conf_" + (B.confidence || "medium")) })), roomLang(el("p", "answer", B.answer || "")));
+  const per = card(t("rs_by_branch"), ...branches.map(b => {
+    const x = (B.branches || []).find(z => z.id === b.id) || { certainty: "thin", summary: "" };
+    const d = el("div", "f"), top = el("div", "br-sum");
+    top.append(roomLang(el("b", null, b.title)), el("span", "cert " + x.certainty, t("rs_cert_" + x.certainty)));
+    d.append(top); if (x.summary) d.append(roomLang(el("p", null, x.summary)));
+    return d;
+  }));
+  const list = xs => { const ul = el("ul", "dots"); xs.forEach(x => ul.append(roomLang(el("li", null, x)))); return ul; };
+  const gaps = B.gaps?.length ? Object.assign(card(t("rs_gaps"), list(B.gaps)), { className: "rs-card yellow" }) : null;
+  const next = B.next?.length ? card(t("rs_next_steps"), list(B.next)) : null;
+  const meta = el("p", "small", t("rs_kept", { n: B.findings ?? findings.length, s: B.sources ?? 0, date: R.brief_at ? Rooms.fmtDate(String(R.brief_at).slice(0, 10)) : "" }));
+  shell(head(t("rs_brief_eyebrow")), band, per, gaps, next, meta, whatNext(B), allFindings(false));
+}
+function whatNext(B) {
+  const box = el("div", "next no-print");
+  const slidesHref = (demo ? "/research.html?demo=brief" : "/research.html?id=" + R.id) + "&slides=1";
+  // Share: a short message with the answer and the link (only people in the research can open it), or a PDF.
+  const share = Rooms.choice(t("rs_share"), t("rs_share_h"), false, () => {
+    const msg = t("rs_share_msg", { q: R.question, a: B.answer || "", link: location.origin + (demo ? "/research.html?demo=brief" : "/research.html?id=" + R.id) });
+    const L = Rooms.shareLinks(msg, t("rs_share_subject")), row = el("div", "acts");
+    const w = el("a", "btn soft", "WhatsApp"); w.href = L.whatsapp; w.target = "_blank"; w.rel = "noopener";
+    const m = el("a", "btn soft", t("rs_email")); m.href = L.email;
+    const p = btn(t("rs_pdf"), "btn ghost"); p.onclick = () => print();
+    row.append(w, m, p); share.after(row); share.disabled = true;
+  });
+  const slidesBtn = Rooms.choice(t("rs_slides"), t("rs_slides_h"), false, () => location.assign(slidesHref));
+  box.append(share, slidesBtn);
+  if (isOwner()) {
+    const dec = Rooms.choice(t("rs_to_room"), B.decision ? t("rs_to_room_q", { q: B.decision.question }) : t("rs_to_room_h"), false, () => {
+      let d = {}; try { d = JSON.parse(localStorage.getItem(ROOM_DRAFT)) || {}; } catch {}
+      const ctx = [t("rs_ctx_from", { q: R.question }), B.answer, B.gaps?.length ? t("rs_gaps") + ": " + B.gaps.join("; ") : ""].filter(Boolean).join("\n");
+      Object.assign(d, { at: 0, atId: null, question: B.decision?.question || R.question, qOrig: "", qRes: null, qKeys: [],
+        options: B.decision?.options?.length >= 2 ? B.decision.options.slice(0, 6) : ["", ""], optsDraft: null,
+        crits: B.decision?.criteria?.length ? B.decision.criteria.map(label => ({ label, on: true })) : null, critsDraft: null,
+        context: ctx.slice(0, 3000), brief: null, briefFor: "", briefPicked: [] });
+      try { localStorage.setItem(ROOM_DRAFT, JSON.stringify(d)); } catch {}
+      Rooms.openNewRoom(demo ? "/new.html?demo=1" : "/new.html");
+    });
+    const round = Rooms.choice(t("rs_round"), t("rs_round_h"), false, () => {
+      draft = { ...blank(), question: t("rs_round_q", { q: R.question }).slice(0, 400), context: [B.answer, ...(B.gaps || [])].join("\n").slice(0, 4000), parent: demo ? null : R.id,
+        visibility: R.visibility, branches: (B.gaps?.length ? B.gaps : [""]).map((g, i) => ({ title: String(g).slice(0, 120), ask: (B.next || [])[i] || "", method: "lookup" })) };
+      keep(); location.assign(demo ? "/research.html?demo=1&new=1&step=2" : "/research.html?new=1&step=2");
+    });
+    box.prepend(dec); box.append(round);
+  }
+  const c = card(t("rs_what_next"), box);
+  return c;
+}
+
+/* ---------- Slides ---------- */
+function vSlides() {
+  document.body.classList.add("slides");
+  const B = R.brief || {};
+  const s = (cls, k, title, ...kids) => { const d = el("section", "slide" + (cls ? " " + cls : "")); d.append(el("span", "k", k)); if (title) d.append(roomLang(el("h2", null, title))); d.append(...kids.filter(Boolean)); return d; };
+  const list = xs => { const ul = el("ul", "dots"); xs.forEach(x => ul.append(roomLang(el("li", null, x)))); return ul; };
+  const out = [s("", t("rs_title") + " · " + (R.brief_at ? Rooms.fmtDate(String(R.brief_at).slice(0, 10)) : ""), R.question, el("p", null, t("rs_slide_by", { n: roster.filter(p => p.role !== "invited").length, f: findings.length }))),
+    s("teal", t("rs_short", { conf: t("rs_conf_" + (B.confidence || "medium")) }), B.answer)];
+  branches.forEach(b => {
+    const x = (B.branches || []).find(z => z.id === b.id) || {};
+    const top = findings.filter(f => f.branch_id === b.id).slice(0, 3).map(f => f.body + (f.source_label ? " (" + f.source_label + ")" : ""));
+    out.push(s("", b.title + " · " + t("rs_cert_" + (x.certainty || "thin")), x.summary || b.title, top.length ? list(top) : null));
+  });
+  if (B.gaps?.length || B.next?.length) out.push(s("yellow", t("rs_gaps") + " · " + t("rs_next_steps"), null, B.gaps?.length ? list(B.gaps) : null, B.next?.length ? list(B.next.map(x => "→ " + x)) : null));
+  const bar = el("div", "acts no-print");
+  const p = btn(t("rs_print")); p.onclick = () => print();
+  const back = el("a", "btn ghost", "← " + t("rs_back_brief")); back.href = demo ? "/research.html?demo=brief" : "/research.html?id=" + R.id;
+  bar.append(p, back);
+  view.replaceChildren(bar, ...out);
+}
+
+/* ---------- Render ---------- */
+function render() {
+  if (sent) return vSent();
+  if (!id && !joining && (!demo || demo === "1")) return vNew();
+  if (joining) return vJoin();
+  if (!R || !me) return shell(card(null, el("p", "body", t("rs_no_access"))));
+  if (slides && R.status === "done") return vSlides();
+  if (R.status === "done") return vBrief();
+  if (R.status === "pooled") return vPooled();
+  return isOwner() ? vOwnerOpen() : vFind();
+}
+Rooms.langToggle(() => render());
+(async () => {
+  await Rooms.loadLang(Rooms.firstLang());
+  if (params.get("step")) step = Math.min(2, Math.max(0, Number(params.get("step")) - 1)) || 0;
+  if (demo) { if (!joining && demo !== "1") await store.load(); return render(); }
+  if (!(await Rooms.connect())) { view.replaceChildren(el("p", "text", t("not_setup"))); return; }
+  if (joining) return vJoin();
+  if (!Rooms.hasAccount()) {
+    const box = el("div", "stack-sm"), c = el("article", "msg you"); c.append(el("p", "text sm", t("si_title")), box); view.replaceChildren(c);
+    return Rooms.ensureAccount(box, { onDone: async () => { Rooms.showMyRooms(); if (id) await store.load(); render(); } });
+  }
+  Rooms.showMyRooms();
+  if (id) await store.load();
+  render();
+})();
+})();
+</script>
+</body>
+</html>

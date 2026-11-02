@@ -86,13 +86,15 @@ All seven ideas ship before launch, in this order, no mock-ups; launch date to b
 7. Organisation document library
 8. At launch: switch on the world library ($20 a month to start)
 
-## Research room (idea, decided 2026-11-02, sketched, not built)
+## Research room (decided 2026-11-02; first version built in 1.8.0)
 A room where a team gets one piece of research done, using the same thinking models. Chosen over a general collaboration space (that would compete with Notion, Asana and Docs, and blur what DXRooms is); widen later only if customers ask.
 - **Flow:** frame (the question; MECE branches; Cynefin says look it up or test it) → split (branches to people or roles, deadline, nudges) → find (findings with source, date and how sure; files and links) → pool (agree, conflict, thin branches, old facts; the owner can send a branch back) → brief (dated, sourced, confidence per finding, gaps).
 - **Visibility:** the owner chooses; hidden until submitted by default (no anchoring), open for simple fact-gathering. Once pooled, everyone sees findings with names.
 - **Endings, any or all, the owner picks:** share the brief, turn it into a decision room (the brief becomes "what everyone should know"), slides, next steps (a new research round).
 - **Reuses:** people and invites, nudges, phone notifications, talk, document library, organisation memory, reports. Not live co-editing or chat.
 - **Sketch:** https://claude.ai/artifact/XacfPGo5Png8w9rqreNpGF
+- **Built in 1.8.0:** setup (question, branches drafted by the AI with look it up or test it, visibility, people with their branches, due date), personal single-use links sent from the owner's WhatsApp or email, findings with link, source name, date and how sure, submit and take back, owner progress and re-sending links, pool (agree, conflict, weak, thin, old), send a branch back, the brief (short answer, confidence capped in code, branch by branch, gaps, next steps), and the four endings: share (message or PDF), slides, turn into a decision room (fills the setup), next round (gaps become branches). Phone notifications: invited, someone submitted, brief ready. Research appears on Your rooms.
+- **Not in the first version:** files on findings, automatic reminders before the due date, organisation colleagues and departments as invitees, talk under the brief, organisation memory and the document library reading research, a public share link for the brief.
 
 ## Rename to DXRooms (decided 2026-11-02, waiting for the domain)
 The product becomes **DXRooms** at dxrooms.com. Nothing changes until the domain transfer is done.

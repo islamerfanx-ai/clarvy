@@ -100,7 +100,7 @@ button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 const { $, el, t } = Rooms;
 const demo = new URLSearchParams(location.search).get("demo");
 const view = $("view");
-let rooms = null, myName = "", helping = [];
+let rooms = null, myName = "", helping = [], research = [];   // research: research rooms you own or help with
 let statFilter = null, statSets = {};   // a number card chosen above filters the room lists   // helping: rooms you run for someone else, as their assistant
 
 // Demo data mirrors the sketch: two open rooms of yours, one ongoing, one old.
@@ -367,9 +367,37 @@ function drawResults() {
     all.onclick = () => { statFilter = null; render(); };
     bar.append(el("span", null, t("ds_showing", { title: t({ need: "ds_need_t", wait: "ds_wait_t", verdict: "ds_verdict_t", done: "ds_done_t" }[statFilter]), n: statSets[statFilter].length })), all);
   }
-  results.replaceChildren(...[bar, s1, statFilter ? null : s4,
+  results.replaceChildren(...[bar, s1, statFilter ? null : s4, statFilter ? null : researchSection(),
     list(t("db_ongoing"), ongoing, t(query ? "db_no_match" : "db_empty_ongoing"), false),
     list(t("db_old"), old, t(query ? "db_no_match" : "db_empty_old"), true)].filter(Boolean));
+}
+
+// Research rooms: the team researches one question; owners see how many submitted, members what's next.
+function researchStatus(r) {
+  if (r.status === "done") return { text: t("rs_st_done"), go: true };
+  if (r.status === "pooled") return { text: t("rs_st_pooled"), go: r.role === "owner" };
+  if (r.role === "owner") return { text: t("rs_st_open_owner", { n: r.submitted, m: r.people }), go: r.people > 0 && r.submitted >= r.people };
+  return r.i_submitted ? { text: t("rs_st_sent") } : { text: t("rs_st_find"), go: true };
+}
+function researchSection() {
+  const shown = research.filter(r => !query || r.question.toLowerCase().includes(query.toLowerCase()));
+  const sec = section(t("rs_db_t"), shown.length || null);
+  if (shown.length) {
+    const ul = el("ul", "rows");
+    shown.forEach(r => {
+      const li = el("li", "rrow" + (r.status === "done" ? " old" : "")), a = el("a");
+      a.href = demo ? "/research.html?demo=" + (r.status === "done" ? "brief" : r.role === "owner" ? "owner" : "find") : "/research.html?id=" + encodeURIComponent(r.id);
+      const s = researchStatus(r);
+      a.append(q(r), el("span", "when", t("db_started", { date: Rooms.fmtDate(String(r.created_at).slice(0, 10)) })),
+        el("span", "st" + (s.go ? " go" : ""), (r.role === "owner" ? t("rs_db_owner") + " · " : "") + s.text));
+      li.append(a); ul.append(li);
+    });
+    sec.append(ul);
+  } else sec.append(el("p", "empty", t("rs_db_none")));
+  const start = el("a", "btn soft", "+ " + t("rs_db_start")); start.href = demo ? "/research.html?demo=1" : "/research.html";
+  start.style.width = "auto"; start.style.alignSelf = "flex-start";
+  sec.append(start);
+  return sec;
 }
 
 // No account in this browser yet (trial accounts live in the browser that made them).
@@ -383,7 +411,11 @@ function noRooms() {
 }
 
 async function load() {
-  if (demo) { rooms = DEMO; myName = "Islam"; return render(); }
+  if (demo) {
+    rooms = DEMO; myName = "Islam";
+    research = [{ id: "r1", question: t("rs_demo_q"), status: "open", role: "owner", people: 4, submitted: 2, i_submitted: false, language: Rooms.lang, created_at: new Date().toISOString() }];
+    return render();
+  }
   const sb = Rooms.sb;
   // Join any organisation that invited this email (or matches its domain), then link to it.
   await sb.rpc("claim_org_invites").then(() => {}, () => {});
@@ -394,6 +426,7 @@ async function load() {
   }, () => {});
   const [{ data, error }, p, { data: helps }] = await Promise.all([sb.rpc("my_rooms"), Rooms.profile(), sb.rpc("assisted_rooms")]);
   helping = helps || [];
+  research = (await sb.rpc("my_research").then(r => r.data, () => null)) || [];
   if (error) { const c = el("article", "msg"); c.append(el("p", "text", t("err_generic"))); return view.replaceChildren(c); }
   myName = p?.name || "";
   // Member names come from each room's roster (names and ticks only, never answers).
