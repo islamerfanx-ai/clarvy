@@ -59,9 +59,9 @@ function head(title, hint) {
   const prog = el("div", "progress"); prog.setAttribute("aria-hidden", "true");
   ids.forEach((_, i) => prog.append(el("i", i <= d.at ? "on" : "")));
   const m = el("div", "meta"); m.append(el("span", null, t("step", { n: d.at + 1, total: ids.length })));
-  const nodes = [prog, m, el("h1", "step-title", title)];
-  if (hint) nodes.push(el("p", "small", hint));
-  return nodes;
+  const box = el("div", "wz-head"); box.append(prog, m, el("h1", "step-title", title));
+  if (hint) box.append(el("p", "small", hint));
+  return [box];
 }
 function actions({ next = t("next") } = {}) {
   const row = el("div", "actions");

@@ -2011,5 +2011,15 @@
   "dn_g_org": "Organisation",
   "dn_g_you": "You",
   "dn_mini": "Fold the sidebar",
-  "dn_full": "Open the sidebar"
+  "dn_full": "Open the sidebar",
+  "dl_more": "More",
+  "dl_delete": "Delete room",
+  "dl_delete_rs": "Delete research",
+  "dl_t": "Delete this room?",
+  "dl_t_rs": "Delete this research?",
+  "dl_h": "It goes for everyone in it: the answers, the call, the plan and the invites. This can't be undone.",
+  "dl_h_rs": "It goes for everyone in it: the branches, the findings and the brief. This can't be undone.",
+  "dl_yes": "Delete",
+  "dl_no": "Keep it",
+  "dl_doing": "Deleting…"
 }

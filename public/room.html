@@ -1726,21 +1726,6 @@ function appendNotes() {
     const det = el("details", "more"); det.append(el("summary", null, t("as_log_sum", { n: S.assistLog.length })), ul); lc.append(det);
     view.append(lc);
   }
-  const c = card("you", el("p", "text sm", t("rn_title")), el("p", "small", t("rn_hint")));
-  const ta = el("textarea"); Object.assign(ta, { rows: 4, maxLength: 20000, placeholder: t("rn_ph"), value: S.note?.body || "" }); ta.setAttribute("aria-label", t("rn_title"));
-  const st = el("p", "status"); st.setAttribute("role", "status");
-  let timer = null;
-  ta.oninput = () => { clearTimeout(timer); st.className = "status"; st.textContent = t("nt_saving");
-    timer = setTimeout(async () => { try { S.note = await store.saveNote(ta.value); st.textContent = ""; } catch { st.className = "status err"; st.textContent = t("err_generic"); } }, 700); };
-  const share = btn(t("rn_share"), "ghost", async () => {
-    if (!ta.value.trim() || !confirm(t("rn_share_sure"))) return;
-    share.disabled = true;
-    try { await store.shareNote(ta.value); await refresh(); } catch { share.disabled = false; st.className = "status err"; st.textContent = t("err_generic"); }
-  });
-  const more = el("details", "more"); more.open = !!S.note?.body;
-  more.append(el("summary", null, t("rn_title")), ta, share, st);
-  c.replaceChildren(more, el("p", "small", t("rn_hint")));
-  view.append(c);
 }
 // While waiting on other people (or on the analysis), check again every few seconds.
 function poll() {

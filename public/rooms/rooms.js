@@ -261,7 +261,7 @@ async function accountMenu() {
   const menu = el("div", "acct-pop"); menu.setAttribute("role", "menu"); menu.hidden = true;
   const head = el("div", "acct-head");
   const item = (label, href, onClick) => { const x = el(href ? "a" : "button", "acct-item", label); x.setAttribute("role", "menuitem"); if (href) { x.href = href; x.target = "_top"; } else { x.type = "button"; x.onclick = onClick; } return x; };
-  menu.append(head, item(t("pf_link"), "/profile.html"), item(t("my_rooms"), "/dashboard.html"), item(t("nt_link"), "/notes.html"));
+  menu.append(head, item(t("pf_link"), "/profile.html"), item(t("my_rooms"), "/dashboard.html"));
   const out = item(t("si_sign_out"), null, async () => { await signOut(); (window.top || window).location.href = "/"; });
   menu.append(out);
   const open = on => { menu.hidden = !on; btn.setAttribute("aria-expanded", String(on)); };
@@ -894,7 +894,6 @@ function drawShell() {
   nav.replaceChildren(...[head,
     item("home", t("dn_rooms"), "/dashboard.html" + demoQ, { cur: here === "home", kind: null }),
     item("research", t("dn_research"), "/dashboard.html?kind=research" + (demoQ ? "&demo=1" : ""), { cur: here === "research" && shellPage === "rooms", kind: "research" }),
-    item("notes", t("dn_notes"), "/notes.html" + demoQ, { cur: here === "notes" }),
     group("new", t("dn_g_new"), [
       item("rooms", t("kd_decide"), "/new.html" + demoQ, { cur: here === "new", cls: "direct" }),
       item("research", t("kd_research"), "/research.html" + demoQ, { cur: here === "research" && shellPage === "research" })]),
@@ -905,7 +904,6 @@ function drawShell() {
     item("home", t("dn_rooms"), "/dashboard.html" + demoQ, { cur: here === "home", kind: null }),
     item("research", t("dn_research"), "/dashboard.html?kind=research" + (demoQ ? "&demo=1" : ""), { cur: here === "research", kind: "research" }),
     item("add", t("dn_add"), "/new.html" + demoQ, { cls: "add", cur: here === "new" }),
-    item("notes", t("dn_notes"), "/notes.html" + demoQ, { cur: here === "notes" }),
     item("profile", t("dn_profile"), "/profile.html", { cur: here === "profile" }));
 }
 shellBuild();

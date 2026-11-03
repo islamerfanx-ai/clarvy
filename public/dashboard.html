@@ -58,7 +58,24 @@ button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
 .rcard{display:flex;flex-direction:column;gap:14px;background:var(--ink);border-radius:18px;padding:20px}
 .rcard.att{background:var(--yellow)}
 .rcard a.open,.rcard .body{display:flex;flex-direction:column;gap:8px;color:var(--fg);text-decoration:none;flex:1}
-.rcard .cardtop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.rcard .cardtop{display:flex;justify-content:space-between;align-items:flex-start}
+.cardr{display:flex;align-items:center;gap:6px}
+.rmenu{position:relative;flex:none}
+.rmenu-btn{width:32px;height:32px;border:0;border-radius:10px;background:none;font:inherit;font-size:18px;line-height:1;color:var(--fg);cursor:pointer}
+.rmenu-btn:hover,.rmenu-btn[aria-expanded=true]{background:rgba(29,29,29,.07)}
+.rmenu-pop{position:absolute;top:calc(100% + 4px);inset-inline-end:0;z-index:30;min-width:180px;background:#fff;border-radius:14px;padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.14)}
+.rmenu-pop button{display:block;width:100%;text-align:start;font:inherit;font-size:14px;border:0;background:none;border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--fg)}
+.rmenu-pop button:hover{background:var(--ink)}
+.rmenu-pop .danger{color:var(--err)}
+.dl-panel{border-radius:24px}
+.dl-panel .dl-q{margin:0;font-size:17px;font-weight:500;line-height:1.35}
+.dl-acts{display:flex;gap:10px;justify-content:flex-end;margin-top:6px}
+.dl-acts .btn{width:auto;padding:13px 20px}
+.btn.danger{background:var(--err);border-color:var(--err);color:#fff}
+.btn.danger:hover{background:#a8263a}
+.dt li{display:flex;align-items:center;gap:4px}
+.dt li > .dt-row{flex:1;min-width:0}
+.dt li > .rmenu,.dt li > .menu-gap{width:32px;flex:none}
 .rcard .type{font-size:13px;color:var(--dim)}
 .rcard a.open:hover .q{text-decoration:underline;text-underline-offset:3px}
 .rcard .q{font-size:18px;font-weight:500;line-height:1.3;letter-spacing:-.01em}
@@ -96,7 +113,7 @@ details.old .dt{margin-top:14px}
   .db-hello{padding-top:20px}
   .stats{gap:10px}.stat{padding:14px;border-radius:16px}.stat .num{font-size:32px}.stat .cap{display:none}
   .db-sec,details.old{border-radius:20px}
-  .dt-head{display:none}
+  .dt li:first-child{display:none}
   .dt-row{grid-template-columns:1fr auto;gap:4px 10px}
   .dt-row .q{grid-column:1/-1}
   .dt-row .c-ppl,.dt-row .c-date{display:none}
@@ -277,7 +294,7 @@ function render() {
     : t("hi_quiet");
   // Search pill under the greeting: it filters every list on the page.
   const search = el("label", "db-search"); search.append(icon("research"), searchIn);
-  hello.append(el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), search, Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
+  hello.append(el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), search);
   // Add a room (asks decision or research) and the app, in the top row beside the language and the account.
   let acts = $("dbActs");
   if (!acts) { acts = el("div", "db-acts"); acts.id = "dbActs"; document.querySelector(".top-acts").prepend(acts); }
@@ -337,6 +354,59 @@ function entries() {
 const kindTag = k => el("span", "kind" + (k === "research" ? " rs" : ""), t(k === "research" ? "dn_k_research" : "dn_k_decision"));
 const dateOf = x => Rooms.fmtDate(String(x.r.created_at).slice(0, 10));
 
+/* ---------- Delete (owners only) ---------- */
+// A ⋯ menu on each room you own. Deleting asks first, then removes the room for everyone (row-level security
+// lets only the owner delete; answers, invites and the plan go with it).
+function roomMenu(x) {
+  if (!x.mine || x.help) return null;
+  const wrap = el("div", "rmenu"), b = el("button", "rmenu-btn", "⋯");
+  b.type = "button"; b.setAttribute("aria-haspopup", "menu"); b.setAttribute("aria-expanded", "false");
+  b.setAttribute("aria-label", t("dl_more")); b.title = t("dl_more");
+  b.onclick = e => {
+    e.preventDefault(); e.stopPropagation();
+    const open = wrap.querySelector(".rmenu-pop");
+    document.querySelectorAll(".rmenu-pop").forEach(p => { p.previousSibling?.setAttribute("aria-expanded", "false"); p.remove(); });
+    if (open) return;
+    const pop = el("div", "rmenu-pop"); pop.setAttribute("role", "menu");
+    const del = el("button", "danger", t(x.kind === "research" ? "dl_delete_rs" : "dl_delete")); del.type = "button"; del.setAttribute("role", "menuitem");
+    del.onclick = ev => { ev.stopPropagation(); pop.remove(); b.setAttribute("aria-expanded", "false"); askDelete(x); };
+    pop.append(del); wrap.append(pop); b.setAttribute("aria-expanded", "true");
+  };
+  wrap.append(b);
+  return wrap;
+}
+document.addEventListener("click", () => document.querySelectorAll(".rmenu-pop").forEach(p => { p.previousSibling?.setAttribute("aria-expanded", "false"); p.remove(); }));
+function askDelete(x) {
+  const rs = x.kind === "research";
+  const pop = el("div", "dr-pop dr-kind"); pop.setAttribute("role", "alertdialog"); pop.setAttribute("aria-modal", "true");
+  const panel = el("div", "dr-kind-panel dl-panel"), title = el("h2", null, t(rs ? "dl_t_rs" : "dl_t"));
+  title.id = "dlT"; pop.setAttribute("aria-labelledby", "dlT");
+  const quote = el("p", "dl-q", x.r.question); quote.dir = x.r.language === "ar" ? "rtl" : "ltr";
+  const st = el("p", "status"); st.setAttribute("role", "status");
+  const row = el("div", "dl-acts");
+  const keep = el("button", "btn ghost", t("dl_no")); keep.type = "button";
+  const yes = el("button", "btn danger", t("dl_yes")); yes.type = "button";
+  const shut = () => { pop.remove(); document.body.classList.remove("dr-pop-open"); removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") shut(); };
+  keep.onclick = shut; pop.addEventListener("click", e => { if (e.target === pop) shut(); });
+  yes.onclick = async () => {
+    yes.disabled = keep.disabled = true; st.className = "status"; st.textContent = t("dl_doing");
+    try {
+      if (!demo) {
+        const { error, count } = await Rooms.sb.from(rs ? "research" : "rooms").delete({ count: "exact" }).eq("id", x.r.id);
+        if (error || !count) throw error || new Error("not deleted");
+      }
+      if (rs) research = research.filter(r => r !== x.r); else rooms = rooms.filter(r => r !== x.r);
+      shut(); render();
+    } catch (err) { console.error(err); st.className = "status err"; st.textContent = t("err_generic"); yes.disabled = keep.disabled = false; }
+  };
+  row.append(keep, yes);
+  panel.append(title, quote, el("p", "small", t(rs ? "dl_h_rs" : "dl_h")), row, st);
+  pop.append(panel); document.body.append(pop); document.body.classList.add("dr-pop-open");
+  addEventListener("keydown", onKey);
+  keep.focus();
+}
+
 let showAllOpen = false, lastCols = 0;
 function drawResults() {
   document.title = t("my_rooms") + " · " + t("product");
@@ -363,10 +433,11 @@ function drawResults() {
   (showAllOpen ? open : open.slice(0, limit)).forEach(x => {
     const r = x.r, card = el("article", "rcard");
     const a = el("a", "open"); a.href = x.href;
-    const top = el("span", "cardtop"), sq = el("span", "sq"); sq.append(icon(x.kind === "research" ? "research" : "rooms"));
-    top.append(sq, kindTag(x.kind));
-    a.append(top, el("span", "type", x.kind === "research" ? t("rs_db_t") : Rooms.typeName(r)), q(r), el("span", "st" + (x.s.go ? " go" : ""), x.s.text));
-    card.append(a);
+    const top = el("div", "cardtop"), sq = el("span", "sq"), right = el("div", "cardr"); sq.append(icon(x.kind === "research" ? "research" : "rooms"));
+    right.append(kindTag(x.kind), roomMenu(x));
+    top.append(sq, right);
+    a.append(el("span", "type", x.kind === "research" ? t("rs_db_t") : Rooms.typeName(r)), q(r), el("span", "st" + (x.s.go ? " go" : ""), x.s.text));
+    card.append(top, a);
     if (x.kind === "research") {
       // Research invites live in the research room.
       const go = el("a", "btn invite", t("na_open")); go.href = x.href;
@@ -392,14 +463,15 @@ function drawResults() {
   // 2. Everything else in one table: question, kind, stage, people, date. Old rooms fold away.
   const table = items => {
     const ul = el("ul", "dt");
-    const head = el("li", "dt-row dt-head"); head.setAttribute("aria-hidden", "true");
-    head.append(el("span", null, t("dn_c_q")), el("span", null, t("dn_c_kind")), el("span", null, t("dn_c_stage")), el("span", "c-ppl", t("dn_c_people")), el("span", "c-date", t("dn_c_date")));
+    const head = el("li"), hr = el("div", "dt-row dt-head"); head.setAttribute("aria-hidden", "true");
+    hr.append(el("span", null, t("dn_c_q")), el("span", null, t("dn_c_kind")), el("span", null, t("dn_c_stage")), el("span", "c-ppl", t("dn_c_people")), el("span", "c-date", t("dn_c_date")));
+    head.append(hr, el("span", "menu-gap"));
     ul.append(head);
     items.forEach(x => {
       const li = el("li"), a = el("a", "dt-row"); a.href = x.href;
       if (x.r.status === "decided" && x.r.final_label) a.title = x.r.final_label;
       a.append(q(x.r), kindTag(x.kind), el("span", "st" + (x.s.go ? " go" : ""), x.stage), el("span", "c-ppl dim", String(x.people ?? "")), el("span", "c-date dim", dateOf(x)));
-      li.append(a); ul.append(li);
+      li.append(a, roomMenu(x) || el("span", "menu-gap")); ul.append(li);
     });
     return ul;
   };

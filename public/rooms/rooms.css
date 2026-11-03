@@ -558,3 +558,19 @@ body.slides .db-shell{grid-template-columns:minmax(0,1fr)}
   .db-tabs a[aria-current=page]{color:var(--fg);font-weight:500}
   .db-tabs .add .ic{align-items:center;justify-content:center;width:42px;height:42px;margin-top:-16px;border-radius:50%;background:var(--accent);color:#fff}
 }
+/* Setup and research in the console style: no white box around the content, a centred heading, rounded fields and cards */
+html.shelled #wiz.msg{background:none;box-shadow:none;padding:12px 0 0;max-width:min(760px,100%);gap:18px}
+html.shelled .wz-head{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:8px 0 10px}
+html.shelled .wz-head .progress{width:min(420px,100%)}
+html.shelled .wz-head .step-title{font-size:clamp(28px,2.6vw,40px);line-height:1.15}
+html.shelled .wz-head .small{max-width:56ch;color:var(--dim)}
+html.shelled .rs-head{align-items:center;text-align:center;margin:12px 0 10px}
+html.shelled .rs-head h1{font-size:clamp(28px,2.6vw,40px)}
+html.shelled .rs-head + .rs-steps{text-align:center;margin-top:0}
+html.shelled .rs-card:not(.yellow){background:none;padding:0;margin-bottom:22px}
+html.shelled .rs-card.yellow,html.shelled .rs-band,html.shelled .note,html.shelled .msg.outline{border-radius:20px;padding:20px 22px}
+html.shelled .addf,html.shelled .pool .it{border-radius:16px}
+html.shelled input.line,html.shelled textarea,html.shelled select.line{border-radius:14px;border-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+html.shelled input.line:focus,html.shelled textarea:focus,html.shelled select.line:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+html.shelled .choice{border-radius:16px;border-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+html.shelled .choice[aria-pressed=true],html.shelled .choice.on{box-shadow:0 0 0 2px var(--accent)}
