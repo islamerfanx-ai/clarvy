@@ -2009,5 +2009,7 @@
   "dn_demo_rq": "What do our customers in Jeddah pay for delivery today?",
   "dn_g_new": "Start something",
   "dn_g_org": "Organisation",
-  "dn_g_you": "You"
+  "dn_g_you": "You",
+  "dn_mini": "Fold the sidebar",
+  "dn_full": "Open the sidebar"
 }

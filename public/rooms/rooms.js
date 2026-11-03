@@ -43,6 +43,7 @@ async function loadLang(l) {
   document.querySelectorAll("[data-t-ph]").forEach(e => { e.placeholder = t(e.dataset.tPh); });
   const b = $("langBtn");
   if (b) { b.textContent = t("lang_other"); b.setAttribute("aria-label", t("lang_other_label")); }
+  if (shellPage) drawShell();
 }
 /* ---------- Loading: a bar that fills and short lines about what's happening ---------- */
 // Pages start with <div class="ld" data-load="room"></div>. Its lines are the words ld_<kind>_1..3: they move on by
@@ -115,6 +116,7 @@ async function connect() {
   sb.auth.onAuthStateChange((_e, session) => { user = session?.user || null; if (user) markActive(true); });
   showMyRooms();
   syncPush();
+  if (shellPage) drawShell();
   return true;
 }
 const isGuest = () => !!user?.is_anonymous;      // joined with just a name
@@ -570,10 +572,12 @@ async function readFile(f) {
   throw new Error("unsupported");
 }
 
-/* ---------- "Add a room" opens the setup as a pop-up over the current page ---------- */
+/* ---------- "Add a room": asks decision or research, then opens the setup as its own page ---------- */
 const embedded = new URLSearchParams(location.search).get("embed") === "1";
 if (embedded) document.documentElement.classList.add("embed");
 function openNewRoom(href = "/new.html") {
+  const u = new URL(href, location.origin); u.searchParams.delete("embed");
+  if (!embedded) { location.href = u.pathname + u.search; return; }
   if (document.querySelector(".dr-pop")) return;
   const url = new URL(href, location.origin); url.searchParams.set("embed", "1");
   const pop = el("div", "dr-pop"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-modal", "true");
@@ -595,11 +599,11 @@ addEventListener("message", e => {
   if (e.origin !== location.origin || e.data?.type !== "dr-open" || !String(e.data.url || "").startsWith("/room.html")) return;
   location.href = e.data.url;
 });
-// Any link to the setup page opens the pop-up instead (landing CTAs, Add a room, empty states).
-// First it asks which kind: a decision room (the setup pop-up) or a research room (research.html).
+// Any link to the setup page first asks which kind (landing CTAs, Add a room, empty states): a decision room
+// (the setup page) or a research room (research.html). Sidebar links marked .direct go straight there.
 if (!embedded) document.addEventListener("click", e => {
   const a = e.target.closest?.('a[href^="/new.html"]');
-  if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  if (!a || a.classList.contains("direct") || e.metaKey || e.ctrlKey || e.shiftKey) return;
   e.preventDefault(); chooseRoomKind(a.getAttribute("href"));
 });
 function chooseRoomKind(href = "/new.html") {
@@ -800,11 +804,117 @@ function appBack() {
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", appBack); else appBack();
 if (standalone()) document.documentElement.classList.add("in-app");
 
+/* ---------- The console layout: a sidebar of pages (a tab bar on a phone) ---------- */
+// Pages opt in with <body data-shell="rooms|research|notes|new|profile|org">: the page's own content moves into the
+// main column, beside a sidebar with the logo, the pages in folding groups and Get the app. The sidebar folds to icons.
+const shellPage = document.body?.dataset.shell || null;
+const SHELL_ICON = {
+  home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/>',
+  rooms: '<path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>',
+  research: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.8-4.8"/>',
+  notes: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h3"/>',
+  org: '<path d="M4 21V5l8-2v18M12 8h8v13M2 21h20M8 9h.01M8 13h.01M8 17h.01M16 12h.01M16 16h.01"/>',
+  profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
+  app: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
+  add: '<path d="M12 5v14M5 12h14"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4"/>',
+  door: '<path d="M6 21V4h10v17M3 21h18M13 12h.01"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>',
+  side: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'
+};
+function icon(k) { const s = el("span", "ic"); s.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHELL_ICON[k] || ""}</svg>`; return s; }
+const shell = { kind: null, onKind: null, orgs: null, appOn: false };
+let navClosed = {};
+try { navClosed = JSON.parse(localStorage.getItem("dr-nav-closed") || "{}") || {}; if (localStorage.getItem("dr-nav-mini") === "1") document.documentElement.classList.add("nav-mini"); } catch {}
+function shellBuild() {
+  const main = document.querySelector("main");
+  if (!shellPage || embedded || !main || main.querySelector(".db-shell")) return;
+  const wrap = el("div", "db-shell"), nav = el("nav", "db-nav"), col = el("div", "db-main"), tabs = el("nav", "db-tabs");
+  nav.id = "dbNav"; tabs.id = "dbTabs";
+  col.append(...main.childNodes);
+  wrap.append(nav, col); main.append(wrap, tabs);
+  document.documentElement.classList.add("shelled");
+  app.pushState().then(st => { shell.appOn = !(st === "unsupported" || (st === "on" && standalone())); drawShell(); }, () => {});
+}
+// The install steps in a small panel by a button (top right on Your rooms, the foot of the sidebar elsewhere).
+let appPopEl = null;
+function appPopover(anchor, { up = false, onDone } = {}) {
+  if (appPopEl) { const same = appPopEl._anchor === anchor; appPopEl.remove(); appPopEl = null; anchor.setAttribute("aria-expanded", "false"); if (same) return; }
+  const pop = el("div", "db-apppop" + (up ? " up" : "")); pop._anchor = anchor;
+  pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", t("ap_title"));
+  const inner = el("div"), shut = () => { pop.remove(); appPopEl = null; anchor.setAttribute("aria-expanded", "false"); };
+  pop.append(el("h2", null, t("ap_title")), el("p", "small", t("ap_line")), inner);
+  appBox(inner, { onDone: () => { shut(); shell.appOn = false; drawShell(); onDone?.(); }, later: shut });
+  anchor.parentNode.append(pop); anchor.setAttribute("aria-expanded", "true");
+  appPopEl = pop;
+}
+document.addEventListener("click", e => { if (appPopEl && !appPopEl.contains(e.target) && !appPopEl._anchor.contains(e.target)) { appPopEl._anchor.setAttribute("aria-expanded", "false"); appPopEl.remove(); appPopEl = null; } });
+function drawShell() {
+  const nav = $("dbNav"), tabs = $("dbTabs");
+  if (!nav || !words.dn_nav) return;
+  if (shell.orgs === null && sb && hasAccount()) { shell.orgs = []; sb.rpc("my_orgs").then(({ data }) => { shell.orgs = data || []; drawShell(); }, () => {}); }
+  const demoQ = /[?&]demo=/.test(location.search) ? "?demo=1" : "";
+  const here = shellPage === "rooms" ? (shell.kind === "research" ? "research" : "home") : shellPage;
+  nav.setAttribute("aria-label", t("dn_nav")); tabs.setAttribute("aria-label", t("dn_nav"));
+  const item = (key, label, href, { cur, kind, cls } = {}) => {
+    const a = el("a", cls || null); a.href = href; a.title = label;
+    if (cur) a.setAttribute("aria-current", "page");
+    if (kind !== undefined) a.onclick = e => { if (shell.onKind) { e.preventDefault(); shell.kind = kind; shell.onKind(kind); drawShell(); } };
+    a.append(icon(key), el("span", "lb", label));
+    return a;
+  };
+  const group = (id, label, items) => {
+    items = items.filter(Boolean);
+    if (!items.length) return null;
+    const wrap = el("div", "grp-w"), btn = el("button", "grp"), list = el("div", "grp-items");
+    btn.type = "button"; btn.setAttribute("aria-expanded", String(!navClosed[id]));
+    btn.append(el("span", null, label), icon("chev"));
+    list.append(...items); list.hidden = !!navClosed[id];
+    btn.onclick = () => {
+      navClosed[id] = !navClosed[id]; list.hidden = navClosed[id]; btn.setAttribute("aria-expanded", String(!navClosed[id]));
+      try { localStorage.setItem("dr-nav-closed", JSON.stringify(navClosed)); } catch {}
+    };
+    wrap.append(btn, list);
+    return wrap;
+  };
+  // The logo and the fold button.
+  const head = el("div", "nav-head"), wm = el("a", "wm", "Decision Rooms"); wm.href = "/";
+  const mini = el("button", "nav-mini-btn"); mini.type = "button";
+  const isMini = document.documentElement.classList.contains("nav-mini");
+  mini.setAttribute("aria-label", t(isMini ? "dn_full" : "dn_mini")); mini.title = t(isMini ? "dn_full" : "dn_mini");
+  mini.append(icon("side"));
+  mini.onclick = () => {
+    const on = document.documentElement.classList.toggle("nav-mini");
+    try { localStorage.setItem("dr-nav-mini", on ? "1" : "0"); } catch {}
+    drawShell();
+  };
+  head.append(wm, mini);
+  const appItem = shell.appOn ? (() => { const w = el("div", "foot"), b = el("button", "it"); b.type = "button"; b.title = t("dn_app");
+    b.append(icon("app"), el("span", "lb", t("dn_app"))); b.onclick = e => { e.stopPropagation(); appPopover(b, { up: true }); }; w.append(b); return w; })() : null;
+  nav.replaceChildren(...[head,
+    item("home", t("dn_rooms"), "/dashboard.html" + demoQ, { cur: here === "home", kind: null }),
+    item("research", t("dn_research"), "/dashboard.html?kind=research" + (demoQ ? "&demo=1" : ""), { cur: here === "research" && shellPage === "rooms", kind: "research" }),
+    item("notes", t("dn_notes"), "/notes.html" + demoQ, { cur: here === "notes" }),
+    group("new", t("dn_g_new"), [
+      item("rooms", t("kd_decide"), "/new.html" + demoQ, { cur: here === "new", cls: "direct" }),
+      item("research", t("kd_research"), "/research.html" + demoQ, { cur: here === "research" && shellPage === "research" })]),
+    group("org", t("dn_g_org"), (shell.orgs || []).map(o => item("org", o.name, "/org.html", { cur: here === "org" }))),
+    group("you", t("dn_g_you"), [item("profile", t("dn_profile"), "/profile.html", { cur: here === "profile" })]),
+    appItem].filter(Boolean));
+  tabs.replaceChildren(
+    item("home", t("dn_rooms"), "/dashboard.html" + demoQ, { cur: here === "home", kind: null }),
+    item("research", t("dn_research"), "/dashboard.html?kind=research" + (demoQ ? "&demo=1" : ""), { cur: here === "research", kind: "research" }),
+    item("add", t("dn_add"), "/new.html" + demoQ, { cls: "add", cur: here === "new" }),
+    item("notes", t("dn_notes"), "/notes.html" + demoQ, { cur: here === "notes" }),
+    item("profile", t("dn_profile"), "/profile.html", { cur: here === "profile" }));
+}
+shellBuild();
+
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
   post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
-  openNewRoom, goToRoom, embedded, validUrl, linksEditor, app, appBox, loadStep
+  openNewRoom, goToRoom, embedded, icon, shell, drawShell, appPopover, validUrl, linksEditor, app, appBox, loadStep
 };
 })();

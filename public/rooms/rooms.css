@@ -506,3 +506,55 @@ ul.live-done li.in{animation:thinkIn .45s ease both}
 html.in-app .top{height:auto;min-height:60px;padding-top:env(safe-area-inset-top,0px)}
 html.in-app .top > *{align-self:center}
 @media (max-width:720px){html.in-app .top{min-height:calc(60px + env(safe-area-inset-top,0px))}}
+
+/* ================= Console layout (pages with body[data-shell]): sidebar, main column, tab bar on a phone ================= */
+html.shelled main{padding:0;max-width:none}
+html.shelled main > .db-shell,html.shelled main > .db-tabs{max-width:none}
+.db-shell{display:grid;grid-template-columns:264px minmax(0,1fr);align-items:start;min-height:100vh}
+html.nav-mini .db-shell{grid-template-columns:72px minmax(0,1fr)}
+.db-nav{position:sticky;top:0;z-index:25;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:12px 12px 16px;background:#EDEBE0}
+.db-nav .nav-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0 14px}
+.db-nav .wm{display:block;font-size:22px;padding:4px 12px;color:var(--fg);text-decoration:none;white-space:nowrap;overflow:hidden}
+.nav-mini-btn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex:none;border:0;border-radius:10px;background:none;color:var(--dim);cursor:pointer}
+.nav-mini-btn:hover{background:rgba(29,29,29,.06);color:var(--fg)}
+.db-nav a,.db-nav button.it{display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:12px;color:var(--fg);text-decoration:none;font:inherit;font-size:15px;background:none;border:0;cursor:pointer;text-align:start;width:100%;white-space:nowrap}
+.db-nav a:hover,.db-nav button.it:hover{background:rgba(29,29,29,.05)}
+.db-nav a[aria-current=page]{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
+.db-nav .grp{display:flex;align-items:center;justify-content:space-between;width:100%;font:inherit;font-size:13px;color:var(--dim);background:none;border:0;cursor:pointer;padding:18px 12px 6px;text-align:start}
+.db-nav .grp .ic{transition:transform .15s;color:var(--dim)}
+.db-nav .grp[aria-expanded=false] .ic{transform:rotate(-90deg)}
+.db-nav .grp-items{display:flex;flex-direction:column;gap:2px}
+.db-nav .foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line);position:relative}
+.db-nav .ic,.db-tabs .ic{display:flex;flex:none}
+/* Folded: icons only, groups open, labels as tooltips */
+html.nav-mini .db-nav{padding-inline:10px}
+html.nav-mini .db-nav .nav-head{flex-direction:column;padding-bottom:8px}
+html.nav-mini .db-nav .wm{display:none}
+html.nav-mini .db-nav .lb{display:none}
+html.nav-mini .db-nav a,html.nav-mini .db-nav button.it{justify-content:center;padding:11px 0}
+html.nav-mini .db-nav .grp{display:none}
+html.nav-mini .db-nav .grp-items[hidden]{display:flex}
+html.nav-mini .db-nav .grp-w{border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.db-main{display:flex;flex-direction:column;min-width:0;padding:0 clamp(16px,3.4vw,56px) 64px;max-width:1440px;width:100%;margin-inline:auto}
+.db-main > :not(.top):not(.band){width:100%;max-width:min(var(--content),100%);margin-inline:auto}
+.db-main .top{position:static;display:flex;justify-content:flex-end;align-items:center;height:72px;margin:0;padding:0;border:0;background:none;width:100%;max-width:none}
+.db-main .top .wm{display:none}
+.db-main .top .top-acts{flex:none}
+.db-apppop{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:30;width:min(360px,calc(100vw - 32px));background:#fff;border-radius:20px;padding:20px;box-shadow:0 12px 32px rgba(0,0,0,.14);display:flex;flex-direction:column;gap:6px}
+.db-apppop.up{top:auto;bottom:calc(100% + 8px);inset-inline-start:0;inset-inline-end:auto}
+.db-apppop h2{margin:0;font-size:var(--t-h5);font-weight:400}
+.db-tabs{display:none}
+body.slides .db-nav,body.slides .db-tabs{display:none}
+body.slides .db-shell{grid-template-columns:minmax(0,1fr)}
+@media (min-width:821px){html.shelled .top #orgLink,html.shelled .top a.navlink[href^="/dashboard.html"]{display:none}}
+@media (max-width:820px){
+  .db-shell,html.nav-mini .db-shell{grid-template-columns:minmax(0,1fr)}
+  .db-nav{display:none}
+  .db-main{padding:0 var(--gutter) calc(96px + env(safe-area-inset-bottom,0px))}
+  .db-main .top{position:sticky;top:0;z-index:20;background:var(--ink);margin:0 calc(-1 * var(--gutter));padding:0 var(--gutter);height:60px;border-bottom:1px solid var(--line);justify-content:space-between;width:auto}
+  .db-main .top .wm{display:block}
+  .db-tabs{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around}
+  .db-tabs a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;color:var(--dim);text-decoration:none;padding:4px 0}
+  .db-tabs a[aria-current=page]{color:var(--fg);font-weight:500}
+  .db-tabs .add .ic{align-items:center;justify-content:center;width:42px;height:42px;margin-top:-16px;border-radius:50%;background:var(--accent);color:#fff}
+}
