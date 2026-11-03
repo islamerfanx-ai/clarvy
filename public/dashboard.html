@@ -17,87 +17,105 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wdth,wght@75..112.5,300..600&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/rooms/rooms.css">
 <style>
-/* Your rooms as a dashboard: a sidebar of pages (a tab bar on a phone), the greeting with Add a room and the app at the
-   top right, slim number cards, what needs attention, open rooms in two rows of cards, then one compact table for the
-   rest, decision and research rooms together. One gap (--gap) between every block. */
-main{--content:none;--gap:28px}
-.db-shell{display:grid;grid-template-columns:196px minmax(0,1fr);gap:32px;align-items:start}
-.db-nav{position:sticky;top:93px;display:flex;flex-direction:column;gap:2px;padding-inline-end:20px;border-inline-end:1px solid var(--line);min-height:calc(100vh - 140px)}
-.db-nav a,.db-nav button{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--fg);text-decoration:none;font:inherit;font-size:15px;background:none;border:0;cursor:pointer;text-align:start}
-.db-nav a:hover,.db-nav button:hover{background:rgba(0,0,0,.05)}
-.db-nav [aria-current=page]{background:#fff;font-weight:500}
-.db-nav .foot{margin-top:auto;color:var(--dim)}
-.db-nav svg,.db-tabs svg,.db-appbtn svg{flex:none}
-.db-main{display:flex;flex-direction:column;min-width:0}
-.db-top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
-.db-hello .eyebrow{display:block;font-size:14px;color:var(--dim)}
-.db-hello .db-title{margin:4px 0 6px;font-size:var(--t-h3);max-width:none}
-.db-hello .db-line{margin:0 0 4px;font-size:16px;max-width:52ch}
-.db-acts{display:flex;gap:10px;align-items:center;position:relative}
-.db-acts .btn{width:auto;padding:13px 20px}
-.db-appbtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:var(--t-ui);background:#fff;border:1px solid var(--line);border-radius:40px;padding:11px 16px;color:var(--fg);cursor:pointer}
+/* Your rooms as a dashboard: a full-height sidebar (logo, grouped pages, the current one as a white pill; a tab bar on a
+   phone), a slim top row (Add a room, the app, language, account), a centred greeting with the search pill, then rounded
+   white panels: numbers, needs attention, open rooms (soft cards inside), and one table for the rest. Our colours. */
+main{--content:none;--gap:24px;padding:0}
+main > *{max-width:none}
+.db-shell{display:grid;grid-template-columns:264px minmax(0,1fr);align-items:start;min-height:100vh}
+.db-nav{position:sticky;top:0;height:100vh;overflow-y:auto;display:flex;flex-direction:column;gap:2px;padding:14px 12px 16px;background:rgba(29,29,29,.04)}
+.db-nav .wm{display:block;font-size:22px;padding:10px 12px 18px;color:var(--fg);text-decoration:none}
+.db-nav a,.db-nav button.it{display:flex;align-items:center;gap:14px;padding:10px 12px;border-radius:12px;color:var(--fg);text-decoration:none;font:inherit;font-size:15px;background:none;border:0;cursor:pointer;text-align:start;width:100%}
+.db-nav a:hover,.db-nav button.it:hover{background:rgba(29,29,29,.05)}
+.db-nav a[aria-current=page],.db-nav button.it[aria-current=page]{background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.06);font-weight:500}
+.db-nav .grp{display:flex;align-items:center;justify-content:space-between;width:100%;font:inherit;font-size:13px;color:var(--dim);background:none;border:0;cursor:pointer;padding:18px 12px 6px;text-align:start}
+.db-nav .grp svg{transition:transform .15s}
+.db-nav .grp[aria-expanded=false] svg{transform:rotate(-90deg)}
+.db-nav .grp-items{display:flex;flex-direction:column;gap:2px}
+.db-nav .foot{margin-top:auto;padding-top:12px;border-top:1px solid var(--line)}
+.db-nav .ic{display:flex;color:var(--fg)}
+.db-main{display:flex;flex-direction:column;min-width:0;padding:0 clamp(16px,3.4vw,56px) 64px;max-width:1440px;width:100%;margin-inline:auto}
+.db-main .top{position:static;display:flex;justify-content:flex-end;align-items:center;height:72px;margin:0;padding:0;border:0;background:none}
+.db-main .top .wm{display:none}
+.top-acts .db-acts{display:flex;gap:10px;align-items:center;position:relative}
+.db-acts .btn{width:auto;padding:12px 18px}
+.db-appbtn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-size:var(--t-ui);background:#fff;border:1px solid var(--line);border-radius:40px;padding:10px 14px;color:var(--fg);cursor:pointer;white-space:nowrap}
 .db-appbtn:hover{border-color:var(--fg)}
-.db-apppop{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:30;width:min(360px,calc(100vw - 32px));background:#fff;padding:18px;box-shadow:0 8px 28px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:6px}
+.db-apppop{position:absolute;top:calc(100% + 8px);inset-inline-end:0;z-index:30;width:min(360px,calc(100vw - 32px));background:#fff;border-radius:20px;padding:20px;box-shadow:0 12px 32px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:6px}
 .db-apppop h2{margin:0;font-size:var(--t-h5);font-weight:400}
-.db-sec{display:flex;flex-direction:column;gap:12px;margin-top:var(--gap)}
-.db-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+/* Greeting, centred, with the search pill */
+.db-hello{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:28px 0 8px}
+.db-hello .db-title{margin:0;font-size:clamp(28px,2.6vw,40px);line-height:1.15;letter-spacing:-.02em;max-width:none}
+.db-hello .db-line{margin:0;font-size:16px;color:var(--dim);max-width:56ch}
+.db-search{display:flex;align-items:center;gap:12px;width:min(640px,100%);margin-top:14px;background:#fff;border-radius:40px;padding:0 20px;box-shadow:0 2px 10px rgba(0,0,0,.06)}
+.db-search input{flex:1;border:0;background:none;font:inherit;font-size:16px;padding:17px 0;outline:none;min-width:0}
+.db-search:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.db-hello .linkbtn{margin-top:4px}
+/* Panels */
+.db-sec{display:flex;flex-direction:column;gap:16px;margin-top:var(--gap);background:#fff;border-radius:24px;padding:24px clamp(16px,2vw,28px)}
+.db-head{display:flex;align-items:center;gap:10px}
 .db-head h2{margin:0;font-size:var(--t-h5);font-weight:500;letter-spacing:-.01em}
-.db-head .n{font-size:var(--t-ui);color:var(--dim)}
+.db-head .n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:40px;background:var(--accent);color:#fff;font-size:12px;font-weight:500}
+.db-head .n:empty{display:none}
 .db-head .linkbtn{margin-inline-start:auto}
-/* Number cards: slim, the figure beside its title; tap to filter */
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:var(--gap)}
-.stat{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:4px 14px;background:#fff;padding:14px 16px;color:var(--fg);text-decoration:none;min-height:0}
+.db-sub{margin:-10px 0 0;font-size:14px;color:var(--dim)}
+.sq{display:flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;border-radius:12px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+/* Number cards */
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:var(--gap)}
+.stat{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:2px 14px;background:#fff;border-radius:20px;padding:18px 20px;color:var(--fg);text-decoration:none;min-height:0}
 .stat .num{grid-row:1/3;font-size:40px;line-height:1;font-weight:400;letter-spacing:-.03em}
 .stat h3{margin:0;font-size:15px;font-weight:500;letter-spacing:0}
 .stat .cap{font-size:13px;line-height:1.3;color:var(--dim)}
 .stat.go .num{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:6px}
 button.stat{font:inherit;text-align:start;border:0;cursor:pointer;width:100%}
-button.stat:hover h3,button.stat:focus-visible h3{text-decoration:underline;text-underline-offset:4px}
+button.stat:hover{box-shadow:0 0 0 1px var(--line)}
 button.stat:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-.stat[aria-pressed=true]{outline:2px solid var(--accent);outline-offset:-2px}
+.stat[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent)}
 .filterbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:var(--gap) 0 0;font-size:var(--t-ui)}
-/* Open rooms: cards, two rows at most until See all */
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-.rcard{display:flex;flex-direction:column;gap:12px;background:#fff;padding:16px 18px}
+/* Needs attention: soft rows inside the panel */
+.attention{display:flex;flex-direction:column;gap:10px;list-style:none;margin:0;padding:0}
+.attention li{display:flex;align-items:center;gap:16px;background:var(--yellow);border-radius:16px;padding:16px 18px}
+.attention .txt{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.attention .q{font-size:16px;font-weight:500;line-height:1.35}
+.attention .why{font-size:14px;color:var(--dim)}
+.attention .act{flex:none;width:auto;padding:11px 18px;background:#fff;color:var(--fg);border:1px solid var(--line)}
+.attention .act:hover{border-color:var(--fg);background:#fff}
+/* Open rooms: soft cards in the panel, two rows until See all */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px}
+.rcard{display:flex;flex-direction:column;gap:14px;background:var(--ink);border-radius:18px;padding:20px}
 .rcard a.open{display:flex;flex-direction:column;gap:8px;color:var(--fg);text-decoration:none;flex:1}
-.rcard a.open .meta{display:flex;justify-content:space-between;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.rcard .cardtop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.rcard .type{font-size:13px;color:var(--dim)}
 .rcard a.open:hover .q{text-decoration:underline;text-underline-offset:3px}
-.rcard .q{font-size:17px;font-weight:400;line-height:1.3;letter-spacing:-.01em}
+.rcard .q{font-size:18px;font-weight:500;line-height:1.3;letter-spacing:-.01em}
 .rcard .st{font-size:14px;color:var(--dim)}
 .rcard .st.go{color:var(--fg);font-weight:600}
 .rcard .invite{width:100%;padding:13px 16px}
-.kind{justify-self:start;font-size:12px;border:1px solid var(--line);border-radius:40px;padding:1px 8px;white-space:nowrap;color:var(--fg)}
+.kind{justify-self:start;font-size:12px;border:1px solid var(--line);border-radius:40px;padding:2px 9px;white-space:nowrap;color:var(--fg);background:#fff}
 .kind.rs{background:var(--yellow);border-color:transparent}
 .panel{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
 .panel .share{grid-template-columns:1fr 1fr}
 .empty{margin:0;font-size:15px;color:var(--dim);padding:6px 0}
-/* Ongoing and old: one thin row per room */
-.tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.tools input{flex:1;min-width:180px;font-size:15px}
-.seg{display:inline-flex;background:rgba(0,0,0,.05);border-radius:40px;padding:3px}
+/* The table */
+.seg{display:inline-flex;background:var(--ink);border-radius:40px;padding:3px;margin-inline-start:auto}
 .seg button{font:inherit;font-size:var(--t-ui);border:0;background:none;border-radius:40px;padding:7px 14px;cursor:pointer;color:var(--fg)}
-.seg button[aria-pressed=true]{background:#fff;font-weight:500}
-.dt{list-style:none;margin:0;padding:0;background:#fff}
+.seg button[aria-pressed=true]{background:#fff;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.dt{list-style:none;margin:0;padding:0}
 .dt li + li{border-top:1px solid var(--line)}
-.dt-row{display:grid;grid-template-columns:minmax(0,3fr) 96px minmax(0,1.4fr) 70px 96px;gap:12px;align-items:center;padding:11px 16px;color:var(--fg);text-decoration:none;font-size:14px}
-a.dt-row:hover .q{text-decoration:underline;text-underline-offset:3px}
-.dt-head{font-size:13px;color:var(--dim);padding-block:9px;background:transparent}
+.dt-row{display:grid;grid-template-columns:minmax(0,3fr) 96px minmax(0,1.4fr) 70px 96px;gap:12px;align-items:center;padding:13px 8px;color:var(--fg);text-decoration:none;font-size:14px;border-radius:10px}
+a.dt-row:hover{background:var(--ink)}
+.dt-head{font-size:13px;color:var(--dim);padding-block:6px}
 .dt .q{font-size:15px;line-height:1.35;overflow:hidden;text-overflow:ellipsis}
 .dt .st.go{font-weight:600}
 .dt .dim{color:var(--dim)}
-details.old{margin-top:var(--gap)}
-details.old > summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:12px;padding-bottom:8px;border-bottom:1px solid var(--line);font-size:var(--t-h5);font-weight:500}
+details.old{margin-top:var(--gap);background:#fff;border-radius:24px;padding:20px clamp(16px,2vw,28px)}
+details.old > summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;font-size:var(--t-h5);font-weight:500}
 details.old > summary::-webkit-details-marker{display:none}
-details.old > summary::before{content:"▸";margin-inline-end:8px;display:inline-block;transition:transform .15s}
-details.old[open] > summary::before{transform:rotate(90deg)}
-details.old > summary span:first-child{margin-inline-end:auto}
-details.old > summary .n{font-size:var(--t-ui);color:var(--dim);font-weight:400}
-details.old .dt{margin-top:12px}
-.attention{display:flex;flex-direction:column;gap:1px;background:var(--line);list-style:none;margin:0;padding:0}
-.attention li{display:grid;grid-template-columns:1fr auto;gap:4px 18px;align-items:center;background:var(--yellow);padding:12px 16px}
-.attention .q{font-size:15px;line-height:1.35}
-.attention .why{grid-column:1;font-size:13px}
-.attention .act{grid-row:1/3;grid-column:2;white-space:nowrap;width:auto;padding:11px 16px}
+details.old > summary::after{content:"";margin-inline-start:auto;width:8px;height:8px;border-right:1.6px solid var(--fg);border-bottom:1.6px solid var(--fg);transform:rotate(45deg);transition:transform .15s}
+details.old[open] > summary::after{transform:rotate(225deg)}
+details.old > summary .n{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:40px;background:var(--ink);font-size:12px;font-weight:500}
+details.old > summary .n:empty{display:none}
+details.old .dt{margin-top:14px}
 /* Phone tab bar */
 .db-tabs{display:none}
 @media (min-width:821px){.top #orgLink{display:none}}
@@ -105,35 +123,36 @@ details.old .dt{margin-top:12px}
 @media (max-width:820px){
   .db-shell{grid-template-columns:minmax(0,1fr)}
   .db-nav{display:none}
-  main{padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))}
-  .db-tabs{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:40;background:var(--ink);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around}
+  .db-main{padding:0 var(--gutter) calc(96px + env(safe-area-inset-bottom,0px))}
+  .db-main .top{position:sticky;top:0;z-index:20;background:var(--ink);margin:0 calc(-1 * var(--gutter));padding:0 var(--gutter);height:60px;border-bottom:1px solid var(--line);justify-content:space-between}
+  .db-main .top .wm{display:block}
+  .db-acts .btn.add,.db-appbtn span:not(.ic){display:none}
+  .db-tabs{display:flex;position:fixed;inset-inline:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));justify-content:space-around}
   .db-tabs a,.db-tabs button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font:inherit;font-size:11px;color:var(--dim);text-decoration:none;background:none;border:0;padding:4px 0;cursor:pointer}
   .db-tabs [aria-current=page]{color:var(--fg);font-weight:500}
-  .db-tabs .add span.ic{display:flex;align-items:center;justify-content:center;width:40px;height:40px;margin-top:-14px;border-radius:50%;background:var(--accent);color:#fff}
-  .db-acts .btn.add{display:none}
+  .db-tabs .add .ic{display:flex;align-items:center;justify-content:center;width:42px;height:42px;margin-top:-16px;border-radius:50%;background:var(--accent);color:#fff}
 }
 @media (max-width:640px){
-  .db-top{flex-direction:column}
-  .db-acts{align-self:stretch}
-  .db-apppop{inset-inline-start:0;inset-inline-end:auto}
-  .stat{padding:12px 14px}.stat .num{font-size:32px}.stat .cap{display:none}
+  .db-hello{padding-top:20px}
+  .stats{gap:10px}.stat{padding:14px;border-radius:16px}.stat .num{font-size:32px}.stat .cap{display:none}
+  .db-sec,details.old{border-radius:20px}
   .dt-head{display:none}
   .dt-row{grid-template-columns:1fr auto;gap:4px 10px}
   .dt-row .q{grid-column:1/-1}
   .dt-row .c-ppl,.dt-row .c-date{display:none}
-  .attention li{grid-template-columns:1fr}.attention .act{grid-row:auto;grid-column:1}
+  .attention li{flex-wrap:wrap}.attention .sq{display:none}.attention .act{width:100%}
 }
 </style>
 </head>
 <body>
 <main>
-  <header class="top">
-    <a class="wm" href="/">Decision Rooms</a>
-    <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
-  </header>
   <div class="db-shell">
     <nav class="db-nav" id="dbNav"></nav>
     <div class="db-main">
+      <header class="top">
+        <a class="wm" href="/">Decision Rooms</a>
+        <div class="top-acts"><button class="lang" type="button" id="langBtn"></button></div>
+      </header>
       <div id="view" aria-live="polite"><div class="ld" data-load="rooms"></div></div>
       <p class="small" id="demoNote" data-t="demo_note" hidden style="text-align:center;padding-top:16px"></p>
     </div>
@@ -246,8 +265,10 @@ function attention() {
   const sec = section(t("na_title"), items.length);
   const ul = el("ul", "attention");
   items.forEach(([r, x]) => {
-    const li = el("li");
-    li.append(q(r), el("span", "why", x.why));
+    const li = el("li"), txt = el("div", "txt"), sq = el("span", "sq");
+    sq.append(icon(x.act === "open" ? "door" : "bell"));
+    txt.append(q(r), el("span", "why", x.why));
+    li.append(sq, txt);
     const link = `${location.origin}/room.html?room=${encodeURIComponent(r.id)}`;
     let a;
     if (x.act === "open") { a = el("a", "btn act", t("na_open")); a.href = roomHref(r); }
@@ -278,33 +299,60 @@ const ICON = {
   org: '<path d="M4 21V5l8-2v18M12 8h8v13M2 21h20M8 9h.01M8 13h.01M8 17h.01M16 12h.01M16 16h.01"/>',
   profile: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/>',
   app: '<rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/>',
-  add: '<path d="M12 5v14M5 12h14"/>'
+  add: '<path d="M12 5v14M5 12h14"/>',
+  home: '<path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1z"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4"/>',
+  door: '<path d="M6 21V4h10v17M3 21h18M13 12h.01"/>',
+  chev: '<path d="m6 9 6 6 6-6"/>'
 };
 const icon = k => { const s = el("span", "ic"); s.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`; return s; };
 let kindFilter = null, myOrgs = [];   // kindFilter: null (all), "decision" or "research"
 const addHref = () => demo ? "/new.html?demo=1" : "/new.html";
+// The sidebar in groups (each folds, remembered in this browser); on a phone a tab bar with Add in the middle.
+let navClosed = {};
+try { navClosed = JSON.parse(localStorage.getItem("dr-nav-closed") || "{}") || {}; } catch {}
 function drawNav() {
   const nav = $("dbNav"), tabs = $("dbTabs");
   nav.setAttribute("aria-label", t("dn_nav")); tabs.setAttribute("aria-label", t("dn_nav"));
   const item = (key, label, { href, onClick, current, cls } = {}) => {
-    const x = el(href ? "a" : "button", cls || null);
+    const x = el(href ? "a" : "button", cls || (href ? null : "it"));
     if (href) x.href = href; else { x.type = "button"; x.onclick = onClick; }
     if (current) x.setAttribute("aria-current", "page");
     x.append(icon(key), el("span", null, label));
     return x;
   };
+  const group = (id, label, items) => {
+    items = items.filter(Boolean);
+    if (!items.length) return null;
+    const wrap = el("div"), btn = el("button", "grp"), list = el("div", "grp-items");
+    btn.type = "button"; btn.setAttribute("aria-expanded", String(!navClosed[id]));
+    const chev = icon("chev"); btn.append(el("span", null, label), chev);
+    list.append(...items); list.hidden = !!navClosed[id];
+    btn.onclick = () => {
+      navClosed[id] = !navClosed[id]; list.hidden = navClosed[id]; btn.setAttribute("aria-expanded", String(!navClosed[id]));
+      try { localStorage.setItem("dr-nav-closed", JSON.stringify(navClosed)); } catch {}
+    };
+    wrap.append(btn, list);
+    return wrap;
+  };
   const showKind = k => () => { kindFilter = k; statFilter = null; render(); if (k) $("dbList")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
-  const org = myOrgs.length ? item("org", myOrgs.length === 1 ? myOrgs[0].name : t("og_link"), { href: "/org.html" }) : null;
+  const wm = el("a", "wm", "Decision Rooms"); wm.href = "/";
+  const newDecision = () => Rooms.openNewRoom(addHref());
   nav.replaceChildren(...[
-    item("rooms", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
+    wm,
+    item("home", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
     item("research", t("dn_research"), { onClick: showKind("research"), current: kindFilter === "research" }),
     item("notes", t("dn_notes"), { href: demo ? "/notes.html?demo=1" : "/notes.html" }),
-    org,
-    item("profile", t("dn_profile"), { href: "/profile.html" }),
-    appShown ? item("app", t("dn_app"), { onClick: e => { e.stopPropagation(); toggleApp(true); }, cls: "foot" }) : null
+    group("new", t("dn_g_new"), [
+      item("rooms", t("kd_decide"), { onClick: newDecision }),
+      item("research", t("kd_research"), { href: demo ? "/research.html?demo=1" : "/research.html" })]),
+    group("org", t("dn_g_org"), myOrgs.map(o => item("org", o.name, { href: "/org.html" }))),
+    group("you", t("dn_g_you"), [
+      item("profile", t("dn_profile"), { href: "/profile.html" })]),
+    appShown ? item("app", t("dn_app"), { onClick: e => { e.stopPropagation(); toggleApp(true); }, cls: "it foot" }) : null
   ].filter(Boolean));
   tabs.replaceChildren(
-    item("rooms", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
+    item("home", t("dn_rooms"), { onClick: showKind(null), current: kindFilter !== "research" }),
     item("research", t("dn_research"), { onClick: showKind("research"), current: kindFilter === "research" }),
     item("add", t("dn_add"), { href: addHref(), cls: "add" }),
     item("notes", t("dn_notes"), { href: demo ? "/notes.html?demo=1" : "/notes.html" }),
@@ -353,12 +401,14 @@ function render() {
     : ready ? t(ready === 1 ? "hi_ready_1" : "hi_ready_n", { n: ready })
     : stuckN ? t(stuckN === 1 ? "hi_stuck_1" : "hi_stuck_n", { n: stuckN })
     : t("hi_quiet");
-  hello.append(el("span", "eyebrow", t("db_title")), el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
-  // Add a room (asks decision or research) and the app, top right.
-  const acts = el("div", "db-acts");
+  // Search pill under the greeting: it filters every list on the page.
+  const search = el("label", "db-search"); search.append(icon("research"), searchIn);
+  hello.append(el("h1", "db-title", first ? t("hi_" + part, { name: first }) : t("hi_" + part + "_noname")), el("p", "db-line", line), search, Object.assign(el("a", "linkbtn", "✎ " + t("nt_draft")), { href: demo ? "/notes.html?demo=1" : "/notes.html?new=1" }));
+  // Add a room (asks decision or research) and the app, in the top row beside the language and the account.
+  let acts = $("dbActs");
+  if (!acts) { acts = el("div", "db-acts"); acts.id = "dbActs"; document.querySelector(".top-acts").prepend(acts); }
   const add = el("a", "btn add", "+ " + t("db_add")); add.href = addHref();
-  acts.append(add, appBtn);
-  const top = el("div", "db-top"); top.append(hello, acts);
+  acts.replaceChildren(add, appBtn);
   // Numbers row: what needs you, at a glance.
   const finished = r => ["decided", "reviewed"].includes(r.status);
   const needMe = rooms.filter(r => r.status === "open" && !r.i_submitted && r.role !== "observer");
@@ -388,7 +438,7 @@ function render() {
     stat("wait", t("ds_wait_t"), waiting, t("ds_wait_c"), t("ds_wait_f")),
     stat("verdict", t("ds_verdict_t"), verdicts, t("ds_verdict_c"), t("ds_verdict_f"), true),
     stat("done", t("ds_done_t"), statSets.done, t("ds_done_c"), t("ds_done_f")));
-  view.replaceChildren(...[top, stats, attention(), results].filter(Boolean));
+  view.replaceChildren(...[hello, stats, attention(), results].filter(Boolean));
   drawResults();
 }
 
@@ -427,8 +477,8 @@ function drawResults() {
 
   // 1. Your open rooms, two rows of cards at most until See all.
   const s1 = section(t("db_yours"), open.length || null);
-  const width = results.clientWidth || view.clientWidth || 900;
-  lastCols = Math.max(1, Math.floor((width + 12) / (230 + 12)));
+  const width = (results.clientWidth || view.clientWidth || 900) - 56;   // the panel's padding
+  lastCols = Math.max(1, Math.floor((width + 16) / (230 + 16)));
   const limit = lastCols * 2;
   if (open.length > limit) {
     const more = el("button", "linkbtn", showAllOpen ? t("dn_fewer") : t("dn_see_all", { n: open.length })); more.type = "button";
@@ -439,8 +489,9 @@ function drawResults() {
   (showAllOpen ? open : open.slice(0, limit)).forEach(x => {
     const r = x.r, card = el("article", "rcard");
     const a = el("a", "open"); a.href = x.href;
-    const meta = el("span", "meta"); meta.append(el("span", null, x.kind === "research" ? t("rs_db_t") : Rooms.typeName(r)), kindTag(x.kind));
-    a.append(meta, q(r), el("span", "st" + (x.s.go ? " go" : ""), x.s.text));
+    const top = el("span", "cardtop"), sq = el("span", "sq"); sq.append(icon(x.kind === "research" ? "research" : "rooms"));
+    top.append(sq, kindTag(x.kind));
+    a.append(top, el("span", "type", x.kind === "research" ? t("rs_db_t") : Rooms.typeName(r)), q(r), el("span", "st" + (x.s.go ? " go" : ""), x.s.text));
     card.append(a);
     if (x.kind === "research") {
       // Research invites live in the research room.
@@ -481,15 +532,14 @@ function drawResults() {
   const s2 = section(t("db_ongoing"), ongoing.length || null);
   s2.id = "dbList";
   // Search and the kind switch sit with the table.
-  const tools = el("div", "tools");
   const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", t("dn_c_kind"));
   [[null, "dn_k_all"], ["decision", "dn_k_decision"], ["research", "dn_k_research"]].forEach(([k, key]) => {
     const b = el("button", null, t(key)); b.type = "button"; b.setAttribute("aria-pressed", String(kindFilter === k));
     b.onclick = () => { kindFilter = k; drawNav(); drawResults(); };
     seg.append(b);
   });
-  tools.append(searchIn, seg);
-  s2.append(tools, ongoing.length ? table(ongoing) : el("p", "empty", t(query ? "db_no_match" : "db_empty_ongoing")));
+  s2.firstChild.append(seg);
+  s2.append(ongoing.length ? table(ongoing) : el("p", "empty", t(query ? "db_no_match" : "db_empty_ongoing")));
   const s3 = el("details", "old");
   if (query || statFilter === "done") s3.open = true;
   const sum = el("summary"); sum.append(el("span", null, t("db_old")), el("span", "n", old.length ? String(old.length) : ""));
@@ -503,15 +553,13 @@ function drawResults() {
     back.onclick = () => { statFilter = null; render(); };
     bar.append(el("span", null, t("ds_showing", { title: t({ need: "ds_need_t", wait: "ds_wait_t", verdict: "ds_verdict_t", done: "ds_done_t" }[statFilter]), n: statSets[statFilter].length })), back);
   }
-  const hadFocus = document.activeElement === searchIn;
   results.replaceChildren(...[bar, s1, s2, s3].filter(Boolean));
-  if (hadFocus) searchIn.focus();
 }
 // Two rows of cards follow the width: redraw when the number of columns changes.
 let resizeT = 0;
 addEventListener("resize", () => { clearTimeout(resizeT); resizeT = setTimeout(() => {
   if (!rooms || showAllOpen) return;
-  const cols = Math.max(1, Math.floor(((results.clientWidth || 900) + 12) / 242));
+  const cols = Math.max(1, Math.floor(((results.clientWidth || 900) - 56 + 16) / 246));
   if (cols !== lastCols) drawResults();
 }, 150); });
 // No account in this browser yet (trial accounts live in the browser that made them).
