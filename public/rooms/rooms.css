@@ -574,3 +574,24 @@ html.shelled input.line,html.shelled textarea,html.shelled select.line{border-ra
 html.shelled input.line:focus,html.shelled textarea:focus,html.shelled select.line:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 html.shelled .choice{border-radius:16px;border-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.07)}
 html.shelled .choice[aria-pressed=true],html.shelled .choice.on{box-shadow:0 0 0 2px var(--accent)}
+/* Setup step one: who is opening the room, and the kind of organisation as tiles (two cards, one column on a phone) */
+.you-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.6fr);gap:16px;align-items:start}
+.you-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.you-card{display:flex;flex-direction:column;gap:10px;background:#fff;border-radius:20px;padding:20px;min-width:0}
+.you-card .lbl{color:var(--dim)}
+.you-card p{margin:0}
+.you-id{display:flex;align-items:center;gap:12px}
+.you-id .av{display:flex;align-items:center;justify-content:center;flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;font-weight:500}
+.you-id .body{font-size:17px}
+.org-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.org-tile{display:flex;flex-direction:column;align-items:flex-start;gap:10px;font:inherit;font-size:14px;line-height:1.3;text-align:start;color:var(--fg);background:var(--ink);border:0;border-radius:16px;padding:14px;cursor:pointer}
+.org-tile .sq{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:#fff}
+.org-tile:hover{box-shadow:0 0 0 1px var(--line)}
+.org-tile[aria-pressed=true]{box-shadow:0 0 0 2px var(--accent);background:#fff}
+.org-tile[aria-pressed=true] .sq{background:var(--accent);color:#fff}
+@media (max-width:760px){.you-grid{grid-template-columns:minmax(0,1fr)}}
+/* In the console layout the setup keeps yellow for highlights only, and Next is a centred button, not a bar */
+html.shelled .signed-in,html.shelled .org-pick,html.shelled .qline,html.shelled .why-band,html.shelled .voice-heard{background:#fff;border-radius:20px;padding:18px 20px}
+html.shelled #wiz .actions{justify-content:center;margin-top:10px}
+html.shelled #wiz .actions .btn{flex:0 0 auto;min-width:200px;padding:15px 32px}
+html.shelled #wiz .actions .btn.ghost{min-width:0}

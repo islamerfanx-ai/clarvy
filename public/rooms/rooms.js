@@ -820,7 +820,12 @@ const SHELL_ICON = {
   bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5h4"/>',
   door: '<path d="M6 21V4h10v17M3 21h18M13 12h.01"/>',
   chev: '<path d="m6 9 6 6 6-6"/>',
-  side: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>'
+  side: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/>',
+  building: '<path d="M5 21V4h10v17M15 9h4v12M3 21h18M8 8h4M8 12h4M8 16h4"/>',
+  bank: '<path d="M3 9.5 12 4l9 5.5M5 10v8M10 10v8M14 10v8M19 10v8M3 21h18"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.8 5.5 3.8 9s-1.3 6.5-3.8 9c-2.5-2.5-3.8-5.5-3.8-9S9.5 5.5 12 3z"/>',
+  people: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.4c2.1.7 3.5 2.8 3.5 5.6"/>',
+  dots: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>'
 };
 function icon(k) { const s = el("span", "ic"); s.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHELL_ICON[k] || ""}</svg>`; return s; }
 const shell = { kind: null, onKind: null, orgs: null, appOn: false };

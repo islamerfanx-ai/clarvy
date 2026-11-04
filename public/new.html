@@ -91,17 +91,30 @@ function field(id, label, input, hint) {
 let me = null;   // the signed-in owner's profile
 let myOrgs = [];  // organisations the owner belongs to (a room can open inside one)
 let targets = []; // as someone's assistant: whose room this could be, and where (assist_targets)
+// Step one as two cards: who is opening the room on the start side, the kind of organisation as tiles beside it.
+const ORG_ICON = { corporation: "building", government: "bank", international: "globe", club: "people", custom: "dots" };
+function youGrid(left, right) {
+  const g = el("div", "you-grid"), a = el("div", "you-col"), b = el("div", "you-card");
+  a.append(...left); b.append(...right); g.append(a, b);
+  return g;
+}
 function stepYou() {
-  const orgs = el("div", "chips"); orgs.setAttribute("role", "group");
+  const orgs = el("div", "org-tiles"); orgs.setAttribute("role", "group");
   const orgIn = el("input", "line"); Object.assign(orgIn, { maxLength: 60, value: d.orgLabel || "", placeholder: t("org_custom_ph") });
   orgIn.oninput = () => { d.orgLabel = orgIn.value; save(); };
   const orgF = field("orgLabel", t("org_custom_lbl"), orgIn);
   const drawOrgs = () => {
-    orgs.replaceChildren(...ORGS.map(o => chip(t("org_" + o), o === d.orgType, () => { d.orgType = o; save(); drawOrgs(); if (o === "custom") orgIn.focus(); })));
+    orgs.replaceChildren(...ORGS.map(o => {
+      const b = el("button", "org-tile"); b.type = "button"; b.setAttribute("aria-pressed", String(o === d.orgType));
+      const sq = el("span", "sq"); sq.append(Rooms.icon(ORG_ICON[o]));
+      b.append(sq, el("span", null, t("org_" + o)));
+      b.onclick = () => { d.orgType = o; save(); drawOrgs(); if (o === "custom") orgIn.focus(); };
+      return b;
+    }));
     orgF.hidden = d.orgType !== "custom";
   };
   drawOrgs();
-  const orgField = el("div", "field org-pick"); orgField.append(el("span", "lbl", t("org_lbl")), el("p", "small", t("org_why")), orgs, orgF);
+  const orgNodes = [el("span", "lbl", t("org_lbl")), el("p", "small", t("org_why")), orgs, orgF];
 
   // Demo: no accounts, just a name and an email.
   if (demo) {
@@ -109,7 +122,8 @@ function stepYou() {
     nameIn.oninput = () => { d.name = nameIn.value; save(); };
     const emailIn = el("input", "line"); Object.assign(emailIn, { type: "email", maxLength: 120, value: d.email, placeholder: t("email_ph") });
     emailIn.oninput = () => { d.email = emailIn.value; save(); };
-    return form([...head(t("nr_you_title"), t("nr_you_hint")), field("ownerName", t("your_name"), nameIn), field("ownerEmail", t("email_lbl"), emailIn), orgField, actions()], () => {
+    const card = el("div", "you-card"); card.append(field("ownerName", t("your_name"), nameIn), field("ownerEmail", t("email_lbl"), emailIn));
+    return form([...head(t("nr_you_title"), t("nr_you_hint")), youGrid([card], orgNodes), actions()], () => {
       if (!d.name.trim()) return fail(t("need_name"));
       if (!d.orgType) return fail(t("need_org"));
       next();
@@ -131,8 +145,12 @@ function stepYou() {
     return box;
   }
   d.name = me.name; d.email = me.email || ""; save();
-  const who = el("div", "block signed-in");
-  who.append(el("span", "lbl", t("si_signed_in")), el("p", "body", [me.name, me.job_title, me.organisation].filter(Boolean).join(" · ")), el("p", "small", me.email || ""));
+  const who = el("div", "you-card");
+  const initials = String(me.name || "").trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
+  const idRow = el("div", "you-id"), txt = el("div");
+  txt.append(el("p", "body", me.name), el("p", "small", [me.job_title, me.organisation].filter(Boolean).join(" · ")));
+  idRow.append(el("span", "av", initials || "·"), txt);
+  who.append(el("span", "lbl", t("si_signed_in")), idRow, el("p", "small", me.email || ""));
   const links = el("div", "voice-extra");
   const edit = el("a", "linkbtn", t("pf_edit")); edit.href = "/profile.html"; edit.target = "_top";
   const out = el("button", "linkbtn", t("si_not_you")); out.type = "button";
@@ -149,7 +167,7 @@ function stepYou() {
         d.forOwner?.owner_id === x.owner_id && d.forOwner?.workspace_id === x.workspace_id,
         () => { d.forOwner = { owner_id: x.owner_id, workspace_id: x.workspace_id, kind: x.kind }; if (x.kind === "organisation") d.wsId = x.workspace_id; save(); drawFor(); })));
     drawFor();
-    const ff = el("div", "field"); ff.append(el("span", "lbl", t("as_for_lbl")), forC);
+    const ff = el("div", "you-card"); ff.append(el("span", "lbl", t("as_for_lbl")), forC);
     nodes.push(ff);
   }
   if (myOrgs.length) {
@@ -158,10 +176,10 @@ function stepYou() {
     const drawWhere = () => where.replaceChildren(...[...myOrgs.map(o => [o.id, o.name, o.org_type]), [null, t("nr_ws_me"), null]].map(([id, label, type]) =>
       chip(label, (d.wsId || null) === id, () => { d.wsId = id; if (type) { d.orgType = type; drawOrgs(); } save(); drawWhere(); })));
     drawWhere();
-    const wf = el("div", "field"); wf.append(el("span", "lbl", t("nr_ws_lbl")), el("p", "small", t("nr_ws_hint")), where);
+    const wf = el("div", "you-card"); wf.append(el("span", "lbl", t("nr_ws_lbl")), el("p", "small", t("nr_ws_hint")), where);
     nodes.push(wf);
   }
-  return form([...head(t("nr_you_title_back", { name: String(d.name || "").trim().split(/\s+/)[0] || "" }).replace(/,\s*\./, "."), t("nr_you_hint_back")), ...nodes, orgField, actions()], () => {
+  return form([...head(t("nr_you_title_back", { name: String(d.name || "").trim().split(/\s+/)[0] || "" }).replace(/,\s*\./, "."), t("nr_you_hint_back")), youGrid(nodes, orgNodes), actions()], () => {
     if (!d.orgType) return fail(t("need_org"));
     if (d.orgType === "custom" && !d.orgLabel.trim()) { orgIn.focus(); return fail(t("need_org_label")); }
     try { localStorage.setItem(ORG_KEY, JSON.stringify({ orgType: d.orgType, orgLabel: d.orgLabel })); } catch {}
