@@ -127,6 +127,8 @@ function actions({ next = t("next") } = {}) {
   return row;
 }
 function form(nodes, onNext) {
+  // What's missing or went wrong shows right above the buttons (see fail).
+  const st = el("div", "status err step-err"); st.id = "stepStatus"; st.setAttribute("role", "alert");
   const f = el("form", "stack-sm"); f.noValidate = true; f.style.gap = "16px";
   // The step's own fields sit on one white card between the heading and the buttons (step one has its own grid).
   const top = nodes.filter(n => n.classList?.contains("wz-head")), end = nodes.filter(n => n.classList?.contains("actions"));
@@ -139,18 +141,35 @@ function form(nodes, onNext) {
       const pct = built(), bar = f.querySelector(".wz-meter i"), lbl = f.querySelector(".wz-built");
       if (bar) bar.style.width = pct + "%"; if (lbl) lbl.textContent = t("lv_built", { n: pct });
     };
-    const main = el("div", "wz-mainc"); main.append(card, work, ...end);
+    const main = el("div", "wz-mainc"); main.append(card, work, st, ...end);
     const cols = el("div", "wz-cols"); cols.append(main, live);
     f.append(...top, cols);
     f.addEventListener("input", () => setTimeout(() => liveDraw?.(), 0));
     f.addEventListener("click", () => setTimeout(() => liveDraw?.(), 0));
-  } else { liveDraw = null; f.append(...nodes); }
-  const st = el("p", "status err"); st.id = "stepStatus"; st.setAttribute("role", "status");
-  f.append(st);
+  } else { liveDraw = null; f.append(...nodes.filter(n => !end.includes(n)), st, ...end); }
   f.addEventListener("submit", e => { e.preventDefault(); onNext(); });
   return f;
 }
-const fail = msg => { $("stepStatus").textContent = msg; };
+// fail(message, {target, step}): says what's missing, right above the buttons, and makes sure it's seen.
+// target: the part of the page to fix (outlined, scrolled to, with the message beside it too).
+// step: a step to go back to, with a "Take me there" link.
+function fail(msg, { target = null, step = null } = {}) {
+  const st = $("stepStatus"); if (!st) return;
+  document.querySelectorAll(".need").forEach(n => n.classList.remove("need"));
+  document.querySelectorAll(".need-msg").forEach(n => n.remove());
+  st.replaceChildren(); st.classList.toggle("show", !!msg);
+  if (!msg) return;
+  st.append(el("span", null, msg));
+  if (step != null) { const b = el("button", "linkbtn", t("fix_go")); b.type = "button"; b.onclick = () => go(step); st.append(b); }
+  st.classList.remove("shake"); void st.offsetWidth; st.classList.add("shake");
+  if (target) {
+    target.classList.add("need"); target.prepend(el("p", "need-msg", msg));
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+  } else {
+    const r = st.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) st.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
 function go(i) { d.at = Math.max(0, Math.min(i, ids.length - 1)); d.atId = ids[d.at]; save(); render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
 const next = () => go(d.at + 1);
 function field(id, label, input, hint) {
@@ -947,7 +966,7 @@ function drawFiles() {
 }
 // Who sees this file: the owner must choose (everyone, certain people or roles, or the analysis only).
 function whoSees(f) {
-  const box = el("div", "fx-vis");
+  const box = el("div", "fx-vis"); f.visBox = box;
   f.visP = f.visP || []; f.visR = f.visR || [];
   const draw = () => {
     const opts = el("div", "chips");
@@ -1006,9 +1025,36 @@ function contextWithBrief() {
   const lines = chosen.map(x => `• ${x.text} (${[x.date, x.source].filter(Boolean).join(", ")})`).join("\n");
   return ((d.context.trim() ? d.context.trim() + "\n\n" : "") + t("brief_heading", { date: r.as_of || new Date().toISOString().slice(0, 10) }) + "\n" + lines).slice(0, 4000);
 }
+// Opening the room: first say clearly what's missing, anywhere in the setup; then make it.
 async function create() {
+  try { await makeRoom(); }
+  catch (err) {
+    console.error(err);
+    render(); setTimeout(drawFiles, 0);
+    fail(t("err_generic"));
+  }
+}
+function missing() {
+  const at = id => ids.indexOf(id);
+  if (!String(d.name || "").trim()) return [t("need_name"), at("you")];
+  if (!d.orgType) return [t("need_org"), at("you")];
+  if (!d.question.trim()) return [t("need_question"), at("question")];
+  if (filled(d.options).length < 2) return [t("need_options"), at("options")];
+  if ((d.crits || []).filter(c => c.on !== false && String(c.label || "").trim()).length < 2) return [t("need_criteria"), at("options")];
+  if (!d.model) return [t("need_model"), at("model")];
+  return null;
+}
+async function makeRoom() {
+  const gap = missing();
+  if (gap) return fail(gap[0], { step: gap[1] });
+  const reading = files.find(f => f.status === "reading");
+  if (reading) return fail(t("files_wait", { name: reading.name }));
   const unset = files.filter(f => f.status === "ready" && (!f.vis || (f.vis === "some" && !(f.visP || []).length && !(f.visR || []).length)));
-  if (unset.length) { fail(t("fx_need_vis", { name: unset[0].name })); $("fileList")?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+  if (unset.length) {
+    const f = unset[0];
+    if (f.vis === "some") return fail(t("fx_need_who", { name: f.name }), { target: f.visBox });
+    return fail(t("fx_need_vis", { name: f.name }), { target: f.visBox });
+  }
   const options = d.options.map(o => o.trim()).filter(Boolean).map((label, i) => ({ id: "o" + (i + 1), label }));
   const picked = d.crits.filter(c => c.on !== false && c.label.trim());
   const w = Rooms.apportion(picked.map((_, i) => "c" + (i + 1)), {}, 100); // equal starting weights; members set their own
