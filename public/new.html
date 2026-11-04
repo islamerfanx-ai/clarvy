@@ -71,7 +71,13 @@ function actions({ next = t("next") } = {}) {
 }
 function form(nodes, onNext) {
   const f = el("form", "stack-sm"); f.noValidate = true; f.style.gap = "16px";
-  f.append(...nodes);
+  // The step's own fields sit on one white card between the heading and the buttons (step one has its own grid).
+  const top = nodes.filter(n => n.classList?.contains("wz-head")), end = nodes.filter(n => n.classList?.contains("actions"));
+  const mid = nodes.filter(n => !top.includes(n) && !end.includes(n));
+  if (mid.length && !mid.some(n => n.classList?.contains("you-grid"))) {
+    const card = el("div", "wz-card stack-sm"); card.style.gap = "16px"; card.append(...mid);
+    f.append(...top, card, ...end);
+  } else f.append(...nodes);
   const st = el("p", "status err"); st.id = "stepStatus"; st.setAttribute("role", "status");
   f.append(st);
   f.addEventListener("submit", e => { e.preventDefault(); onNext(); });
@@ -968,7 +974,9 @@ async function create() {
 // Until the product sends messages itself, each person's link goes out from the owner's own WhatsApp or email.
 function vSend(to, invites, roles) {
   const wrap = el("div", "stack-sm"); wrap.style.gap = "16px";
-  wrap.append(el("h1", "step-title", t("send_title")), el("p", "small", t("send_hint")));
+  const hd = el("div", "wz-head"); hd.append(el("h1", "step-title", t("send_title")), el("p", "small", t("send_hint")));
+  const card = el("div", "wz-card stack-sm"); card.style.gap = "16px";
+  wrap.append(hd, card);
   const q = d.question.trim(), me = d.name.trim();
   invites.forEach(inv => {
     const link = `${location.origin}/room.html?join=${encodeURIComponent(inv.token)}`;
@@ -989,10 +997,12 @@ function vSend(to, invites, roles) {
     cp.onclick = async () => { await Rooms.copyText(link); cp.textContent = t("copied"); mark(); setTimeout(() => { cp.textContent = t("copy"); }, 1600); };
     share.append(...(L.mail && !L.phone ? [em, wa] : [wa, em]), cp);
     row.append(top, el("p", "small", inv.person_contact || t("no_contact")), share);
-    wrap.append(row);
+    card.append(row);
   });
   const go = el("button", "btn", t("go_to_room")); go.type = "button"; go.onclick = () => Rooms.goToRoom(to);
-  wrap.append(el("p", "small", t("send_later")), go);
+  const acts = el("div", "actions"); acts.append(go);
+  card.append(el("p", "small", t("send_later")));
+  wrap.append(acts);
   $("wiz").replaceChildren(wrap);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }

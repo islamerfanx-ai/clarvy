@@ -567,7 +567,16 @@ html.shelled .wz-head .small{max-width:56ch;color:var(--dim)}
 html.shelled .rs-head{align-items:center;text-align:center;margin:12px 0 10px}
 html.shelled .rs-head h1{font-size:clamp(28px,2.6vw,40px)}
 html.shelled .rs-head + .rs-steps{text-align:center;margin-top:0}
-html.shelled .rs-card:not(.yellow){background:none;padding:0;margin-bottom:22px}
+html.shelled .rs-card:not(.yellow){background:#fff;border-radius:20px;padding:24px;margin-bottom:16px}
+html.shelled .rs-card :is(input:not([type=checkbox]):not([type=radio]),textarea,select),html.shelled .rs-card .choice{background:var(--ink);box-shadow:none;border-color:transparent}
+html.shelled .rs-card .choice[aria-pressed=true]{background:#fff;box-shadow:inset 0 0 0 2px var(--accent)}
+html.shelled .rs-card .br{background:var(--ink);border-radius:16px;padding:14px}
+html.shelled .rs-card .br :is(input,textarea){background:#fff}
+html.shelled #view > .acts{justify-content:center}
+html.shelled #view > .acts .btn{min-width:200px;padding:15px 32px}
+html.shelled #view > .acts .btn.ghost{min-width:0}
+@media (min-width:821px){html.shelled .rs-back{display:none}}
+@media (max-width:640px){html.shelled .rs-card:not(.yellow){padding:18px 16px}html.shelled #view > .acts .btn{min-width:0}html.shelled #view > .acts .btn:not(.ghost):not(.linkbtn){flex:1}}
 html.shelled .rs-card.yellow,html.shelled .rs-band,html.shelled .note,html.shelled .msg.outline{border-radius:20px;padding:20px 22px}
 html.shelled .addf,html.shelled .pool .it{border-radius:16px}
 html.shelled input.line,html.shelled textarea,html.shelled select.line{border-radius:14px;border-color:transparent;box-shadow:0 1px 3px rgba(0,0,0,.07)}
@@ -593,5 +602,24 @@ html.shelled .choice[aria-pressed=true],html.shelled .choice.on{box-shadow:0 0 0
 /* In the console layout the setup keeps yellow for highlights only, and Next is a centred button, not a bar */
 html.shelled .signed-in,html.shelled .org-pick,html.shelled .qline,html.shelled .why-band,html.shelled .voice-heard{background:#fff;border-radius:20px;padding:18px 20px}
 html.shelled #wiz .actions{justify-content:center;margin-top:10px}
-html.shelled #wiz .actions .btn{flex:0 0 auto;min-width:200px;padding:15px 32px}
+html.shelled #wiz .actions .btn{flex:0 0 auto;width:auto;min-width:200px;padding:15px 32px}
 html.shelled #wiz .actions .btn.ghost{min-width:0}
+
+/* Setup steps: the fields on one white card, like step one; on a phone Back stays small and Next fills the rest */
+.wz-card{display:contents}
+html.shelled #wiz .wz-card{display:flex;flex-direction:column;background:#fff;border-radius:20px;padding:24px}
+@media (max-width:640px){
+  html.shelled #wiz .wz-card{padding:18px 16px}
+  html.shelled #wiz .actions .btn{min-width:0}
+  html.shelled #wiz .actions .btn:not(.ghost){flex:1}
+}
+/* Inside the white card, fields and choices take the soft ground so they still read as boxes */
+html.shelled #wiz .wz-card :is(input:not([type=checkbox]):not([type=radio]),textarea,select),
+html.shelled #wiz .wz-card .choice{background:var(--ink);box-shadow:none;border-color:transparent}
+html.shelled #wiz .wz-card .choice[aria-pressed=true],html.shelled #wiz .wz-card .choice.on{background:#fff;box-shadow:inset 0 0 0 2px var(--accent)}
+html.shelled #wiz .wz-card .choice-t{font-size:16px;line-height:1.35}
+html.shelled #wiz .wz-card :is(.signed-in,.org-pick,.qline,.why-band,.voice-heard){background:var(--ink)}
+html.shelled #wiz .wz-card .invite-row + .invite-row{border-top:1px solid var(--line);padding-top:16px}
+html.shelled #wiz .wz-card .share .btn{width:auto}
+/* On a phone with the tab bar, Ask the analyst sits above the bar instead of on the Add button */
+@media (max-width:820px){html.shelled .helper-btn{bottom:calc(84px + env(safe-area-inset-bottom,0px))}}

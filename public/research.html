@@ -222,6 +222,7 @@ const store = demo ? {
 
 /* ---------- Small pieces ---------- */
 const btn = (label, cls = "btn") => { const b = el("button", cls, label); b.type = "button"; return b; };
+const actRow = (...kids) => { const a = el("div", "acts"); a.append(...kids); return a; };
 const card = (title, ...kids) => { const c = el("section", "rs-card"); if (title) c.append(el("h2", null, title)); c.append(...kids.filter(Boolean)); return c; };
 const errText = e => t(e?.message === "quota" ? "err_quota" : e?.message === "no_findings" ? "rs_err_none" : "err_generic");
 const roomLang = node => { if (R) { node.lang = R.language; node.dir = R.language === "ar" ? "rtl" : "ltr"; } return node; };
@@ -248,7 +249,7 @@ function head(eyebrow) {
 }
 function shell(...nodes) {
   document.title = t("rs_title") + " · " + t("product");
-  const back = el("a", "linkbtn no-print", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
+  const back = el("a", "linkbtn no-print rs-back", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
   view.replaceChildren(back, ...nodes.filter(Boolean));
 }
 function findingNode(f, { names = false, mine = false } = {}) {
@@ -280,7 +281,7 @@ function vNew() {
   const h = el("div", "rs-head"); h.append(el("p", "small", t("rs_eyebrow")), el("h1", null, t(["rs_s1_t", "rs_s2_t", "rs_s3_t"][step])));
   const steps = el("p", "rs-steps", t("rs_step", { n: step + 1 }));
   const st = el("p", "status err");
-  const back = el("a", "linkbtn no-print", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
+  const back = el("a", "linkbtn no-print rs-back", "← " + t("my_rooms")); back.href = demo ? "/dashboard.html?demo=1" : "/dashboard.html";
   if (step === 0) {
     const q = el("textarea"); Object.assign(q, { rows: 3, maxLength: 400, value: draft.question, placeholder: t("rs_q_ph") }); q.setAttribute("aria-label", t("rs_q_lbl"));
     q.oninput = () => { draft.question = q.value; keep(); };
@@ -295,7 +296,7 @@ function vNew() {
     };
     const own = btn(t("rs_own_branches"), "linkbtn");
     own.onclick = () => { if (draft.question.trim().length < 3) { st.textContent = t("rs_need_q"); return q.focus(); } if (!draft.branches.length) draft.branches = [{ title: "", ask: "", method: "lookup" }, { title: "", ask: "", method: "lookup" }]; keep(); step = 1; render(); };
-    return view.replaceChildren(back, h, steps, card(null, el("label", "lbl", t("rs_q_lbl")), q, el("label", "lbl", t("rs_ctx_lbl")), c, el("p", "small", t("rs_split_h")), go, own, st));
+    return view.replaceChildren(back, h, steps, card(null, el("label", "lbl", t("rs_q_lbl")), q, el("label", "lbl", t("rs_ctx_lbl")), c, el("p", "small", t("rs_split_h")), st), actRow(go), actRow(own));
   }
   if (step === 1) {
     const list = el("div");
