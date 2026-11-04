@@ -59,9 +59,65 @@ function head(title, hint) {
   const prog = el("div", "progress"); prog.setAttribute("aria-hidden", "true");
   ids.forEach((_, i) => prog.append(el("i", i <= d.at ? "on" : "")));
   const m = el("div", "meta"); m.append(el("span", null, t("step", { n: d.at + 1, total: ids.length })));
+  const pct = built();
+  m.append(el("span", "wz-built", t("lv_built", { n: pct })));
+  const meter = el("div", "wz-meter"); meter.setAttribute("aria-hidden", "true");
+  const fill = el("i"); fill.style.width = pct + "%"; meter.append(fill);
   const box = el("div", "wz-head"); box.append(prog, m, el("h1", "step-title", title));
   if (hint) box.append(el("p", "small", hint));
+  box.append(meter);
   return [box];
+}
+
+/* ---------- The room taking shape: how much is built, a live card of the parts, and what the analyst is doing ---------- */
+const filled = a => (a || []).filter(x => String(x || "").trim());
+function parts() {
+  const opts = filled(d.options), crits = (d.crits || []).filter(c => c.on !== false), ppl = d.people || [];
+  const ctxN = (d.context?.trim() ? 1 : 0) + (d.links || []).length + files.length;
+  const model = d.model && M?.MODELS?.[d.model]?.framework;
+  const brief = d.brief?.items?.length || 0;
+  return [
+    { id: "you", done: !!(String(d.name || "").trim() && d.orgType) },
+    { id: "question", k: "lv_q", done: !!d.question?.trim(), v: d.question?.trim() },
+    { id: "options", k: "lv_opts", done: opts.length >= 2, v: opts.length ? t("lv_opts_v", { n: opts.length, m: crits.length }) : "" },
+    { id: "model", k: "lv_model", done: !!model && ids.indexOf("model") < d.at, v: model ? model + (d.rapid ? " + RAPID" : "") : "" },
+    { id: "people", k: "lv_people", done: ppl.length > 0, v: ppl.length ? t("lv_people_v", { n: ppl.length }) : "", ppl },
+    { id: "context", k: "lv_ctx", done: ctxN > 0, v: ctxN ? t("lv_ctx_v", { n: ctxN }) : "" },
+    { id: "brief", k: "lv_brief", done: brief > 0, v: brief ? t("lv_brief_v", { n: brief }) : briefRun ? t("lv_reading") : "" }
+  ];
+}
+function built() { const p = parts(); return Math.round(100 * p.filter(x => x.done).length / p.length); }
+let liveDraw = null;
+function liveCard() {
+  const box = el("aside", "wz-live"); box.setAttribute("aria-label", t("lv_title"));
+  const draw = () => {
+    const rows = parts().filter(p => p.k).map(p => {
+      const at = ids[d.at] === p.id, i = ids.indexOf(p.id);
+      const r = el(i >= 0 && i < d.at ? "button" : "div", "lv-row" + (p.done ? " done" : "") + (at ? " at" : ""));
+      if (r.tagName === "BUTTON") { r.type = "button"; r.onclick = () => go(i); }
+      const top = el("span", "lv-k", t(p.k)); top.append(el("span", "lv-s", p.done ? "✓" : at ? t("lv_here") : ""));
+      r.append(top);
+      const v = p.v || (at ? "" : t("lv_wait"));
+      if (v) r.append(el("span", "lv-v", v.length > 90 ? v.slice(0, 88) + "…" : v));
+      if (p.ppl?.length) { const av = el("span", "lv-av"); p.ppl.slice(0, 6).forEach(x => av.append(el("i", null, String(x.name || "?").trim().split(/\s+/).map(w => w[0]).slice(0, 2).join("").toUpperCase()))); r.append(av); }
+      return r;
+    });
+    box.replaceChildren(el("h2", null, t("lv_title")), ...rows);
+  };
+  draw(); return [box, draw];
+}
+function workStrip() {
+  const box = el("div", "wz-work"); box.setAttribute("aria-live", "polite");
+  const draw = () => {
+    const w = [];
+    if (d.qRes) w.push([1, "lv_w_q"]);
+    if (d.optsDraft || d.critsDraft) w.push([1, "lv_w_opts"]);
+    if (d.rec) w.push([1, "lv_w_model"]);
+    if ((d.extra || []).length) w.push([1, "lv_w_roles"]);
+    if (briefRun) w.push([0, "lv_w_brief_run"]); else if (d.brief) w.push([1, "lv_w_brief"]);
+    box.replaceChildren(el("span", "lv-who", t("lv_work_t")), ...(w.length ? w.map(([ok, k]) => el("span", ok ? "ok" : "run", t(k))) : [el("span", "idle", t("lv_w_idle"))]));
+  };
+  draw(); return [box, draw];
 }
 function actions({ next = t("next") } = {}) {
   const row = el("div", "actions");
@@ -76,8 +132,18 @@ function form(nodes, onNext) {
   const mid = nodes.filter(n => !top.includes(n) && !end.includes(n));
   if (mid.length && !mid.some(n => n.classList?.contains("you-grid"))) {
     const card = el("div", "wz-card stack-sm"); card.style.gap = "16px"; card.append(...mid);
-    f.append(...top, card, ...end);
-  } else f.append(...nodes);
+    const [work, drawW] = workStrip(), [live, drawL] = liveCard();
+    liveDraw = () => {
+      drawW(); drawL();
+      const pct = built(), bar = f.querySelector(".wz-meter i"), lbl = f.querySelector(".wz-built");
+      if (bar) bar.style.width = pct + "%"; if (lbl) lbl.textContent = t("lv_built", { n: pct });
+    };
+    const main = el("div", "wz-mainc"); main.append(card, work, ...end);
+    const cols = el("div", "wz-cols"); cols.append(main, live);
+    f.append(...top, cols);
+    f.addEventListener("input", () => setTimeout(() => liveDraw?.(), 0));
+    f.addEventListener("click", () => setTimeout(() => liveDraw?.(), 0));
+  } else { liveDraw = null; f.append(...nodes); }
   const st = el("p", "status err"); st.id = "stepStatus"; st.setAttribute("role", "status");
   f.append(st);
   f.addEventListener("submit", e => { e.preventDefault(); onNext(); });
@@ -388,12 +454,13 @@ function startBrief() {
   const key = d.question.trim();
   if (!key || (d.briefFor === key && (d.brief || briefRun))) return;
   d.briefFor = key; d.brief = null; d.briefErr = ""; d.briefPicked = []; save();
+  setTimeout(() => liveDraw?.(), 0);
   const run = briefRun = (demo
     ? new Promise(res => setTimeout(() => res({ summary: t("brief_demo_summary"), as_of: new Date().toISOString().slice(0, 10), items: [{ text: t("brief_demo_item"), date: new Date().toISOString().slice(0, 7), source: "Example source", url: null }] }), 2500))
     : Rooms.post("/api/rooms/brief", { question: key, options: d.options.filter(o => o.trim()), context: d.context, type: d.type, type_label: d.typeLabel, lang: Rooms.lang }))
     .then(r => { if (d.briefFor === key) { d.brief = r; save(); } })
     .catch(e => { if (d.briefFor === key) { d.briefErr = e.message === "quota" ? "err_quota" : "brief_fail"; save(); } })
-    .finally(() => { if (briefRun === run) briefRun = null; briefDraw?.(); });
+    .finally(() => { if (briefRun === run) briefRun = null; briefDraw?.(); liveDraw?.(); });
 }
 
 /* ---------- The options and what to weigh, on one page ---------- */
@@ -1013,6 +1080,7 @@ function render() { briefDraw = null; $("wiz").replaceChildren(STEPS[ids[d.at]](
 Rooms.langToggle(() => { document.title = t("new_room") + " · " + t("product"); render(); });
 
 async function start() {
+  import("/rooms/models.js").then(m => { M = M || m; liveDraw?.(); }, () => {});
   try { const saved = JSON.parse(localStorage.getItem(DRAFT_KEY)); if (saved && saved.question !== undefined) d = { ...d, ...saved }; } catch {}
   // The organisation from the last room, so a returning owner only confirms it.
   if (!d.orgType) { try { const o = JSON.parse(localStorage.getItem(ORG_KEY)); if (o?.orgType) { d.orgType = o.orgType; d.orgLabel = o.orgLabel || ""; } } catch {} }
