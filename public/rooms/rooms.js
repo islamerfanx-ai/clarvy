@@ -48,21 +48,50 @@ async function loadLang(l) {
 /* ---------- Loading: a bar that fills and short lines about what's happening ---------- */
 // Pages start with <div class="ld" data-load="room"></div>. Its lines are the words ld_<kind>_1..3: they move on by
 // themselves, and loadStep(n) moves to line n when that part has really started. The page replaces the box when it's ready.
+// The signature loader: four people (dots) circle and draw in to one point, the call, while a short checklist
+// ticks off what is really happening. buildLoader(lines) is also used for waits inside a page (Rooms.working).
+const LD_MARK = `<svg class="ld-mark" viewBox="0 0 96 96" aria-hidden="true">
+  <circle class="ld-track" cx="48" cy="48" r="40"/><circle class="ld-arc" cx="48" cy="48" r="40"/>
+  <g class="ld-orbit"><circle class="ld-p p1" cx="48" cy="16" r="5"/><circle class="ld-p p2" cx="80" cy="48" r="5"/><circle class="ld-p p3" cx="48" cy="80" r="5"/><circle class="ld-p p4" cx="16" cy="48" r="5"/></g>
+  <circle class="ld-core" cx="48" cy="48" r="7"/></svg>`;
+function buildLoader(getLines, { title = "" } = {}) {
+  const box = el("div", "ld-in"); box.innerHTML = LD_MARK;
+  if (title) box.append(el("p", "ld-title", title));
+  const list = el("ol", "ld-steps"), bar = el("div", "ld-bar"), fill = el("i");
+  bar.append(fill); box.append(list, bar);
+  let pct = 6, at = 1, since = Date.now();
+  const draw = () => {
+    const lines = getLines().filter(Boolean);
+    list.replaceChildren(...lines.map((w, i) => {
+      const li = el("li", i + 1 < at ? "done" : i + 1 === at ? "now" : "next");
+      li.append(el("span", "ld-ic"), el("span", "ld-tx", w)); return li;
+    }));
+  };
+  const step = n => { if (n > at) { at = Math.min(getLines().filter(Boolean).length || 3, n); since = Date.now(); pct = Math.max(pct, (at - 1) * 30 + 6); draw(); } };
+  const tick = setInterval(() => {
+    if (!box.isConnected && box._mounted) return clearInterval(tick);
+    if (box.isConnected) box._mounted = true;
+    pct += (94 - pct) * 0.05; fill.style.width = pct.toFixed(1) + "%";
+    if (Date.now() - since > 1900 && at < getLines().filter(Boolean).length) step(at + 1);
+  }, 120);
+  const finish = () => { at = 99; pct = 100; fill.style.width = "100%"; draw(); box.classList.add("ld-done"); };
+  draw();
+  return { box, step, draw, finish };
+}
 function mountLoader(box) {
   if (box.dataset.on) return; box.dataset.on = "1";
   box.setAttribute("role", "status");
-  const bar = el("div", "ld-bar"), fill = el("i"), line = el("p", "ld-line");
-  bar.append(fill); box.append(bar, line);
-  let pct = 6, at = 1, since = Date.now();
-  const say = () => { const w = words["ld_" + box.dataset.load + "_" + at]; if (w && line.textContent !== w) { line.classList.remove("in"); line.textContent = w; void line.offsetWidth; line.classList.add("in"); } };
-  box._step = n => { if (n > at) { at = Math.min(3, n); since = Date.now(); pct = Math.max(pct, (at - 1) * 30 + 6); say(); } };
-  box._say = say;
-  const tick = setInterval(() => {
-    if (!box.isConnected) return clearInterval(tick);
-    pct += (94 - pct) * 0.06; fill.style.width = pct.toFixed(1) + "%";
-    if (Date.now() - since > 1800 && at < 3) box._step(at + 1);
-  }, 120);
-  say();
+  const L = buildLoader(() => [1, 2, 3].map(i => words["ld_" + box.dataset.load + "_" + i]));
+  box.append(L.box);
+  box._step = L.step; box._say = L.draw;
+}
+// A wait inside a page: Rooms.working(container, ["Reading…", "Drafting…"], {title}) shows the loader in place
+// of the container's content and returns {step(n), finish(), stop()}; stop() puts the content back.
+function working(container, lines, opts = {}) {
+  const L = buildLoader(() => lines, opts), keep = [...container.childNodes];
+  const wrap = el("div", "ld ld-inline"); wrap.setAttribute("role", "status"); wrap.append(L.box);
+  container.replaceChildren(wrap);
+  return { step: L.step, finish: L.finish, stop: () => container.replaceChildren(...keep) };
 }
 function loadStep(n) { document.querySelectorAll(".ld[data-load]").forEach(b => b._step && b._step(n)); }
 document.querySelectorAll(".ld[data-load]").forEach(mountLoader);
@@ -1009,7 +1038,7 @@ window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile, fileTools, fileSheet,
+  post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile, fileTools, fileSheet, working,
   openNewRoom, goToRoom, embedded, icon, shell, drawShell, appPopover, validUrl, linksEditor, app, appBox, loadStep
 };
 })();

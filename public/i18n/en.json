@@ -2084,5 +2084,13 @@
   "fx_demo_f1": "Sales, first half",
   "fx_demo_f2": "Sales, second half",
   "fx_demo_r1": "Growth from the first half to the second",
-  "fx_demo_reply": "Page 4 says rent rises 5% a year, so a second site would add about that much to fixed costs each year. The file doesn't say what the new site would cost."
+  "fx_demo_reply": "Page 4 says rent rises 5% a year, so a second site would add about that much to fixed costs each year. The file doesn't say what the new site would cost.",
+  "lv_prep_t": "Getting your room ready",
+  "lv_prep_1": "Reading your question",
+  "lv_prep_2": "Drafting options and what to weigh",
+  "lv_prep_3": "Starting this week's world brief",
+  "lv_make_t": "Opening your room",
+  "lv_make_1": "Setting up the room",
+  "lv_make_2": "Saving your files and who sees them",
+  "lv_make_3": "Making everyone's personal links"
 }

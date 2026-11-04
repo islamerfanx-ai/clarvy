@@ -183,11 +183,37 @@ input[type=date].line{max-width:240px}
 .status.err{color:var(--err)}.status.ok{color:var(--ok)}
 .thinking::after{content:"_";animation:blink 1s steps(1) infinite}
 /* Loading: a thin bar that fills, with a short line about what's happening */
-.ld{display:flex;flex-direction:column;gap:14px;padding:28px 0;max-width:420px}
-.ld-bar{height:4px;border-radius:4px;background:var(--accent-soft);overflow:hidden}
-.ld-bar i{display:block;height:100%;width:6%;background:var(--accent);border-radius:4px;transition:width .3s ease-out}
-.ld-line{margin:0;font-size:15px;color:var(--dim);min-height:1.4em}
-.ld-line.in{animation:ldin .45s ease-out}
+.ld{display:flex;justify-content:center;padding:56px 16px}
+.ld-in{display:flex;flex-direction:column;align-items:center;gap:22px;width:min(400px,100%)}
+.ld-mark{width:88px;height:88px;overflow:visible}
+.ld-track{fill:none;stroke:var(--accent-soft);stroke-width:2}
+.ld-arc{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:60 192;transform-origin:48px 48px;animation:ldarc 1.6s cubic-bezier(.5,.1,.3,1) infinite}
+.ld-orbit{transform-origin:48px 48px;animation:ldorbit 6s linear infinite}
+.ld-p{fill:var(--accent);transform-box:fill-box;transform-origin:center;animation:ldgather 2.4s cubic-bezier(.65,0,.35,1) infinite}
+.ld-p.p1{--dx:0;--dy:18px}.ld-p.p2{--dx:-18px;--dy:0;animation-delay:.15s}.ld-p.p3{--dx:0;--dy:-18px;animation-delay:.3s}.ld-p.p4{--dx:18px;--dy:0;animation-delay:.45s}
+.ld-core{fill:var(--yellow);stroke:var(--accent);stroke-width:2;transform-box:fill-box;transform-origin:center;animation:ldcore 2.4s cubic-bezier(.65,0,.35,1) infinite}
+.ld-title{margin:0;font-size:20px;line-height:1.3;text-align:center}
+.ld-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;width:100%}
+.ld-steps li{display:grid;grid-template-columns:20px 1fr;gap:12px;align-items:center;font-size:15px;transition:opacity .4s}
+.ld-steps li.next{opacity:.45}
+.ld-ic{width:18px;height:18px;border-radius:50%;box-sizing:border-box;border:2px solid var(--line)}
+.ld-steps li.now .ld-ic{border-color:var(--accent);border-top-color:transparent;animation:lvspin .8s linear infinite}
+.ld-steps li.done .ld-ic{background:var(--accent);border-color:var(--accent);position:relative;animation:ldpop .35s cubic-bezier(.3,1.6,.5,1)}
+.ld-steps li.done .ld-ic::after{content:"";position:absolute;left:5px;top:2px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ld-steps li.done .ld-tx{color:var(--dim)}
+.ld-steps li.now .ld-tx{background:linear-gradient(90deg,var(--fg) 0%,var(--fg) 35%,rgba(29,29,29,.35) 50%,var(--fg) 65%,var(--fg) 100%);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:ldshine 1.8s linear infinite}
+.ld-bar{width:100%;height:3px;border-radius:3px;background:var(--accent-soft);overflow:hidden}
+.ld-bar i{display:block;height:100%;width:6%;background:var(--accent);border-radius:3px;transition:width .3s ease-out}
+.ld-done .ld-p,.ld-done .ld-core,.ld-done .ld-orbit,.ld-done .ld-arc{animation-play-state:paused}
+.ld-inline{padding:40px 8px}
+@keyframes ldarc{to{transform:rotate(360deg)}}
+@keyframes ldorbit{to{transform:rotate(360deg)}}
+@keyframes ldgather{0%,15%{transform:translate(0,0);opacity:1}45%,60%{transform:translate(var(--dx),var(--dy)) scale(.7);opacity:.85}90%,100%{transform:translate(0,0);opacity:1}}
+@keyframes ldcore{0%,30%{transform:scale(.6)}50%,62%{transform:scale(1.25)}85%,100%{transform:scale(.6)}}
+@keyframes ldshine{from{background-position:100% 0}to{background-position:-150% 0}}
+@keyframes ldpop{from{transform:scale(.4)}to{transform:scale(1)}}
+@keyframes lvspin{to{transform:rotate(360deg)}}
+@keyframes ldin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes ldin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @keyframes blink{50%{opacity:0}}
 details.more>summary{cursor:pointer;list-style:none;font-family:var(--mono);font-stretch:75%;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);padding-block:4px}
@@ -212,7 +238,7 @@ details.more .field{margin-top:16px}
 .lang{font-family:var(--mono)!important}
 
 @media (max-width:480px){.msg{padding:18px 16px 20px}.scale button{font-size:11px}}
-@media (prefers-reduced-motion:reduce){.meter i{transition:none}.thinking::after{animation:none}.ld-bar i{transition:none}.ld-line.in{animation:none}}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}.thinking::after{animation:none}.ld-bar i{transition:none}.ld-arc,.ld-orbit,.ld-p,.ld-core,.ld-steps li.now .ld-ic,.ld-steps li.now .ld-tx,.ld-steps li.done .ld-ic{animation:none}.ld-steps li.now .ld-tx{color:var(--fg);background:none}}
 
 /* ---------- Editorial type (after the base rules so it wins; Arabic rules above still win by specificity) ---------- */
 body::before{display:none}

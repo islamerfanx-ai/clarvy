@@ -87,7 +87,7 @@ function parts() {
   ];
 }
 function built() { const p = parts(); return Math.round(100 * p.filter(x => x.done).length / p.length); }
-let liveDraw = null;
+let liveDraw = null, busyKey = "";   // busyKey: what the analyst is doing right now, shown first in the strip
 function liveCard() {
   const box = el("aside", "wz-live"); box.setAttribute("aria-label", t("lv_title"));
   const draw = () => {
@@ -110,6 +110,7 @@ function workStrip() {
   const box = el("div", "wz-work"); box.setAttribute("aria-live", "polite");
   const draw = () => {
     const w = [];
+    if (busyKey) w.push([0, busyKey]);
     if (d.qRes) w.push([1, "lv_w_q"]);
     if (d.optsDraft || d.critsDraft) w.push([1, "lv_w_opts"]);
     if (d.rec) w.push([1, "lv_w_model"]);
@@ -265,7 +266,7 @@ async function checkQuestion() {
   const q = d.question.trim();
   if (d.qRes && (d.qKeys || []).includes(q)) return d.qRes;
   const departments = (await orgDepartments(d.wsId)).map(x => x.name);
-  const r = demo ? demoCheck(q) : await Rooms.post("/api/rooms/question", { question: q, type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, draft: true, lang: Rooms.lang, departments });
+  const r = demo ? (await new Promise(res => setTimeout(res, 3200)), demoCheck(q)) : await Rooms.post("/api/rooms/question", { question: q, type: d.type, type_label: d.typeLabel, org_type: d.orgType, org_label: d.orgLabel, draft: true, lang: Rooms.lang, departments });
   d.qRes = r; d.qKeys = [q, String(r.corrected || "").trim()]; save();
   return r;
 }
@@ -441,8 +442,14 @@ function stepQuestion() {
     if (!d.question.trim()) return fail(t("need_question"));
     if (d.type === "custom" && !d.typeLabel.trim()) { customIn.focus(); return fail(t("need_custom")); }
     const nb = f.querySelector(".actions .btn:not(.ghost)"); nb.disabled = true; nb.textContent = t("q_preparing");
+    const acts = f.querySelector(".actions"); if (acts) acts.style.visibility = "hidden";
+    const card = f.querySelector(".wz-card");
+    const w = card && Rooms.working(card, [t("lv_prep_1"), t("lv_prep_2"), t("lv_prep_3")], { title: t("lv_prep_t") });
+    busyKey = "lv_prep_1"; liveDraw?.(); setTimeout(() => { if (busyKey) { busyKey = "lv_prep_2"; liveDraw?.(); } }, 1900);
     try { applyCheck(await checkQuestion()); } catch (e) { console.warn("question check:", e.message); }   // the owner can always go on without it
+    w?.step(3); busyKey = "";
     startBrief();
+    if (w) { w.finish(); await new Promise(r => setTimeout(r, 450)); }
     next();
   });
   return f;
@@ -1011,6 +1018,10 @@ async function create() {
     .map(r => ({ id: r.id, title: r.title.trim().slice(0, 60), max: null, ask: roleAsk(r), rapid: d.rapid ? r.rapid || null : null }));
   const btn = document.querySelector("#wiz .actions .btn:not(.ghost)"); if (btn) { btn.disabled = true; btn.textContent = t("creating"); }
   fail("");
+  const acts = document.querySelector("#wiz .actions"), card = document.querySelector("#wiz .wz-card");
+  if (acts) acts.style.visibility = "hidden";
+  const wk = card && Rooms.working(card, [t("lv_make_1"), files.length ? t("lv_make_2") : null, t("lv_make_3")].filter(Boolean), { title: t("lv_make_t") });
+  if (demo) await new Promise(r => setTimeout(r, 2600));
   try {
     const links = (d.links || []).filter(Rooms.validUrl);
     (d.briefPicked || []).forEach(i => { const u = d.brief?.items?.[i]?.url; if (u && Rooms.validUrl(u) && !links.includes(u)) links.push(u); });
@@ -1079,6 +1090,7 @@ async function create() {
     if (people.length) vSend(to, made || [], roles); else Rooms.goToRoom(to);
   } catch (err) {
     console.error(err);
+    wk?.stop(); if (acts) acts.style.visibility = "";
     fail(t(Rooms.errKey(err, ["room_needs_2_to_6_options", "room_needs_2_to_8_criteria"])));
     if (btn) { btn.disabled = false; btn.textContent = t("create"); }
   }
