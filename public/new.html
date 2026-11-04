@@ -835,7 +835,7 @@ async function draftAsks() {
 /* ---------- Last: what everyone should know, files, settings, then open the room ---------- */
 function stepContext() {
   const ta = el("textarea"); Object.assign(ta, { rows: 5, maxLength: 4000, placeholder: t("context_ph"), value: d.context });
-  ta.setAttribute("aria-label", t("nr_ctx_title"));
+  ta.setAttribute("aria-label", t("nr_ctx_title")); ta.id = "ctxTa";
   ta.oninput = () => { d.context = ta.value; save(); };
 
   // Files: upload, or paste a conversation (Slack, email...), with how-to help for common sources.
@@ -925,14 +925,53 @@ function stepContext() {
 function drawFiles() {
   const list = $("fileList"); if (!list) return;
   list.replaceChildren(...files.map(f => {
-    const li = el("li", "file");
+    const item = el("li", "file-item");
+    const li = el("div", "file");
     const nm = el("span", "nm", f.name); nm.title = f.name;
     const st = el("span", "st" + (f.status === "error" ? " err" : f.status === "ready" ? " ok" : ""), t(f.note));
     const x = el("button", null, "×"); x.type = "button"; x.setAttribute("aria-label", t("remove") + " " + f.name);
     x.onclick = () => { files = files.filter(y => y !== f); drawFiles(); };
     li.append(nm, st, x);
-    return li;
+    item.append(li);
+    if (f.status === "ready") item.append(whoSees(f), fileWork(f));
+    return item;
   }));
+  liveDraw?.();
+}
+// Who sees this file: the owner must choose (everyone, certain people or roles, or the analysis only).
+function whoSees(f) {
+  const box = el("div", "fx-vis");
+  f.visP = f.visP || []; f.visR = f.visR || [];
+  const draw = () => {
+    const opts = el("div", "chips");
+    [["everyone", "fx_vis_everyone"], ["some", "fx_vis_some"], ["analysis", "fx_vis_analysis"]].forEach(([k, w]) =>
+      opts.append(Rooms.chip(t(w), f.vis === k, () => { f.vis = k; draw(); fail(""); })));
+    const kids = [el("span", "lbl", t("fx_vis_q")), opts];
+    if (f.vis === "analysis") kids.push(el("p", "small", t("fx_vis_analysis_h")));
+    if (f.vis === "some") {
+      const ppl = (d.people || []), roleIds = new Set(ppl.map(p => p.roleId).filter(Boolean));
+      const roles = (d.roles || []).filter(r => roleIds.has(r.id));
+      if (!ppl.length) kids.push(el("p", "small", t("fx_vis_nobody")));
+      const pick = el("div", "chips");
+      roles.forEach(r => pick.append(Rooms.chip(t("fx_vis_role", { role: r.title }), f.visR.includes(r.id), () => { f.visR = f.visR.includes(r.id) ? f.visR.filter(x => x !== r.id) : [...f.visR, r.id]; draw(); })));
+      ppl.forEach(p => pick.append(Rooms.chip(p.name, f.visP.includes(p.id), () => { f.visP = f.visP.includes(p.id) ? f.visP.filter(x => x !== p.id) : [...f.visP, p.id]; draw(); })));
+      if (ppl.length) kids.push(pick);
+    }
+    box.replaceChildren(...kids);
+  };
+  draw(); return box;
+}
+// The file panel: summarise, key points, numbers, send, and a chat; results can go into the shared context.
+function fileWork(f) {
+  const det = el("details", "fx-wrap"); det.open = !!f.open;
+  det.ontoggle = () => { f.open = det.open; };
+  det.append(el("summary", null, t("fx_open")));
+  f.panel = f.panel || Rooms.fileTools({ name: f.name, text: f.text, question: d.question, demo: !!demo, onAdd: txt => {
+    d.context = ((d.context || "").trim() ? d.context.trim() + "\n\n" : "") + txt.slice(0, 1500); d.context = d.context.slice(0, 4000); save();
+    const ta = $("ctxTa"); if (ta) ta.value = d.context; liveDraw?.();
+  } });
+  det.append(f.panel);
+  return det;
 }
 async function addFiles(list) {
   for (const file of [...list]) {
@@ -961,6 +1000,8 @@ function contextWithBrief() {
   return ((d.context.trim() ? d.context.trim() + "\n\n" : "") + t("brief_heading", { date: r.as_of || new Date().toISOString().slice(0, 10) }) + "\n" + lines).slice(0, 4000);
 }
 async function create() {
+  const unset = files.filter(f => f.status === "ready" && (!f.vis || (f.vis === "some" && !(f.visP || []).length && !(f.visR || []).length)));
+  if (unset.length) { fail(t("fx_need_vis", { name: unset[0].name })); $("fileList")?.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
   const options = d.options.map(o => o.trim()).filter(Boolean).map((label, i) => ({ id: "o" + (i + 1), label }));
   const picked = d.crits.filter(c => c.on !== false && c.label.trim());
   const w = Rooms.apportion(picked.map((_, i) => "c" + (i + 1)), {}, 100); // equal starting weights; members set their own
@@ -1007,13 +1048,6 @@ async function create() {
       links: links.slice(0, 10).map(url => ({ url }))
     });
     if (error) throw error;
-    let filesFailed = false;
-    for (const [i, f] of files.filter(f => f.status === "ready").entries()) {
-      const path = `${id}/${i + 1}-${safeName(f.name)}`;
-      const up = await sb.storage.from("room-files").upload(path, f.file);
-      const ins = await sb.from("attachments").insert({ room_id: id, file_name: f.name, storage_path: up.error ? null : path, extracted_text: f.text, uploaded_by: me });
-      if (up.error || ins.error) filesFailed = true;
-    }
     // One link per person, or one link for everyone when nobody was added.
     const keep = new Set(roles.map(r => r.id));
     const invites = people.length
@@ -1021,6 +1055,19 @@ async function create() {
       : [{ room_id: id, created_by: me }];
     const { data: made, error: invErr } = await sb.from("invites").insert(invites).select("token,person_name,person_contact,role_id");
     if (invErr) throw invErr;
+    // Files go in after the invites, so a file meant for certain people can name their personal links.
+    const tokenOf = p => (made || []).find(v => v.person_name === p.name && (v.person_contact || null) === (p.contact || null))?.token;
+    let filesFailed = false;
+    for (const [i, f] of files.filter(f => f.status === "ready").entries()) {
+      const path = `${id}/${i + 1}-${safeName(f.name)}`;
+      const up = await sb.storage.from("room-files").upload(path, f.file);
+      const vis = f.vis === "some" ? {
+        visibility: "some", visible_roles: (f.visR || []).filter(r => keep.has(r)),
+        visible_tokens: people.filter(p => (f.visP || []).includes(p.id)).map(tokenOf).filter(Boolean)
+      } : { visibility: f.vis || "everyone" };
+      const ins = await sb.from("attachments").insert({ room_id: id, file_name: f.name, storage_path: up.error ? null : path, extracted_text: f.text, uploaded_by: me, ...vis });
+      if (up.error || ins.error) filesFailed = true;
+    }
     // The address book remembers everyone, for the next room.
     if (people.length) {
       const now = new Date().toISOString();

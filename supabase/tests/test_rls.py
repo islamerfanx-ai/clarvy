@@ -653,5 +653,20 @@ check("a member leaves", as_user(C, f"delete from research_people where research
 check("the owner can't be removed", as_user(A, f"delete from research_people where research_id='{RS}' and user_id='{A}'"), "DELETE 0")
 check("people can't use the server's push", as_user(A, f"select push_on_research_brief()"), "permission denied")
 
+# ---------- File tools: who sees each file (20261112000000_file_tools.sql) ----------
+check("owner adds files with who sees them", as_user(G, f"""insert into attachments (room_id,file_name,extracted_text,uploaded_by,visibility,visible_roles) values
+  ('{R5}','all.pdf','a','{G}','everyone','{{}}'), ('{R5}','cfo.pdf','b','{G}','some','{{r1}}'), ('{R5}','quiet.pdf','c','{G}','analysis','{{}}')""", anonymous=True), "INSERT 0 3")
+check("the CFO sees the shared file and the CFO's file", as_user(B, f"select string_agg(file_name, ',' order by file_name) from attachments where room_id='{R5}'"), "all.pdf,cfo.pdf")
+check("the director sees only the shared file", as_user(C, f"select string_agg(file_name, ',' order by file_name) from attachments where room_id='{R5}'"), "all.pdf")
+check("the owner sees every file", as_user(G, f"select count(*) from attachments where room_id='{R5}'", anonymous=True), "\n3\n")
+check("a file for the analysis only is read by the server", server(f"select count(*) from attachments where room_id='{R5}' and visibility='analysis'"), "\n1\n")
+check("members can't change who sees a file", as_user(B, f"update attachments set visibility='everyone' where room_id='{R5}'"), "UPDATE 0")
+check("the owner changes who sees a file", as_user(G, f"update attachments set visibility='everyone' where room_id='{R5}' and file_name='quiet.pdf'", anonymous=True), "UPDATE 1")
+check("now the director sees it too", as_user(C, f"select count(*) from attachments where room_id='{R5}'"), "\n2\n")
+check("a file for one person", as_user(G, f"insert into attachments (room_id,file_name,extracted_text,uploaded_by,visibility,visible_tokens) values ('{R6}','kenji.pdf','k','{G}','some','{{kenji1}}')", anonymous=True), "INSERT 0 1")
+check("Kenji sees the file picked for him", as_user(E, f"select file_name from attachments where room_id='{R6}'"), "kenji.pdf")
+check("unknown visibility is rejected", as_user(G, f"insert into attachments (room_id,file_name,uploaded_by,visibility) values ('{R5}','x.pdf','{G}','secret')", anonymous=True), "check constraint")
+check("signed-out can't use the file rule", anon(f"select can_read_attachment('{R5}','{G}','everyone','{{}}','{{}}')"), "permission denied")
+
 print(f"\n{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

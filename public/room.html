@@ -64,7 +64,7 @@ const live = {
       sb.from("inputs").select("ratings,weights,risk_appetite,gut_pick,concern,links,role_answer,role_files,comments").eq("room_id", roomId).eq("user_id", me).maybeSingle(),
       sb.rpc("room_roster", { rid: roomId }),
       sb.from("analyses").select("frame,outcomes,disagreement_map,verdict,confidence,owner_decision,override_reason,final_option").eq("room_id", roomId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      sb.from("attachments").select("file_name").eq("room_id", roomId).order("created_at")
+      sb.from("attachments").select("id,file_name,visibility").eq("room_id", roomId).order("created_at")
     ]);
     // Not a member: maybe the owner's assistant (they run the process, never answer or decide).
     let role = mem.data?.role, level = null;
@@ -72,7 +72,7 @@ const live = {
     const { data: setupBy } = await sb.rpc("room_setup_by", { rid: roomId });
     const { data: simShared } = await sb.from("simulations").select("id,findings,size,confidence,results").eq("room_id", roomId).eq("status", "done").not("added_at", "is", null).order("added_at", { ascending: false }).limit(1).maybeSingle();
     if (room.department_ids?.length) { const { data: dp } = await sb.rpc("room_departments", { rid: roomId }); room.__depts = dp || []; }
-    const out = { simulation: simShared || null, departments: room.__depts || [], setupBy: setupBy || null, level, room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => f.file_name) };
+    const out = { simulation: simShared || null, departments: room.__depts || [], setupBy: setupBy || null, level, room, role, roleId: mem.data?.role_id || null, mine: mine.data, roster: (roster.data || []).map(r => ({ ...r, me: r.user_id === me })), analysis: an.data, files: (files.data || []).map(f => ({ id: f.id, name: f.file_name, vis: f.visibility })) };
     if (role === "owner" || (role === "assistant" && level !== "view")) {
       out.invites = await this.invites(room);
       const [{ data: nd }, { data: note }, { data: log }] = await Promise.all([sb.rpc("room_nudges", { rid: roomId }),
@@ -306,7 +306,7 @@ function demoStore(kind) {
       const invites = !owner ? null : withPeople ? people : withRoles ? [{ token: "demo-cfo", role_id: "r1", max_uses: 1, uses: 0 }, { token: "demo-dir", role_id: "r2", max_uses: null, uses: 1 }] : [{ token: "demo-invite", role_id: null }];
       room.report_mode = "both";
       if (room.status === "decided" && params.get("review") === "1" && !this.reviews.length && !this.review) this.review = { round: 1, due: true, review_date: room.review_date, raters: 2 };
-      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: ["Riyadh P&L 2026.xlsx"], invites, nudges: owner ? [{ invite_token: "demo-3", user_id: null, n: 1 }] : [], talk: this.talk, reopen: this.reopen, signoff, counts, objections: room.rapid ? objections : undefined,
+      return { room, role, roleId: withRoles && !owner ? "r1" : null, mine, roster: roster(), analysis, plan: this.plan, files: [{ id: "demo-f1", name: "Riyadh P&L 2026.xlsx", vis: "everyone" }], invites, nudges: owner ? [{ invite_token: "demo-3", user_id: null, n: 1 }] : [], talk: this.talk, reopen: this.reopen, signoff, counts, objections: room.rapid ? objections : undefined,
         review: this.review, reviews: this.reviews, myRating: this.myRating };
     },
     async join(name) { role = "member"; if (name) myName = name; return "demo"; },
@@ -460,7 +460,20 @@ function questionCard() {
     const sum = el("summary", null, t("nr_ctx_title").replace(/[?؟]$/, "")); sum.style.color = "#fff";
     more.append(sum);
     if (r.context) { const b = contentLang(el("p", "body", r.context)); b.style.marginTop = "10px"; more.append(b); }
-    if (S.files?.length) { const ul = el("ul", "plain"); ul.style.marginTop = "12px"; S.files.forEach(n => ul.append(el("li", "file", n))); more.append(ul); }
+    if (S.files?.length) {
+      const ul = el("ul", "plain"); ul.style.marginTop = "12px";
+      S.files.forEach(f => {
+        const li = el("li", "file"), nm = el("span", "nm", f.name); nm.title = f.name; li.append(nm);
+        if (S.role === "owner" && f.vis && f.vis !== "everyone") li.append(el("span", "st", t(f.vis === "some" ? "fx_vis_some_tag" : "fx_vis_analysis_tag")));
+        if (S.role !== "assistant") {
+          const w = el("button", "fx-open", t("fx_open")); w.type = "button";
+          w.onclick = () => Rooms.fileSheet({ name: f.name, roomId: r.id, fileId: f.id, question: r.question, demo: !!demo });
+          li.append(w);
+        }
+        ul.append(li);
+      });
+      more.append(ul);
+    }
     if (links.length) {
       const ul = el("ul", "plain"); ul.style.marginTop = "12px";
       links.forEach(u => { const li = el("li", "file"); const a = el("a", "nm", u); a.href = u; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.color = "#fff"; li.append(a); ul.append(li); });

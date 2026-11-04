@@ -913,11 +913,103 @@ function drawShell() {
 }
 shellBuild();
 
+/* ---------- Work with a file: summarise, key points, numbers, send, and a chat about it ---------- */
+// fileTools({name, text, roomId, fileId, question, onAdd, demo}) returns the panel. In setup the browser sends the
+// file's text; in a room the server reads the file, and only if this person may see it. onAdd(text) puts a result
+// into "what everyone should know". Sending opens the person's own email or WhatsApp; we send nothing ourselves.
+function fileTools({ name = "", text = "", roomId = null, fileId = null, question = "", onAdd = null, demo = false } = {}) {
+  const box = el("div", "fx"), acts = el("div", "fx-acts"), out = el("div", "fx-out");
+  const call = async (action, extra = {}) => {
+    if (demo) {
+      await new Promise(r => setTimeout(r, 700));
+      return {
+        summarise: { summary: t("fx_demo_summary") },
+        points: { points: [{ text: t("fx_demo_p1"), page: 2 }, { text: t("fx_demo_p2"), page: 4 }] },
+        numbers: { figures: [{ id: "f1", label: t("fx_demo_f1"), value: 420000, unit: "SAR", page: 3 }, { id: "f2", label: t("fx_demo_f2"), value: 510000, unit: "SAR", page: 3 }], results: [{ label: t("fx_demo_r1"), value: 21.43, unit: "%", working: `(${t("fx_demo_f2")} (510000) - ${t("fx_demo_f1")} (420000)) / ${t("fx_demo_f1")} (420000) * 100` }], note: "" },
+        ask: { reply: t("fx_demo_reply") }
+      }[action];
+    }
+    return post("/api/rooms/file", { action, ...(roomId ? { room_id: roomId, attachment_id: fileId } : { text, file_name: name, question }), lang, ...extra });
+  };
+  const sendRow = msg => {
+    const row = el("div", "fx-send"), inp = el("input");
+    Object.assign(inp, { type: "text", placeholder: t("fx_send_ph"), autocomplete: "off" }); inp.setAttribute("aria-label", t("fx_send_ph"));
+    const em = el("a", "btn ghost", t("email_btn")), wa = el("a", "btn ghost", t("whatsapp"));
+    const upd = () => { const L = personLinks(inp.value, msg, t("fx_send_subject", { name })); em.href = L.email; wa.href = L.whatsapp; };
+    wa.target = "_blank"; wa.rel = "noopener"; inp.oninput = upd; upd();
+    row.append(inp, em, wa); return row;
+  };
+  const result = (title, nodes, plain) => {
+    const r = el("div", "fx-res"), foot = el("div", "fx-foot");
+    r.append(el("span", "fx-t", title), ...nodes);
+    if (onAdd) { const add = el("button", "linkbtn", t("fx_add")); add.type = "button"; add.onclick = () => { onAdd(`${name}: ${plain}`); add.textContent = t("fx_added"); add.disabled = true; }; foot.append(add); }
+    const snd = el("button", "linkbtn", t("fx_send")); snd.type = "button";
+    snd.onclick = () => { snd.hidden = true; r.append(sendRow(`${name}\n\n${plain}`)); };
+    foot.append(snd); r.append(foot);
+    out.prepend(r); return r;
+  };
+  const run = async (action, btn) => {
+    const wait = el("p", "small fx-wait", t("fx_working")); out.prepend(wait); btn.disabled = true;
+    try {
+      const r = await call(action);
+      if (action === "summarise") result(t("fx_summary"), [el("p", "fx-p", r.summary)], r.summary);
+      if (action === "points") {
+        const ul = el("ul", "fx-ul"); r.points.forEach(p => ul.append(el("li", null, p.text + (p.page ? " " + t("fx_page", { n: p.page }) : ""))));
+        result(t("fx_points"), [r.points.length ? ul : el("p", "small", t("fx_none"))], r.points.map(p => "• " + p.text + (p.page ? " " + t("fx_page", { n: p.page }) : "")).join("\n"));
+      }
+      if (action === "numbers") {
+        const nodes = [], fmt = (v, u) => Number(v).toLocaleString(lang === "ar" ? "ar" : "en") + (u ? " " + u : "");
+        r.results.forEach(x => { const d = el("div", "fx-num"); d.append(el("b", null, x.label + ": " + fmt(x.value, x.unit)), el("span", "small", t("fx_working_shown", { w: x.working }))); nodes.push(d); });
+        if (r.figures.length) { const ul = el("ul", "fx-ul fx-figs"); r.figures.forEach(f => ul.append(el("li", null, `${f.label}: ${fmt(f.value, f.unit)}${f.page ? " " + t("fx_page", { n: f.page }) : ""}`))); const det = el("details"); det.append(el("summary", null, t("fx_figures", { n: r.figures.length })), ul); nodes.push(det); }
+        if (!r.results.length) nodes.push(el("p", "small", r.note || t("fx_none")));
+        nodes.push(el("p", "small fx-check", t("fx_check")));
+        result(t("fx_numbers"), nodes, r.results.map(x => `${x.label}: ${fmt(x.value, x.unit)} (${x.working})`).join("\n") || r.note || "");
+      }
+    } catch (e) { out.prepend(el("p", "status err", t(e.message === "quota" ? "err_quota" : e.message === "no_access" ? "fx_no_access" : "err_generic"))); }
+    finally { wait.remove(); btn.disabled = false; }
+  };
+  [["summarise", "fx_summarise"], ["points", "fx_points_btn"], ["numbers", "fx_numbers_btn"]].forEach(([a, k]) => {
+    const b = el("button", "chip", t(k)); b.type = "button"; b.onclick = () => run(a, b); acts.append(b);
+  });
+  const sendB = el("button", "chip", t("fx_send_btn")); sendB.type = "button";
+  sendB.onclick = () => { if (!box.querySelector(":scope > .fx-send")) box.insertBefore(sendRow(`${name}\n\n${t("fx_send_body")}`), out); };
+  acts.append(sendB);
+  // The chat about this file
+  const chat = el("form", "fx-chat"), log = el("div", "fx-log"), row = el("div", "fx-ask"), q = el("input"), go = el("button", "btn", t("fx_ask"));
+  Object.assign(q, { type: "text", placeholder: t("fx_ask_ph"), maxLength: 600 }); q.setAttribute("aria-label", t("fx_ask_ph")); go.type = "submit";
+  row.append(q, go); chat.append(log, row);
+  const msgs = [];
+  chat.onsubmit = async e => {
+    e.preventDefault(); const text = q.value.trim(); if (!text) return;
+    msgs.push({ role: "user", text }); log.append(el("p", "fx-me", text)); q.value = ""; go.disabled = true;
+    const wait = el("p", "small fx-wait", t("fx_working")); log.append(wait);
+    try { const r = await call("ask", { messages: msgs }); msgs.push({ role: "assistant", text: r.reply }); log.append(el("p", "fx-ai", r.reply)); }
+    catch (er) { log.append(el("p", "status err", t(er.message === "quota" ? "err_quota" : "err_generic"))); msgs.pop(); }
+    finally { wait.remove(); go.disabled = false; }
+  };
+  box.append(acts, out, chat);
+  return box;
+}
+
+// The file panel as a side sheet, used in the room.
+function fileSheet(opts) {
+  if (document.querySelector(".dr-pop")) return;
+  const pop = el("div", "dr-pop fx-pop"); pop.setAttribute("role", "dialog"); pop.setAttribute("aria-modal", "true"); pop.setAttribute("aria-label", opts.name);
+  const panel = el("div", "dr-pop-panel fx-sheet");
+  const close = el("button", "dr-pop-close", "×"); close.type = "button"; close.setAttribute("aria-label", t("close") || "Close");
+  panel.append(close, el("span", "fx-kicker", t("fx_open")), el("h2", null, opts.name), fileTools(opts));
+  pop.append(panel); document.body.append(pop); document.body.classList.add("dr-pop-open");
+  const shut = () => { pop.remove(); document.body.classList.remove("dr-pop-open"); removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") shut(); };
+  close.onclick = shut; pop.addEventListener("click", e => { if (e.target === pop) shut(); });
+  addEventListener("keydown", onKey); close.focus();
+}
+
 window.Rooms = {
   $, el, t, loadLang, firstLang, savedLang, langToggle, fmtDate, typeName, get lang() { return lang; },
   connect, profile, setName, validEmail, isGuest, hasAccount, emailCode, showMyRooms, signInBox, ensureAccount, profileForm, myProfile, saveProfile, signOut, countrySelect, get providers() { return providers; },
   get sb() { return sb; }, get user() { return user; }, get emailCodes() { return emailCodes; },
-  post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile,
+  post, decideNow, signedConfidence, helper, askHelper, errKey, apportion, chip, choice, shareLinks, personLinks, phoneDigits, copyText, agreeNote, fileKind, readFile, fileTools, fileSheet,
   openNewRoom, goToRoom, embedded, icon, shell, drawShell, appPopover, validUrl, linksEditor, app, appBox, loadStep
 };
 })();
