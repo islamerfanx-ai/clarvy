@@ -960,13 +960,15 @@ function fileTools({ name = "", text = "", roomId = null, fileId = null, questio
     }
     return post("/api/rooms/file", { action, ...(roomId ? { room_id: roomId, attachment_id: fileId } : { text, file_name: name, question }), lang, ...extra });
   };
+  const fxErr = e => t({ quota: "err_quota", no_access: "fx_no_access", empty_file: "fx_empty" }[e?.message] || "err_generic");
   const sendRow = msg => {
     const row = el("div", "fx-send"), inp = el("input");
     Object.assign(inp, { type: "text", placeholder: t("fx_send_ph"), autocomplete: "off" }); inp.setAttribute("aria-label", t("fx_send_ph"));
     const em = el("a", "btn ghost", t("email_btn")), wa = el("a", "btn ghost", t("whatsapp"));
     const upd = () => { const L = personLinks(inp.value, msg, t("fx_send_subject", { name })); em.href = L.email; wa.href = L.whatsapp; };
     wa.target = "_blank"; wa.rel = "noopener"; inp.oninput = upd; upd();
-    row.append(inp, em, wa); return row;
+    const btns = el("div", "fx-btns"); btns.append(em, wa);
+    row.append(inp, btns); return row;
   };
   const result = (title, nodes, plain) => {
     const r = el("div", "fx-res"), foot = el("div", "fx-foot");
@@ -994,7 +996,7 @@ function fileTools({ name = "", text = "", roomId = null, fileId = null, questio
         nodes.push(el("p", "small fx-check", t("fx_check")));
         result(t("fx_numbers"), nodes, r.results.map(x => `${x.label}: ${fmt(x.value, x.unit)} (${x.working})`).join("\n") || r.note || "");
       }
-    } catch (e) { out.prepend(el("p", "status err", t(e.message === "quota" ? "err_quota" : e.message === "no_access" ? "fx_no_access" : "err_generic"))); }
+    } catch (e) { out.prepend(el("p", "status err", fxErr(e))); }
     finally { wait.remove(); btn.disabled = false; }
   };
   [["summarise", "fx_summarise"], ["points", "fx_points_btn"], ["numbers", "fx_numbers_btn"]].forEach(([a, k]) => {
@@ -1006,14 +1008,15 @@ function fileTools({ name = "", text = "", roomId = null, fileId = null, questio
   // The chat about this file
   const chat = el("form", "fx-chat"), log = el("div", "fx-log"), row = el("div", "fx-ask"), q = el("input"), go = el("button", "btn", t("fx_ask"));
   Object.assign(q, { type: "text", placeholder: t("fx_ask_ph"), maxLength: 600 }); q.setAttribute("aria-label", t("fx_ask_ph")); go.type = "submit";
-  row.append(q, go); chat.append(log, row);
+  const goW = el("div", "fx-btns"); goW.append(go);
+  row.append(q, goW); chat.append(log, row);
   const msgs = [];
   chat.onsubmit = async e => {
     e.preventDefault(); const text = q.value.trim(); if (!text) return;
     msgs.push({ role: "user", text }); log.append(el("p", "fx-me", text)); q.value = ""; go.disabled = true;
     const wait = el("p", "small fx-wait", t("fx_working")); log.append(wait);
     try { const r = await call("ask", { messages: msgs }); msgs.push({ role: "assistant", text: r.reply }); log.append(el("p", "fx-ai", r.reply)); }
-    catch (er) { log.append(el("p", "status err", t(er.message === "quota" ? "err_quota" : "err_generic"))); msgs.pop(); }
+    catch (er) { log.append(el("p", "status err", fxErr(er))); msgs.pop(); }
     finally { wait.remove(); go.disabled = false; }
   };
   box.append(acts, out, chat);

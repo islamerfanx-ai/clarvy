@@ -2067,6 +2067,7 @@
   "fx_send_body": "Sharing this file with you.",
   "fx_ask": "Ask",
   "fx_ask_ph": "Ask about this file, or tell the analyst what to look for",
+  "fx_empty": "This file has no text we can read. Try a PDF with selectable text, or paste the part that matters.",
   "fx_no_access": "You can't open this file.",
   "fx_vis_q": "Who sees it?",
   "fx_vis_everyone": "Everyone in the room",

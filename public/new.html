@@ -899,7 +899,7 @@ function stepContext() {
   linksF.append(el("span", "lbl", t("links_lbl")), el("p", "small", t("links_hint")), Rooms.linksEditor(d.links, 10, l => { d.links = l; save(); }));
 
   // World brief: started when the question was set. Tick what everyone should see; it goes in with the room.
-  const briefF = el("div", "field");
+  const briefF = el("div", "field brief-panel");
   const briefBox = el("div", "stack-sm");
   briefDraw = () => {
     const r = d.brief;
@@ -925,7 +925,7 @@ function stepContext() {
   briefDraw();
 
   setTimeout(drawFiles, 0);
-  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, briefF, linksF, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, more];
+  const nodes = [...head(t("nr_ctx_title"), t("nr_ctx_hint")), ta, drop, el("p", "small", t("files_types")), pasteBtn, pasteBox, list, how, briefF, linksF, more];
   if (["finance", "politics"].includes(d.type)) nodes.push(el("p", "small", t("advice_note")));
   return form([...nodes, actions({ next: t("create") })], create);
 }

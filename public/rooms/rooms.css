@@ -711,17 +711,11 @@ button.lv-row:hover{border-color:var(--accent)}
 .fx-num b{font-weight:500;font-size:16px}
 .fx-check{color:var(--dim)}
 .fx-foot{display:flex;gap:16px;flex-wrap:wrap}
-.fx-send{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.fx-send input{flex:1;min-width:180px}
-.fx-send .btn{width:auto;padding:10px 16px}
 .fx-chat{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px}
 .fx-log{display:flex;flex-direction:column;gap:6px}
 .fx-log p{margin:0;font-size:15px;line-height:1.45;padding:10px 12px;border-radius:14px;max-width:88%}
 .fx-me{align-self:flex-end;background:var(--accent);color:#fff}
 .fx-ai{align-self:flex-start;background:var(--ink)}
-.fx-ask{display:flex;gap:8px}
-.fx-ask input{flex:1;min-width:0}
-.fx-ask .btn{width:auto;padding:12px 20px}
 .fx-wait{color:var(--dim)}
 .fx-open{background:none;border:0;font:inherit;font-size:13px;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer;white-space:nowrap}
 .fx-pop{justify-content:flex-end}
@@ -730,3 +724,15 @@ button.lv-row:hover{border-color:var(--accent)}
 .fx-kicker{font-size:13px;color:var(--dim)}
 .fx-sheet .fx{box-shadow:none}
 html.shelled #wiz .wz-card .fx :is(input:not([type=checkbox]):not([type=radio]),textarea){background:var(--ink)}
+
+/* File panel rows: the send row and the chat row share one layout, so their fields are the same width */
+:is(.fx-send,.fx-ask){display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:8px;align-items:center}
+:is(.fx-send,.fx-ask) input{width:100%;min-width:0;height:46px;box-sizing:border-box}
+.fx-btns{display:flex;gap:8px}
+.fx-btns .btn{flex:1;width:auto;min-width:0;height:46px;padding:0 12px;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+@media (max-width:560px){:is(.fx-send,.fx-ask){grid-template-columns:1fr}}
+/* The world brief sits on its own soft yellow panel, apart from what the owner writes */
+.brief-panel{background:var(--yellow);border-radius:16px;padding:16px 18px;gap:8px}
+.brief-panel .tick{background:#fff;border-color:transparent;border-radius:12px}
+.brief-panel .tick[aria-pressed=true]{border-color:var(--accent)}
+.brief-panel .small{color:rgba(29,29,29,.7)}
