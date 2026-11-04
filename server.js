@@ -1,4 +1,5 @@
 // Run Clarvy on any Node host (Render, Railway, a VPS, or your laptop): `npm start`
+import "./lib/env.js";
 import http from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
