@@ -344,15 +344,22 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
   box.append(emailStep, codeStep, status);
   let mode = "email", email = "";
   const say = (msg, kind = "err") => { status.textContent = msg; status.className = "status " + kind; };
-  async function send() {
+  // While the code is on its way the pressed button turns and says "Sending...", then gets its label back.
+  const busy = (btn, on) => {
+    if (on) { btn.dataset.label = btn.textContent; btn.textContent = t("sending"); }
+    else if (btn.dataset.label) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
+    btn.disabled = on; btn.classList.toggle("busy", on); btn.setAttribute("aria-busy", String(on));
+  };
+  async function send(btn = eBtn) {
+    if (btn.classList.contains("busy")) return;
     say("");
-    eBtn.disabled = true;
+    busy(btn, true);
     await dropGuest();   // old guest accounts start fresh
     let res;
     try { res = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: location.href, captchaToken: await captchaToken() } }); }
     catch (err) { res = { error: err }; }
     mode = "email";
-    eBtn.disabled = false;
+    busy(btn, false);
     if (res.error) {
       const msg = res.error.message || "";
       const secs = Number((msg.match(/(\d+)\s*seconds?/i) || [])[1]);
@@ -386,7 +393,7 @@ function emailCode(box, { onDone, email: preset = "" } = {}) {
     });
   }
   emailStep.addEventListener("submit", e => { e.preventDefault(); email = eIn.value.trim(); if (email) send(); });
-  resend.addEventListener("click", send);
+  resend.addEventListener("click", () => send(resend));
   change.addEventListener("click", () => { codeStep.hidden = true; emailStep.hidden = false; say(""); eIn.focus(); });
   let checking = false;
   async function verify() {

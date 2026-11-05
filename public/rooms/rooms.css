@@ -84,6 +84,10 @@ input[type=date].line{max-width:240px}
   background:var(--accent);border:0;border-radius:0;padding:16px 20px;width:100%;text-align:center;text-decoration:none;display:block}
 .btn:hover{background:var(--accent-hover)}
 .btn:disabled{opacity:.45;cursor:default}
+/* A button at work (sign-in "Sending..."): a small turning ring before its label, still clearly on */
+.btn.busy:disabled{opacity:.85;cursor:progress}
+.busy::before{content:"";display:inline-block;width:11px;height:11px;border-radius:50%;border:2px solid currentColor;border-top-color:transparent;margin-inline-end:8px;vertical-align:-2px;animation:lvspin .8s linear infinite}
+@media (prefers-reduced-motion:reduce){.busy::before{animation:none;border-top-color:currentColor;opacity:.6}}
 .btn.ghost{background:none;color:var(--fg);border:1px solid var(--line);width:auto;padding:14px 18px}
 .btn.ghost:hover{border-color:rgba(20,20,20,.4);background:rgba(20,20,20,.03)}
 .btn.soft{background:var(--accent-soft);color:var(--accent)}
