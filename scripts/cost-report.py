@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add up the AI cost lines ("usage {...}") from the server log.
 
-  ssh -i ~/.ssh/clarvy_deploy clarvy@62.171.184.161 'journalctl -u clarvy --since "7 days ago" -o cat' | python3 scripts/cost-report.py
+  ssh -i ~/.ssh/clarvy_deploy clarvy@203.161.38.34 'journalctl -u clarvy --since "7 days ago" -o cat' | python3 scripts/cost-report.py
 
 Costs are estimates from the list prices in lib/core.js (PRICE_* env vars), not an OpenAI invoice.
 """

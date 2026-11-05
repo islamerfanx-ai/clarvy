@@ -101,9 +101,9 @@ The product becomes **DXRooms** at dxrooms.com. Nothing changes until the domain
 - **Decided:** written "DXRooms"; a room is still a "decision room"; Arabic text also says "DXRooms" in Latin letters (replaces غرف القرار); clarvy.tejarra.com redirects forever to the same path and query on dxrooms.com, so old invites, reports and room links keep working.
 - **Still open:** the registrar (for the DNS records), the sending email address (mail.dxrooms.com, dxrooms.com, or stay on mail.tejarra.com for now), the logo, wordmark and icon.
 - **Steps when ready:**
-  1. Domain: DNS to the server (62.171.184.161), HTTPS certificate, both dxrooms.com and www.
+  1. Domain: done 2026-11-05. dxrooms.com and www point to a new VPS (203.161.38.34, `deploy/setup-vps.sh`) with HTTPS; the app moved there with the same secrets and push key.
   2. Email: Resend domain records, then switch the sign-in code emails and reminders (`NUDGE_FROM`).
-  3. Outside services: Supabase site URL and redirect URLs, Google and Microsoft sign-in redirect URLs, Turnstile allowed hostnames, `PUBLIC_URL` in /etc/clarvy.env, the health check in .github/workflows/deploy.yml, the push subject in lib/push.js.
+  3. Outside services: Supabase site URL and redirect URLs, Google and Microsoft sign-in redirect URLs, Turnstile allowed hostnames, `PUBLIC_URL` in /etc/clarvy.env, the health check in .github/workflows/deploy.yml, the push subject in lib/push.js. Done 2026-11-05: `PUBLIC_URL`, the health check and the push subject (it reads `PUBLIC_URL`). Still to do: Supabase, Turnstile (sign-in fails on dxrooms.com until it is added).
   4. Words: "Decision Rooms" (about 95 places) and غرف القرار (about 19) in pages, i18n, emails, reminders, notifications, reports, the manifest and app name, the FAQ, the AI prompts, privacy and terms.
   5. Switch: go live on dxrooms.com, then the permanent redirect from clarvy.tejarra.com.
   6. After: test sign-in codes, invites, notifications and reports on the new address; update CLAUDE.md, docs and memory; optionally rename the GitHub repo.
